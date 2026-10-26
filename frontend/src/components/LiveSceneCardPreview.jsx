@@ -604,12 +604,15 @@ const DEFAULT_HOUSE_LAYOUT = [
 export default function LiveSceneCardPreview({
   animation,
   houses,
+  liveSegments = null,
   height = 104,
+  compact = true,
   className = '',
 }) {
   const canvasRef = useRef(null);
   const animRef = useRef(animation);
   const housesRef = useRef(houses);
+  const liveSegsRef = useRef(liveSegments);
 
   useEffect(() => {
     animRef.current = animation;
@@ -618,6 +621,10 @@ export default function LiveSceneCardPreview({
   useEffect(() => {
     housesRef.current = houses;
   }, [houses]);
+
+  useEffect(() => {
+    liveSegsRef.current = liveSegments;
+  }, [liveSegments]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -629,17 +636,36 @@ export default function LiveSceneCardPreview({
       const W = canvas.width;
       const H = canvas.height;
       const anim = animRef.current || {};
+      const isRunning = anim.running !== false;
       const speed = Math.max(0.12, Number(anim.speed || 0.25));
-      // Slightly boost preview speed (~1.35x) so card previews feel lively and easy to read at a glance
-      const unwrappedPhase = elapsedSec * speed * 1.35;
+      const unwrappedPhase = elapsedSec * speed * (compact ? 1.35 : 1.0);
       const mappingMode = anim.mapping_mode || 'house_normalized';
 
-      const enabledHouses = (housesRef.current || []).filter((h) => h.enabled !== false);
+      // Night-sky background gradient matching Flutter ThreeHouseScenePainter
+      const skyGrad = ctx.createLinearGradient(0, 0, 0, H);
+      skyGrad.addColorStop(0, '#040711');
+      skyGrad.addColorStop(0.65, '#0a1124');
+      skyGrad.addColorStop(1, '#070c18');
+      ctx.fillStyle = skyGrad;
+      ctx.fillRect(0, 0, W, H);
+
+      const groundY = H * (compact ? 0.85 : 0.80);
+      ctx.strokeStyle = 'rgba(30, 41, 59, 0.75)';
+      ctx.lineWidth = 1.2;
+      ctx.beginPath();
+      ctx.moveTo(10, groundY);
+      ctx.lineTo(W - 10, groundY);
+      ctx.stroke();
+
+      const rawHouses = Array.isArray(housesRef.current) && housesRef.current.length > 0
+        ? [...housesRef.current].sort((a, b) => (a.order || 1) - (b.order || 1))
+        : null;
+      const enabledHouses = rawHouses ? rawHouses.filter((h) => h.enabled !== false) : null;
       const sourceHouses =
-        Array.isArray(housesRef.current) && housesRef.current.length > 0
-          ? enabledHouses.length > 0
+        rawHouses
+          ? enabledHouses && enabledHouses.length > 0
             ? enabledHouses
-            : housesRef.current.slice(0, 1)
+            : rawHouses.slice(0, 1)
           : null;
 
       const cfgHouses = sourceHouses
@@ -655,174 +681,228 @@ export default function LiveSceneCardPreview({
               sourceHouses.length === 1;
             const tw = Math.max(0.1, Number(h.time_weight || 1.0));
             const spdMult = Number((1.0 / tw).toFixed(2));
-            const speedTag = Math.abs(tw - 1.0) > 0.03 ? ` · ${spdMult}x` : '';
-            const shortName = isMyHouse
-              ? `#${idx + 1} My House (${rawCount || 9}s${speedTag})`
-              : `#${idx + 1} ${(h.name || `House ${idx + 1}`).split('(')[0].trim().slice(0, 10)} (${rawCount || 12}s${speedTag})`;
+            const speedTag = Math.abs(tw - 1.0) < 0.03 ? '1.0x Auto' : `${spdMult}x`;
+            const baseName = (h.name || `House ${idx + 1}`).split('(')[0].trim();
+            const label = compact
+              ? isMyHouse
+                ? `#${idx + 1} ME (${rawCount || 9})`
+                : `#${idx + 1} (${rawCount || 12})`
+              : `#${idx + 1} ${baseName} • ${rawCount || 9} segs • ${speedTag}`;
             return {
               id: h.id || `h-${idx}`,
-              label: shortName,
-              segs: Math.max(
-                6,
-                Math.min(sourceHouses.length === 1 ? 28 : 20, rawCount || (isMyHouse ? 9 : 16))
-              ),
+              label,
+              segs: compact
+                ? Math.max(7, Math.min(18, rawCount || (isMyHouse ? 9 : 16)))
+                : Math.max(6, Math.min(30, rawCount || (isMyHouse ? 9 : 16))),
+              rawSegs: rawCount || 9,
               timeWeight: tw,
+              enabled: h.enabled !== false,
               isCenter: isMyHouse,
             };
           })
-        : DEFAULT_HOUSE_LAYOUT.map((h) => ({ ...h, timeWeight: 1.0 }));
+        : DEFAULT_HOUSE_LAYOUT.map((h, idx) => ({
+            ...h,
+            rawSegs: h.segs,
+            timeWeight: 1.0,
+            enabled: true,
+            label: compact ? h.label : `${h.label} • ${h.segs} segs • 1.0x Auto`,
+            isCenter: idx === 1,
+          }));
 
-      const houseCount = Math.max(1, cfgHouses.length);
-      const totalHouseWeight = cfgHouses.reduce(
-        (sum, h) => sum + Math.max(0.1, Number(h.timeWeight || 1.0)),
+      const count = Math.max(1, cfgHouses.length);
+      const horizontalPad = compact ? 12 : 20;
+      const gap = compact ? 12 : 22;
+      const usableW = Math.max(60, W - horizontalPad * 2 - gap * (count - 1));
+      const houseW = usableW / count;
+
+      const totalWeight = cfgHouses.reduce(
+        (acc, h) => acc + (h.enabled ? Math.max(0.1, h.timeWeight) : 0),
         0
       );
+      const totalAllSegs = cfgHouses.reduce((acc, h) => acc + (h.enabled ? h.segs : 0), 0);
 
-      // Clear background
-      ctx.fillStyle = '#040711';
-      ctx.fillRect(0, 0, W, H);
+      // Group liveSegments by house_id if provided for main visualizer
+      const liveByHouse = {};
+      if (Array.isArray(liveSegsRef.current) && liveSegsRef.current.length > 0) {
+        for (const seg of liveSegsRef.current) {
+          if (!liveByHouse[seg.house_id]) liveByHouse[seg.house_id] = [];
+          liveByHouse[seg.house_id].push([seg.r ?? 0, seg.g ?? 0, seg.b ?? 0]);
+        }
+      }
 
-      const padX = 8;
-      const gap = houseCount > 3 ? 5 : 8;
-      const houseW = (W - padX * 2 - gap * Math.max(0, houseCount - 1)) / houseCount;
-      const roofBaseY = H - 22;
-      const peak1Y = 17;
-      const peak2Y = 23;
+      let cumulativeWeight = 0;
+      let globalSegCursor = 0;
 
-      const totalSegsAll = cfgHouses.reduce((s, h) => s + h.segs, 0);
-      let globalCursor = 0;
-      let cumulativeHouseWeight = 0;
+      for (let idx = 0; idx < count; idx++) {
+        const house = cfgHouses[idx];
+        const left = horizontalPad + idx * (houseW + gap);
+        const right = left + houseW;
+        const centerX = (left + right) * 0.5;
+        const isMiddleMe = house.isCenter;
 
-      for (let hIdx = 0; hIdx < houseCount; hIdx++) {
-        const hInfo = cfgHouses[hIdx];
-        const hWeight = Math.max(0.1, Number(hInfo.timeWeight || 1.0));
-        const houseStartNorm = cumulativeHouseWeight / Math.max(0.1, totalHouseWeight);
-        const houseSpanNorm = hWeight / Math.max(0.1, totalHouseWeight);
-        cumulativeHouseWeight += hWeight;
+        const roofPeakY = H * (compact ? (isMiddleMe ? 0.24 : 0.20) : isMiddleMe ? 0.21 : 0.16);
+        const eaveY = H * (compact ? 0.54 : 0.50);
+        const segCount = house.segs;
 
-        const hx = padX + hIdx * (houseW + gap);
+        const weight = Math.max(0.1, house.timeWeight);
+        const houseStartNorm = totalWeight > 0 ? cumulativeWeight / totalWeight : idx / count;
+        const houseSpanNorm = totalWeight > 0 ? weight / totalWeight : 1.0 / count;
+        if (house.enabled) cumulativeWeight += weight;
 
-        // Subtle card frame per house
-        ctx.fillStyle = hInfo.isCenter ? 'rgba(15, 29, 52, 0.55)' : 'rgba(10, 16, 30, 0.5)';
-        ctx.strokeStyle = hInfo.isCenter ? 'rgba(34, 211, 238, 0.28)' : 'rgba(51, 65, 85, 0.4)';
-        ctx.lineWidth = 1;
-        ctx.beginPath();
-        ctx.roundRect(hx, 3, houseW, H - 15, 6);
-        ctx.fill();
-        ctx.stroke();
-
-        // House label
-        ctx.fillStyle = hInfo.isCenter ? '#67e8f9' : '#94a3b8';
-        ctx.font =
-          houseCount >= 4
-            ? 'bold 7.5px ui-monospace, SFMono-Regular, Menlo, monospace'
-            : 'bold 8.5px ui-monospace, SFMono-Regular, Menlo, monospace';
-        ctx.textAlign = 'center';
-        ctx.fillText(hInfo.label, hx + houseW * 0.5, 12.5);
-
-        // Architectural double-gable roofline silhouette
-        const rx0 = hx + 6;
-        const rxW = Math.max(16, houseW - 12);
-        ctx.fillStyle = '#090e1c';
-        ctx.strokeStyle = '#1e293b';
-        ctx.lineWidth = 1.1;
-
-        ctx.beginPath();
-        ctx.moveTo(rx0, roofBaseY);
-        ctx.lineTo(rx0 + rxW * 0.3, peak1Y);
-        ctx.lineTo(rx0 + rxW * 0.56, roofBaseY - 4);
-        ctx.lineTo(rx0 + rxW * 0.78, peak2Y);
-        ctx.lineTo(rx0 + rxW, roofBaseY);
-        ctx.closePath();
-        ctx.fill();
-        ctx.stroke();
-
-        // Subtle house wall base
-        ctx.fillStyle = '#060a14';
-        ctx.fillRect(rx0 + 4, roofBaseY, Math.max(8, rxW - 8), 8);
-
-        // Draw glowing LED segments along the pitched roofline
-        const segCount = hInfo.segs;
-        const dotR = Math.max(2.0, Math.min(3.8, (rxW / segCount) * 0.36));
+        const houseLiveCols = liveByHouse[house.id];
+        const segColors = [];
 
         for (let s = 0; s < segCount; s++) {
-          const t = (s + 0.5) / segCount;
-          let normPos = 0;
+          if (!house.enabled || !isRunning) {
+            segColors.push([30, 41, 59]);
+            continue;
+          }
+          if (houseLiveCols && houseLiveCols.length > 0 && !compact) {
+            const mIdx = Math.min(
+              houseLiveCols.length - 1,
+              Math.floor((s / Math.max(1, segCount)) * houseLiveCols.length)
+            );
+            segColors.push(houseLiveCols[mIdx]);
+            continue;
+          }
+          const localPos = (s + 0.5) / Math.max(1, segCount);
+          let normX = houseStartNorm + localPos * houseSpanNorm;
           if (mappingMode === 'parallel_zones') {
-            normPos = t;
-          } else if (mappingMode === 'virtual_strip') {
-            normPos = (globalCursor + 0.5) / Math.max(1, totalSegsAll);
-          } else {
-            // house_normalized: each enabled house spans its time_weight share of [0, 1)
-            normPos = houseStartNorm + t * houseSpanNorm;
+            normX = localPos;
+          } else if (mappingMode === 'virtual_strip' && totalAllSegs > 0) {
+            normX = (globalSegCursor + s + 0.5) / totalAllSegs;
           }
-          globalCursor++;
+          segColors.push(evaluateEffectAtPoint(normX, unwrappedPhase, elapsedSec, anim));
+        }
+        if (house.enabled) globalSegCursor += segCount;
 
-          const [r, g, b] = evaluateEffectAtPoint(normPos, unwrappedPhase, elapsedSec, anim);
-          const sx = rx0 + t * rxW;
-          let sy = roofBaseY;
-          if (t < 0.3) {
-            sy = roofBaseY - (t / 0.3) * (roofBaseY - peak1Y);
-          } else if (t < 0.56) {
-            sy = peak1Y + ((t - 0.3) / 0.26) * (roofBaseY - 4 - peak1Y);
-          } else if (t < 0.78) {
-            sy = roofBaseY - 4 - ((t - 0.56) / 0.22) * (roofBaseY - 4 - peak2Y);
-          } else {
-            sy = peak2Y + ((t - 0.78) / 0.22) * (roofBaseY - peak2Y);
+        const midCol =
+          segColors.length > 0 ? segColors[Math.floor(segColors.length / 2)] : [0, 245, 212];
+
+        // 1. House body silhouette with top-down color bloom gradient (exact match to APK)
+        const bodyLeft = left + houseW * 0.08;
+        const bodyRight = right - houseW * 0.08;
+        ctx.beginPath();
+        ctx.moveTo(bodyLeft, groundY);
+        ctx.lineTo(bodyLeft, eaveY);
+        ctx.lineTo(centerX, roofPeakY + 3);
+        ctx.lineTo(bodyRight, eaveY);
+        ctx.lineTo(bodyRight, groundY);
+        ctx.closePath();
+
+        const bodyGrad = ctx.createLinearGradient(0, roofPeakY, 0, groundY);
+        bodyGrad.addColorStop(
+          0,
+          `rgba(${midCol[0]}, ${midCol[1]}, ${midCol[2]}, ${isRunning ? 0.22 : 0.05})`
+        );
+        bodyGrad.addColorStop(1, isMiddleMe ? '#111c38' : '#0d1528');
+        ctx.fillStyle = bodyGrad;
+        ctx.fill();
+
+        ctx.strokeStyle = isMiddleMe
+          ? 'rgba(0, 245, 212, 0.45)'
+          : 'rgba(51, 65, 85, 0.65)';
+        ctx.lineWidth = isMiddleMe ? 1.4 : 1.0;
+        ctx.stroke();
+
+        // 2. Architectural glowing windows inside house body
+        const winW = (bodyRight - bodyLeft) * 0.19;
+        const winH = (groundY - eaveY) * 0.34;
+        const winY = eaveY + (groundY - eaveY) * 0.25;
+        ctx.fillStyle = `rgba(${midCol[0]}, ${midCol[1]}, ${midCol[2]}, ${
+          isRunning ? 0.24 : 0.06
+        })`;
+        ctx.beginPath();
+        ctx.roundRect(bodyLeft + (bodyRight - bodyLeft) * 0.16, winY, winW, winH, 3);
+        ctx.roundRect(bodyRight - (bodyRight - bodyLeft) * 0.16 - winW, winY, winW, winH, 3);
+        ctx.fill();
+
+        // 3. Pitched roof structural line
+        ctx.strokeStyle = '#334155';
+        ctx.lineWidth = compact ? 2.2 : 3.0;
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        ctx.beginPath();
+        ctx.moveTo(left + 3, eaveY);
+        ctx.lineTo(centerX, roofPeakY);
+        ctx.lineTo(right - 3, eaveY);
+        ctx.stroke();
+
+        // 4. Glowing LED nodes along pitched roofline
+        const ledRadius = compact
+          ? segCount > 14
+            ? 2.8
+            : 3.4
+          : segCount > 20
+          ? 3.8
+          : 4.8;
+
+        for (let s = 0; s < segCount; s++) {
+          const u = segCount === 1 ? 0.5 : s / (segCount - 1);
+          const px = left + 4 + u * (right - 4 - (left + 4));
+          const roofFrac = 1.0 - Math.abs(u - 0.5) * 2.0;
+          const py = eaveY - roofFrac * (eaveY - roofPeakY);
+          const [r, g, b] = segColors[s];
+
+          if (isRunning && house.enabled) {
+            ctx.fillStyle = `rgba(${r}, ${g}, ${b}, 0.34)`;
+            ctx.beginPath();
+            ctx.arc(px, py, ledRadius * 2.2, 0, Math.PI * 2);
+            ctx.fill();
           }
 
-          // Outer glow halo
-          ctx.fillStyle = `rgba(${r}, ${g}, ${b}, 0.32)`;
-          ctx.beginPath();
-          ctx.arc(sx, sy, dotR * 2.1, 0, Math.PI * 2);
-          ctx.fill();
-
-          // Crisp LED emitter core
           ctx.fillStyle = `rgb(${r}, ${g}, ${b})`;
           ctx.beginPath();
-          ctx.arc(sx, sy, dotR, 0, Math.PI * 2);
+          ctx.arc(px, py, ledRadius, 0, Math.PI * 2);
           ctx.fill();
         }
-      }
 
-      // Continuous 60-step normalized street strip along the bottom
-      const stripY = H - 8;
-      const stripH = 5;
-      const stripX = padX;
-      const stripW = W - padX * 2;
-      const samples = 60;
-      const cellW = stripW / samples;
-      for (let i = 0; i < samples; i++) {
-        const xNorm = (i + 0.5) / samples;
-        const [r, g, b] = evaluateEffectAtPoint(xNorm, unwrappedPhase, elapsedSec, anim);
-        ctx.fillStyle = `rgb(${r}, ${g}, ${b})`;
-        ctx.fillRect(stripX + i * cellW, stripY, Math.ceil(cellW), stripH);
-      }
-
-      // House boundary divider ticks on the bottom strip respecting each house's time_weight
-      if (houseCount > 1) {
-        ctx.fillStyle = 'rgba(255,255,255,0.65)';
-        let tickWeight = 0;
-        for (let d = 0; d < houseCount - 1; d++) {
-          tickWeight += Math.max(0.1, Number(cfgHouses[d].timeWeight || 1.0));
-          const tickRatio = tickWeight / Math.max(0.1, totalHouseWeight);
-          ctx.fillRect(stripX + stripW * tickRatio, stripY - 1, 1.2, stripH + 2);
+        // 5. Inter-house flow chevron between houses
+        if (idx < count - 1) {
+          const midGapX = right + gap * 0.5;
+          const arrowY = (roofPeakY + eaveY) * 0.52;
+          const pulseGlow = 0.35 + 0.65 * (0.5 * (1.0 + Math.sin(elapsedSec * 5.0 - idx)));
+          ctx.strokeStyle = `rgba(0, 245, 212, ${
+            isRunning ? (0.35 + 0.45 * pulseGlow).toFixed(2) : 0.18
+          })`;
+          ctx.lineWidth = 1.8;
+          const dir =
+            anim.effect === 'center_out_shockwave'
+              ? idx === 0
+                ? -1
+                : 1
+              : anim.direction === 'reverse'
+              ? -1
+              : 1;
+          const dx = 3.2 * dir;
+          ctx.beginPath();
+          ctx.moveTo(midGapX - dx, arrowY - 4);
+          ctx.lineTo(midGapX + dx, arrowY);
+          ctx.lineTo(midGapX - dx, arrowY + 4);
+          ctx.stroke();
         }
+
+        // 6. Crisp label below ground line (exact match to APK)
+        ctx.fillStyle = isMiddleMe ? '#00f5d4' : '#cbd5e1';
+        ctx.font = `${isMiddleMe ? '700' : '600'} ${
+          compact ? '10px' : '11.5px'
+        } -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif`;
+        ctx.textAlign = 'center';
+        ctx.fillText(house.label, centerX, groundY + (compact ? 11.5 : 16));
       }
     };
 
-    // Draw initial frame immediately
     drawFrame((performance.now() - startWallMs) / 1000.0);
     return subscribeTicker(drawFrame);
-  }, [height]);
+  }, [height, compact]);
 
   return (
     <div
-      className={`relative rounded-xl overflow-hidden border border-slate-800/90 bg-[#040711] ${className}`}
+      className={`relative rounded-xl overflow-hidden border border-[#1e293b] bg-[#040711] ${className}`}
     >
       <canvas
         ref={canvasRef}
-        width={420}
+        width={compact ? 440 : 760}
         height={height}
         className="w-full block"
         style={{ height: `${height}px` }}

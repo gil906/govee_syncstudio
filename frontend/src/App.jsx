@@ -1310,286 +1310,189 @@ export default function App() {
     );
   }
 
+  const [activeColorChannel, setActiveColorChannel] = useState('primary_color');
+  const apkColorSwatches = [
+    '#00f5d4',
+    '#7b2cbf',
+    '#ff007f',
+    '#ef4444',
+    '#10b981',
+    '#fbbf24',
+    '#38bdf8',
+    '#f97316',
+    '#9333ea',
+    '#22c55e',
+    '#ec4899',
+    '#fde047',
+    '#69be28',
+    '#ffffff',
+    '#060814',
+  ];
+  const currentChannelHex = selectedAnim[activeColorChannel] || '#00f5d4';
+
+  const navItems = [
+    { id: 'scenes', label: 'Studio', icon: Sparkles },
+    { id: 'houses', label: 'Houses', icon: Home },
+    { id: 'schedule', label: 'Schedule', icon: Clock },
+    { id: 'discovery', label: 'Logs', icon: Radio },
+    { id: 'users', label: 'Access', icon: Users },
+  ];
+
   return (
-    <div className="min-h-screen text-slate-100 flex flex-col overflow-x-hidden pb-20 md:pb-8">
-      {/* Top Glassmorphic Command & Navigation Bar */}
-      <header className="sticky top-0 z-30 backdrop-blur-2xl bg-[#060a15]/95 border-b border-slate-800/90 px-3 sm:px-5 lg:px-8 py-2.5 shadow-xl">
-        <div className="max-w-[1600px] mx-auto flex flex-wrap items-center justify-between gap-3">
-          {/* Brand Logo + Live Clock Status */}
-          <div className="flex items-center gap-3 min-w-0">
-            <BrandLogo className="w-10 h-10 sm:w-11 sm:h-11 rounded-xl shadow-lg shadow-cyan-500/20" />
+    <div className="min-h-screen bg-[#040711] text-slate-100 flex flex-col overflow-x-hidden pb-20 md:pb-0">
+      {/* Compact 1-Row AppBar matching Flutter APK */}
+      <header className="sticky top-0 z-30 backdrop-blur-xl bg-[#040711]/95 border-b border-[#1e293b] px-3 sm:px-5 py-2.5">
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <BrandLogo className="w-9 h-9 rounded-xl shadow-md shadow-cyan-500/15" />
             <div className="min-w-0">
-              <div className="flex flex-wrap items-center gap-1.5">
-                <h1 className="text-sm sm:text-lg font-extrabold tracking-tight text-white truncate">
-                  Govee Multi-House Light Sync
+              <div className="flex items-center gap-2">
+                <h1 className="text-sm sm:text-base font-extrabold tracking-tight text-white truncate">
+                  Govee Sync Studio
                 </h1>
+                <span className="px-2 py-0.5 rounded-md bg-[#00f5d4]/15 border border-[#00f5d4]/45 text-[#00f5d4] text-[10px] font-extrabold font-mono shrink-0">
+                  v{apkInfo?.version_name || '3.1.0'} (b{apkInfo?.version_code || 4})
+                </span>
                 <span
-                  className={`text-[10px] font-mono px-2 py-0.5 rounded-full border shrink-0 ${
+                  className={`hidden sm:inline-flex items-center gap-1 text-[10px] font-mono px-2 py-0.5 rounded-md border shrink-0 ${
                     wsConnected
-                      ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30'
-                      : 'bg-amber-500/15 text-amber-300 border-amber-500/30'
+                      ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/35'
+                      : 'bg-amber-500/15 text-amber-300 border-amber-500/35'
                   }`}
                 >
-                  {wsConnected ? 'LIVE CLOCK LOCKED' : 'SYNCING...'}
+                  ● {wsConnected ? `LIVE · ${liveState?.measured_fps ?? 25} FPS` : 'SYNCING'}
                 </span>
               </div>
               <p className="text-[11px] text-slate-400 truncate">
-                <span className="text-cyan-300 font-mono font-semibold">
-                  {enabledHouseCount}/{allHouses.length || 3} Houses Active
-                </span>{' '}
-                · Drift:{' '}
-                <span className="text-cyan-300 font-mono">
-                  {liveState?.clock_drift_ms ?? 0.0}ms
-                </span>{' '}
-                · Rate:{' '}
-                <span className="text-cyan-300 font-mono">
-                  {liveState?.measured_fps ?? anim.fps ?? 25} FPS
-                </span>
-                {liveSched?.current_local_time && (
-                  <>
-                    {' '}
-                    ·{' '}
-                    <span className="text-purple-300 font-mono">
-                      {liveSched.current_local_time} {liveSched.tz_abbrev || ''}
-                    </span>
-                  </>
-                )}
+                {enabledHouseCount}/{allHouses.length || 3} Houses Active • Drift{' '}
+                {liveState?.clock_drift_ms ?? 0.08}ms
+                {liveSched?.current_local_time
+                  ? ` • ${liveSched.current_local_time} ${liveSched.tz_abbrev || ''}`
+                  : ''}
               </p>
             </div>
           </div>
 
-          {/* 5 Workspace Navigation Tabs (Tablet, Unfolded Z Fold 7 & PC Desktop) */}
-          <div className="hidden md:flex items-center bg-slate-900/90 p-1 rounded-2xl border border-slate-800/90 gap-1">
-            {[
-              { id: 'scenes', label: '✨ Scenes & Studio' },
-              {
-                id: 'houses',
-                label: `🏠 Houses & API Keys (${enabledHouseCount}/${allHouses.length || 3})`,
-              },
-              { id: 'schedule', label: '🕒 Schedule & Jukebox' },
-              { id: 'discovery', label: '📡 Discovery & Logs' },
-              { id: 'users', label: `👥 Access (${authorizedEmails.length})` },
-            ].map((tab) => {
-              const active =
-                activeTab === tab.id || (tab.id === 'scenes' && activeTab === 'dashboard');
-              return (
-                <button
-                  key={tab.id}
-                  onClick={() => setActiveTab(tab.id)}
-                  className={`px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition ${
-                    active
-                      ? 'bg-gradient-to-r from-cyan-400 to-blue-500 text-slate-950 shadow-md shadow-cyan-500/20'
-                      : 'text-slate-300 hover:text-white hover:bg-slate-800/60'
-                  }`}
-                >
-                  {tab.label}
-                </button>
-              );
-            })}
-          </div>
-
-          {/* Master Transport Controls + Authenticated Android APK Download + Logout */}
-          <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
-            <button
-              onClick={handlePlaySync}
-              className={`px-2.5 sm:px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition shadow-lg ${
-                isRunning
-                  ? 'bg-emerald-400 text-slate-950 shadow-emerald-400/25'
-                  : 'bg-emerald-500/20 hover:bg-emerald-500/35 text-emerald-300 border border-emerald-500/40'
-              }`}
-              title="Immediately start or resume the master animation clock"
-            >
-              <Play className="w-3.5 h-3.5 fill-current" />
-              <span className="hidden sm:inline">Start</span>
-            </button>
-
-            <button
-              onClick={handlePauseSync}
-              className={`px-2.5 sm:px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition shadow-lg ${
-                !isRunning && !(liveState?.blackout_on_stop ?? anim.blackout_on_stop ?? true)
-                  ? 'bg-amber-400 text-slate-950 shadow-amber-400/25'
-                  : 'bg-amber-500/20 hover:bg-amber-500/35 text-amber-300 border border-amber-500/40'
-              }`}
-              title="Freeze the animation in place on both preview and physical lights"
-            >
-              <Pause className="w-3.5 h-3.5 fill-current" />
-              <span className="hidden sm:inline">Pause</span>
-            </button>
-
-            <button
-              onClick={handleStopSync}
-              className={`px-2.5 sm:px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition shadow-lg ${
-                !isRunning && (liveState?.blackout_on_stop ?? anim.blackout_on_stop ?? true)
-                  ? 'bg-rose-500 text-slate-950 shadow-rose-500/25'
-                  : 'bg-rose-500/20 hover:bg-rose-500/35 text-rose-300 border border-rose-500/40'
-              }`}
-              title="Immediately stop animation, set segments to #000000, and turn off controllers"
-            >
-              <Square className="w-3.5 h-3.5 fill-current" />
-              <span className="hidden sm:inline">Stop &amp; Off</span>
-            </button>
-
-            {/* Authenticated Download Android APK Button with ?version=&token= */}
+          <div className="flex items-center gap-2 shrink-0">
             <a
               href={apkDownloadHref}
-              download={apkInfo?.filename || `Govee-Sync-Studio-v${apkVersionName}-b${apkVersionCode}.apk`}
-              className="px-3 py-1.5 rounded-xl bg-gradient-to-r from-cyan-500/20 to-purple-500/25 hover:from-cyan-500/35 hover:to-purple-500/40 text-cyan-200 border border-cyan-400/40 text-xs font-bold flex items-center gap-1.5 transition shadow"
+              download={
+                apkInfo?.filename ||
+                `Govee-Sync-Studio-v${apkVersionName}-b${apkVersionCode}.apk`
+              }
+              className="px-3 py-1.5 rounded-xl bg-[#0c1324] hover:bg-[#15223d] text-[#00f5d4] border border-[#00f5d4]/45 text-xs font-extrabold flex items-center gap-1.5 transition"
               title="Download the Native Android App (.apk) for Samsung Galaxy Z Fold 7 & Android phones"
             >
-              <Download className="w-3.5 h-3.5 text-cyan-300" />
-              <span>📱 Download APK v{apkInfo?.version_name || '3.1.0'}</span>
+              <Download className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Download APK</span>
+              <span className="font-mono">v{apkInfo?.version_name || '3.1.0'}</span>
             </a>
+
+            <button
+              type="button"
+              onClick={handleResyncClock}
+              className="p-2 rounded-xl bg-[#0c1324] hover:bg-slate-800 text-slate-300 border border-[#1e293b] transition"
+              title="Re-sync master phase clock to 0%"
+            >
+              <RefreshCw className="w-4 h-4" />
+            </button>
 
             {authStatus?.user && (
               <button
+                type="button"
                 onClick={handleLogout}
-                className="p-2 rounded-xl bg-slate-900 hover:bg-rose-950/60 text-slate-300 hover:text-rose-300 border border-slate-800 transition"
-                title={`Signed in as ${authStatus.user.email} — Click to sign out`}
+                className="p-2 rounded-xl bg-[#0c1324] hover:bg-rose-950/60 text-slate-300 hover:text-rose-300 border border-[#1e293b] transition"
+                title={`Signed in as ${authStatus.user.email} — Sign out`}
               >
-                <LogOut className="w-3.5 h-3.5" />
+                <LogOut className="w-4 h-4" />
               </button>
             )}
           </div>
         </div>
       </header>
 
-      {/* Main Content Container */}
-      <main className="flex-1 max-w-[1600px] w-full mx-auto px-3 sm:px-5 lg:px-8 py-4 sm:py-5 space-y-5">
-        {actionBanner && (
-          <div className="bg-emerald-500/15 border border-emerald-500/40 text-emerald-200 px-4 py-3 rounded-xl text-xs font-medium flex items-center gap-2 shadow-lg">
-            <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
-            <span>{actionBanner}</span>
-          </div>
-        )}
+      {/* Body with Left NavigationRail (Tablet/PC, exact match to APK) + Main Workspace */}
+      <div className="flex-1 flex min-h-0">
+        {/* Left NavigationRail matching Flutter APK */}
+        <aside className="hidden md:flex flex-col items-center w-20 shrink-0 bg-[#080e1e] border-r border-[#1e293b] py-3 gap-2">
+          {navItems.map((item) => {
+            const Icon = item.icon;
+            const active =
+              activeTab === item.id || (item.id === 'scenes' && activeTab === 'dashboard');
+            return (
+              <button
+                key={item.id}
+                type="button"
+                onClick={() => setActiveTab(item.id)}
+                className={`w-16 py-2.5 rounded-2xl flex flex-col items-center justify-center gap-1 transition ${
+                  active
+                    ? 'bg-[#00f5d4]/15 text-[#00f5d4] border border-[#00f5d4]/40 shadow-sm'
+                    : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900/60'
+                }`}
+              >
+                <Icon className="w-5 h-5" />
+                <span className="text-[11px] font-bold">{item.label}</span>
+              </button>
+            );
+          })}
+        </aside>
 
-        {/* TAB 1: ✨ SCENES & STUDIO */}
-        {(activeTab === 'scenes' || activeTab === 'dashboard') && (
-          <div className="space-y-5">
-            {/* Top: Live Multi-House Roofline Visualizer (with Start/Pause/Stop + Burst Chips + Per-House Toggles + Add House) */}
-            <NeighborhoodPreview
-              liveState={liveState}
-              config={config}
-              onPlaySync={handlePlaySync}
-              onPauseSync={handlePauseSync}
-              onStopSync={handleStopSync}
-              onReorderHouses={handleReorderHouses}
-              onTestController={handleTestController}
-              onToggleHouse={handleToggleHouse}
-              onAddHouse={handleAddHouse}
-              onDeleteHouse={handleDeleteHouse}
-              onUpdateHouseTimeWeight={handleUpdateHouseTimeWeight}
-              onTriggerBurst={handleTriggerBurst}
-              burstBusy={burstBusy}
-            />
+        {/* Main Workspace */}
+        <main className="flex-1 max-w-[1540px] w-full mx-auto px-3 sm:px-5 py-4 space-y-4 overflow-y-auto">
+          {actionBanner && (
+            <div className="bg-[#0c1324] border border-[#00f5d4]/50 text-[#00f5d4] px-4 py-2.5 rounded-xl text-xs font-bold flex items-center gap-2 shadow-lg">
+              <CheckCircle2 className="w-4 h-4 shrink-0" />
+              <span>{actionBanner}</span>
+            </div>
+          )}
 
-            {/* Middle: Selected Scene Quick Tuner Bar */}
-            <div className="bg-[#0b1222]/95 border border-cyan-500/35 rounded-2xl p-4 sm:p-5 shadow-xl space-y-4">
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <div className="flex flex-wrap items-center gap-2.5">
-                  <span className="px-2.5 py-1 rounded-lg bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 text-xs font-mono font-bold">
-                    ACTIVE SCENE TUNER
-                  </span>
-                  <h3 className="text-sm sm:text-base font-extrabold text-white">
-                    {selectedPreset ? selectedPreset.name : 'Custom Street Effect'}
-                  </h3>
-                  {selectedPreset?.category && (
-                    <span className="text-[11px] font-mono px-2 py-0.5 rounded-full bg-slate-900 text-slate-300 border border-slate-700">
-                      {selectedPreset.category}
-                    </span>
-                  )}
-                  {selectedPreset?.is_customized && (
-                    <button
-                      type="button"
-                      onClick={(e) => handleResetPreset(selectedPreset.id, e)}
-                      className="text-[11px] font-mono px-2.5 py-0.5 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 transition"
-                    >
-                      Reset Defaults
-                    </button>
-                  )}
-                </div>
-
-                <div className="flex flex-wrap items-center gap-1.5">
-                  <button
-                    onClick={handleResyncClock}
-                    className="px-3 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-cyan-300 border border-slate-700 text-xs font-semibold flex items-center gap-1.5 transition"
-                  >
-                    <RefreshCw className="w-3.5 h-3.5" /> Re-Sync Phase 0%
-                  </button>
-                  <button
-                    onClick={() => handleAllPower(true)}
-                    className="px-2.5 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-emerald-400 border border-slate-700 text-xs font-semibold flex items-center gap-1"
-                  >
-                    <Power className="w-3.5 h-3.5" /> All ON
-                  </button>
-                  <button
-                    onClick={() => handleAllPower(false)}
-                    className="px-2.5 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-rose-400 border border-slate-700 text-xs font-semibold flex items-center gap-1"
-                  >
-                    <Power className="w-3.5 h-3.5" /> All OFF
-                  </button>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-center pt-1">
-                {/* Speed Slider + Slow/Normal/Fast/Hyper Pills (5 cols) */}
-                <div className="md:col-span-5 bg-slate-950/85 border border-slate-800/90 rounded-xl p-3 space-y-2">
-                  <div className="flex items-center justify-between text-xs">
-                    <span className="text-slate-300 font-bold">Scene Speed</span>
-                    <span className="font-mono text-cyan-300 font-bold">
-                      {Number(selectedAnim.speed || 0.25).toFixed(2)} Hz (
-                      {(1 / Math.max(0.02, selectedAnim.speed || 0.25)).toFixed(1)}s cycle)
-                    </span>
-                  </div>
-                  <input
-                    type="range"
-                    min="0.05"
-                    max="1.50"
-                    step="0.01"
-                    value={selectedAnim.speed || 0.25}
-                    onChange={(e) =>
-                      updateAnimation(
-                        { speed: parseFloat(e.target.value) },
-                        selectedPreset?.id
-                      )
-                    }
-                    className="w-full accent-cyan-400"
+          {/* TAB 1: ✨ STUDIO & SCENES (Exact 2-Up Hero Row + Scene Grid from APK) */}
+          {(activeTab === 'scenes' || activeTab === 'dashboard') && (
+            <div className="space-y-4">
+              {/* Top 2-Column Hero Row matching Flutter APK _buildUnfoldedDualPaneStudio */}
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 items-stretch">
+                {/* Left Hero (7 cols): Unified Night-Sky 3-House Visualizer + Transport + Bursts */}
+                <div className="lg:col-span-7 flex flex-col">
+                  <NeighborhoodPreview
+                    liveState={liveState}
+                    config={config}
+                    onPlaySync={handlePlaySync}
+                    onPauseSync={handlePauseSync}
+                    onStopSync={handleStopSync}
+                    onToggleHouse={handleToggleHouse}
+                    onAddHouse={handleAddHouse}
+                    onTriggerBurst={handleTriggerBurst}
+                    burstBusy={burstBusy}
                   />
-                  <div className="grid grid-cols-4 gap-1.5">
-                    {[
-                      { label: 'Slow', val: 0.14 },
-                      { label: 'Normal', val: 0.25 },
-                      { label: 'Fast', val: 0.45 },
-                      { label: 'Hyper', val: 0.8 },
-                    ].map((sp) => (
-                      <button
-                        key={sp.label}
-                        type="button"
-                        onClick={() =>
-                          updateAnimation({ speed: sp.val }, selectedPreset?.id)
-                        }
-                        className={`py-1 rounded-lg border text-[11px] font-mono font-semibold transition ${
-                          Math.abs((selectedAnim.speed || 0.25) - sp.val) < 0.02
-                            ? 'bg-cyan-500/25 border-cyan-400 text-cyan-200'
-                            : 'bg-slate-900 hover:bg-slate-800 border-slate-800 text-slate-300'
-                        }`}
-                      >
-                        {sp.label}
-                      </button>
-                    ))}
-                  </div>
                 </div>
 
-                {/* Flow Direction + Brightness (3 cols) */}
-                <div className="md:col-span-3 bg-slate-950/85 border border-slate-800/90 rounded-xl p-3 space-y-2.5">
-                  <div>
-                    <div className="text-xs font-bold text-slate-300 mb-1.5">
-                      Chase Flow Direction
+                {/* Right Hero (5 cols): Active Scene Speed, Direction & Color Tuner matching APK _buildSelectedSceneInlineTuner */}
+                <div className="lg:col-span-5 bg-[#0c1324] border border-[#1e293b] rounded-2xl p-4 shadow-xl flex flex-col justify-between space-y-3.5">
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <Sliders className="w-4 h-4 text-[#00f5d4] shrink-0" />
+                        <h3 className="text-sm font-extrabold text-[#00f5d4] truncate">
+                          Tune Scene: {selectedPreset ? selectedPreset.name : 'Custom Effect'}
+                        </h3>
+                      </div>
+                      {selectedPreset?.is_customized && (
+                        <button
+                          type="button"
+                          onClick={(e) => handleResetPreset(selectedPreset.id, e)}
+                          className="text-[11px] font-bold px-2.5 py-1 rounded-lg bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 border border-amber-500/40 shrink-0"
+                        >
+                          Reset Default
+                        </button>
+                      )}
                     </div>
-                    <div className="grid grid-cols-3 gap-1">
+
+                    {/* Segmented Direction Selector */}
+                    <div className="grid grid-cols-3 gap-1.5 bg-[#060b18] p-1 rounded-xl border border-[#1e293b]">
                       {[
-                        { id: 'forward', label: '1 → N' },
-                        { id: 'reverse', label: 'N → 1' },
-                        { id: 'pingpong', label: 'Bounce' },
+                        { id: 'forward', label: '1 → 2 → 3' },
+                        { id: 'reverse', label: '3 → 2 → 1' },
+                        { id: 'pingpong', label: 'Bounce ↔' },
                       ].map((d) => (
                         <button
                           key={d.id}
@@ -1597,102 +1500,196 @@ export default function App() {
                           onClick={() =>
                             updateAnimation({ direction: d.id }, selectedPreset?.id)
                           }
-                          className={`py-1.5 rounded-lg text-[11px] font-bold border transition ${
+                          className={`py-1.5 rounded-lg text-xs font-extrabold transition ${
                             selectedAnim.direction === d.id
-                              ? 'bg-cyan-500/25 border-cyan-400 text-cyan-200'
-                              : 'bg-slate-900 border-slate-800 text-slate-400 hover:text-white'
+                              ? 'bg-[#00f5d4]/20 text-[#00f5d4] border border-[#00f5d4]/50'
+                              : 'text-slate-400 hover:text-white'
                           }`}
                         >
                           {d.label}
                         </button>
                       ))}
                     </div>
-                  </div>
-                  <div>
-                    <div className="flex justify-between text-[11px] mb-1">
-                      <span className="text-slate-400 font-semibold">Brightness</span>
-                      <span className="font-mono text-cyan-300 font-bold">
-                        {anim.intensity ?? 100}%
-                      </span>
-                    </div>
-                    <input
-                      type="range"
-                      min="5"
-                      max="100"
-                      step="1"
-                      value={anim.intensity ?? 100}
-                      onChange={(e) =>
-                        updateAnimation({ intensity: parseInt(e.target.value, 10) })
-                      }
-                      className="w-full accent-cyan-400"
-                    />
-                  </div>
-                </div>
 
-                {/* 4 Color Pickers (4 cols) */}
-                <div className="md:col-span-4 bg-slate-950/85 border border-slate-800/90 rounded-xl p-3">
-                  <div className="text-xs font-bold text-slate-300 mb-2">
-                    Scene Color Palette (Tap to Customize)
-                  </div>
-                  <div className="grid grid-cols-4 gap-2">
-                    {[
-                      { key: 'primary_color', label: 'Lead 1' },
-                      { key: 'secondary_color', label: 'Mid 2' },
-                      { key: 'accent_color', label: 'Tail 3' },
-                      { key: 'background_color', label: 'Base' },
-                    ].map((c) => {
-                      const hexVal = selectedAnim[c.key] || '#00f5d4';
-                      return (
+                    {/* Speed Slider + Slow / Norm / Fast / Hyper Pills */}
+                    <div className="space-y-1.5">
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="text-slate-300 font-semibold">
+                          Speed: {Number(selectedAnim.speed || 0.25).toFixed(2)} Hz (
+                          {(1 / Math.max(0.02, selectedAnim.speed || 0.25)).toFixed(1)}s cycle)
+                        </span>
+                        <div className="flex items-center gap-1">
+                          {[
+                            { label: 'Slow', val: 0.14 },
+                            { label: 'Norm', val: 0.25 },
+                            { label: 'Fast', val: 0.45 },
+                            { label: 'Hyper', val: 0.8 },
+                          ].map((sp) => (
+                            <button
+                              key={sp.label}
+                              type="button"
+                              onClick={() =>
+                                updateAnimation({ speed: sp.val }, selectedPreset?.id)
+                              }
+                              className={`px-2 py-0.5 rounded-md border text-[10px] font-bold transition ${
+                                Math.abs((selectedAnim.speed || 0.25) - sp.val) < 0.02
+                                  ? 'bg-[#00f5d4]/20 border-[#00f5d4] text-[#00f5d4]'
+                                  : 'bg-[#060b18] border-[#1e293b] text-slate-300 hover:text-white'
+                              }`}
+                            >
+                              {sp.label}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                      <input
+                        type="range"
+                        min="0.05"
+                        max="1.50"
+                        step="0.01"
+                        value={selectedAnim.speed || 0.25}
+                        onChange={(e) =>
+                          updateAnimation(
+                            { speed: parseFloat(e.target.value) },
+                            selectedPreset?.id
+                          )
+                        }
+                        className="w-full accent-[#00f5d4]"
+                      />
+                    </div>
+
+                    {/* Brightness Slider */}
+                    <div className="space-y-1">
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="text-slate-300 font-semibold">
+                          Master Brightness: {anim.intensity ?? 100}%
+                        </span>
+                        <div className="flex items-center gap-1.5">
+                          <button
+                            type="button"
+                            onClick={() => handleAllPower(true)}
+                            className="px-2 py-0.5 rounded-md bg-[#060b18] hover:bg-slate-800 text-emerald-400 border border-[#1e293b] text-[10px] font-bold"
+                          >
+                            All ON
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleAllPower(false)}
+                            className="px-2 py-0.5 rounded-md bg-[#060b18] hover:bg-slate-800 text-rose-400 border border-[#1e293b] text-[10px] font-bold"
+                          >
+                            All OFF
+                          </button>
+                        </div>
+                      </div>
+                      <input
+                        type="range"
+                        min="5"
+                        max="100"
+                        step="1"
+                        value={anim.intensity ?? 100}
+                        onChange={(e) =>
+                          updateAnimation({ intensity: parseInt(e.target.value, 10) })
+                        }
+                        className="w-full accent-purple-500"
+                      />
+                    </div>
+
+                    {/* Color Channel Chips + Swatches matching APK */}
+                    <div className="space-y-2 pt-1 border-t border-[#1e293b]">
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        {[
+                          { key: 'primary_color', label: 'Lead 1' },
+                          { key: 'secondary_color', label: 'Mid 2' },
+                          { key: 'accent_color', label: 'Tail 3' },
+                          { key: 'background_color', label: 'Base Glow' },
+                        ].map((ch) => {
+                          const hex = selectedAnim[ch.key] || '#00f5d4';
+                          const sel = activeColorChannel === ch.key;
+                          return (
+                            <button
+                              key={ch.key}
+                              type="button"
+                              onClick={() => setActiveColorChannel(ch.key)}
+                              className={`px-2.5 py-1 rounded-lg text-[11px] font-bold flex items-center gap-1.5 border transition ${
+                                sel
+                                  ? 'bg-[#00f5d4]/20 border-[#00f5d4] text-white'
+                                  : 'bg-[#060b18] border-[#1e293b] text-slate-300 hover:text-white'
+                              }`}
+                            >
+                              <span
+                                className="w-3 h-3 rounded-full border border-white/30"
+                                style={{ backgroundColor: hex }}
+                              />
+                              <span>{ch.label}</span>
+                            </button>
+                          );
+                        })}
                         <label
-                          key={c.key}
-                          className="flex flex-col items-center bg-slate-900 border border-slate-800 rounded-xl p-1.5 cursor-pointer hover:border-cyan-400/60 transition"
+                          className="px-2 py-1 rounded-lg bg-[#060b18] border border-[#1e293b] text-[11px] font-bold text-cyan-300 flex items-center gap-1 cursor-pointer hover:border-cyan-400"
+                          title="Pick custom RGB color"
                         >
                           <input
                             type="color"
-                            value={hexVal}
+                            value={currentChannelHex}
                             onChange={(e) =>
                               updateAnimation(
-                                { [c.key]: e.target.value },
+                                { [activeColorChannel]: e.target.value },
                                 selectedPreset?.id
                               )
                             }
-                            className="w-8 h-8 rounded-lg cursor-pointer bg-transparent border-0"
+                            className="w-4 h-4 bg-transparent border-0 cursor-pointer"
                           />
-                          <span className="text-[10px] font-semibold text-slate-300 mt-1">
-                            {c.label}
-                          </span>
+                          <span>Custom</span>
                         </label>
-                      );
-                    })}
+                      </div>
+
+                      <div className="flex flex-wrap items-center gap-2 pt-0.5">
+                        {apkColorSwatches.map((hex) => {
+                          const isSel =
+                            currentChannelHex.toLowerCase() === hex.toLowerCase();
+                          return (
+                            <button
+                              key={hex}
+                              type="button"
+                              onClick={() =>
+                                updateAnimation(
+                                  { [activeColorChannel]: hex },
+                                  selectedPreset?.id
+                                )
+                              }
+                              className="w-6 h-6 rounded-full transition-transform hover:scale-110"
+                              style={{
+                                backgroundColor: hex,
+                                border: isSel
+                                  ? '2.5px solid #ffffff'
+                                  : '1px solid rgba(255,255,255,0.22)',
+                              }}
+                              title={hex}
+                            />
+                          );
+                        })}
+                      </div>
+                    </div>
                   </div>
                 </div>
               </div>
-            </div>
 
-            {/* Main Area: Full-Width Categorized Scene Gallery (Phone 1-col, Z Fold 7 Unfolded 2 wide cols, PC 3-4 cols) */}
-            <div className="bg-[#0b1120]/95 border border-slate-800/90 rounded-2xl p-4 sm:p-6 shadow-2xl space-y-4">
-              <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-800/90 pb-3.5">
-                <div>
-                  <div className="flex flex-wrap items-center gap-2">
-                    <Sparkles className="w-5 h-5 text-cyan-400" />
-                    <h2 className="text-base sm:text-xl font-extrabold text-white">
-                      Categorized Multi-House Scene Gallery
+              {/* Immediately Below Hero Row: Full-Width Multi-House Scene Gallery matching APK _buildSceneGalleryCard */}
+              <div className="bg-[#0c1324] border border-[#1e293b] rounded-2xl p-4 shadow-xl space-y-3.5">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <Sparkles className="w-4 h-4 text-[#00f5d4]" />
+                    <h2 className="text-sm sm:text-base font-extrabold text-white">
+                      Multi-House Scene Gallery ({filteredPresets.length} Live Previews)
                     </h2>
-                    <span className="text-xs font-mono px-2.5 py-0.5 rounded-full bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 font-bold">
-                      {presets.length} LIVE ANIMATED SCENES
-                    </span>
                   </div>
-                  <p className="text-xs text-slate-400 mt-1">
-                    Every card below renders a real-time 20 FPS animated roofline preview across all{' '}
-                    <strong className="text-cyan-300">
-                      {enabledHouseCount} active {enabledHouseCount === 1 ? 'house' : 'houses'}
-                    </strong>
-                    . Tap any card to launch it immediately!
-                  </p>
+                  <span className="text-xs text-slate-400">
+                    Tap any card to sync across all active houses
+                  </span>
                 </div>
 
-                {/* Category Filter Pills */}
-                <div className="flex items-center gap-2 overflow-x-auto pb-1 no-scrollbar w-full xl:w-auto">
+                {/* Category Filter Chips matching APK */}
+                <div className="flex items-center gap-2 overflow-x-auto pb-1 no-scrollbar">
                   {SCENE_CATEGORIES.map((cat) => {
                     const active = sceneCategory === cat.id;
                     const count =
@@ -1702,92 +1699,64 @@ export default function App() {
                     return (
                       <button
                         key={cat.id}
+                        type="button"
                         onClick={() => setSceneCategory(cat.id)}
-                        className={`px-3.5 py-2 rounded-xl text-xs font-bold whitespace-nowrap border transition flex items-center gap-1.5 shrink-0 ${
+                        className={`px-3 py-1.5 rounded-xl text-xs font-extrabold whitespace-nowrap border transition flex items-center gap-1.5 shrink-0 ${
                           active
-                            ? 'bg-gradient-to-r from-cyan-400 to-blue-500 text-slate-950 border-cyan-300 shadow-lg shadow-cyan-500/20'
-                            : 'bg-slate-950/90 hover:bg-slate-900 text-slate-300 border-slate-800'
+                            ? 'bg-[#00f5d4]/20 text-[#00f5d4] border-[#00f5d4]'
+                            : 'bg-[#060b18] hover:bg-slate-900 text-[#cbd5e1] border-[#1e293b]'
                         }`}
                       >
                         <span>{cat.label}</span>
-                        <span
-                          className={`text-[10px] font-mono px-1.5 py-0.2 rounded-full ${
-                            active
-                              ? 'bg-slate-950/25 text-slate-950 font-extrabold'
-                              : 'bg-slate-800 text-slate-400'
-                          }`}
-                        >
-                          {count}
-                        </span>
+                        <span className="text-[11px] opacity-80">({count})</span>
                       </button>
                     );
                   })}
                 </div>
-              </div>
 
-              {/* Full-Width Responsive Auto-Fill Grid:
-                  - Phone (<640px): 1 wide column (100%)
-                  - Unfolded Galaxy Z Fold 7 (680px-1024px): 2 spacious columns (~340px+ each) with 104px tall previews
-                  - PC Desktop (1200px+): 3 to 4 spacious columns */}
-              <div
-                className="scene-gallery-grid"
-                style={{
-                  display: 'grid',
-                  gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))',
-                  gap: '1rem',
-                }}
-              >
-                {filteredPresets.map((preset) => {
-                  const isSelected = activePresetId === preset.id;
-                  const pAnim = preset.animation || {};
-                  const isCenterOut = pAnim.effect === 'center_out_shockwave';
-                  const dirLabel = isCenterOut
-                    ? '◀ Center → Out ▶'
-                    : pAnim.direction === 'pingpong'
-                    ? '1 ↔ N Bounce'
-                    : pAnim.direction === 'reverse'
-                    ? 'House N → 1'
-                    : 'House 1 → N';
+                {/* Scene Cards Grid — Exact match to APK _buildAnimatedSceneCard */}
+                <div
+                  className="scene-gallery-grid"
+                  style={{
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))',
+                    gap: '0.75rem',
+                  }}
+                >
+                  {filteredPresets.map((preset) => {
+                    const isSelected = activePresetId === preset.id;
+                    const pAnim = isSelected ? { ...(preset.animation || {}), ...anim } : preset.animation || {};
+                    const primaryCol = pAnim.primary_color || '#00f5d4';
 
-                  return (
-                    <div
-                      key={preset.id}
-                      onClick={() => handleApplyPreset(preset.id)}
-                      role="button"
-                      tabIndex={0}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter' || e.key === ' ') handleApplyPreset(preset.id);
-                      }}
-                      className={`text-left rounded-2xl p-4 border transition-all flex flex-col justify-between gap-3 cursor-pointer group ${
-                        isSelected
-                          ? 'bg-gradient-to-b from-cyan-500/20 via-slate-900/95 to-slate-950 border-cyan-400 shadow-xl shadow-cyan-500/15 ring-1 ring-cyan-400/50'
-                          : 'bg-slate-950/90 hover:bg-slate-900/95 border-slate-800/90 hover:border-slate-700'
-                      }`}
-                    >
-                      <div className="space-y-3 w-full">
-                        {/* Card Header */}
-                        <div className="flex items-start justify-between gap-2">
-                          <div className="min-w-0">
-                            <div className="flex flex-wrap items-center gap-1.5 mb-1">
-                              <span className="text-[10px] font-mono uppercase tracking-wider px-2 py-0.5 rounded-full bg-slate-900 text-cyan-300 border border-slate-700/80">
-                                {preset.category}
-                              </span>
-                              <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-purple-500/15 text-purple-300 border border-purple-500/30">
-                                {preset.badge}
-                              </span>
-                              {preset.is_customized && (
-                                <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/40">
-                                  CUSTOMIZED
-                                </span>
-                              )}
-                            </div>
-                            <h3 className="text-base font-extrabold text-white group-hover:text-cyan-300 transition truncate">
-                              {preset.name}
-                            </h3>
-                          </div>
+                    return (
+                      <div
+                        key={preset.id}
+                        onClick={() => handleApplyPreset(preset.id)}
+                        role="button"
+                        tabIndex={0}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' || e.key === ' ') handleApplyPreset(preset.id);
+                        }}
+                        className={`text-left rounded-[14px] p-3 border transition-all flex flex-col justify-between gap-2 cursor-pointer group ${
+                          isSelected
+                            ? 'bg-[#0f243c] border-[#00f5d4] border-[1.8px] shadow-lg shadow-[#00f5d4]/10'
+                            : 'bg-[#060b18] hover:bg-[#091226] border-[#1e293b]'
+                        }`}
+                      >
+                        {/* 1. Top: Live 3-House Night-Sky Architectural Preview (exact match to APK) */}
+                        <LiveSceneCardPreview
+                          animation={{ ...pAnim, running: true }}
+                          houses={config?.houses}
+                          height={96}
+                          compact={true}
+                        />
 
-                          {/* Color Swatches */}
-                          <div className="flex items-center gap-1 shrink-0 mt-1">
+                        {/* 2. Middle: Title + 3 Color Dots */}
+                        <div className="flex items-center justify-between gap-2 pt-0.5">
+                          <h3 className="text-[13.5px] font-extrabold text-white truncate">
+                            {preset.name}
+                          </h3>
+                          <div className="flex items-center gap-1 shrink-0">
                             {[
                               pAnim.primary_color,
                               pAnim.secondary_color,
@@ -1795,49 +1764,45 @@ export default function App() {
                             ].map((hex, i) => (
                               <span
                                 key={i}
-                                className="w-4 h-4 rounded-full border border-white/25 shadow-sm"
+                                className="w-2.5 h-2.5 rounded-full border border-white/25"
                                 style={{ backgroundColor: hex }}
                               />
                             ))}
                           </div>
                         </div>
 
-                        {/* Tall 104px Live Multi-House Animated Roofline Preview */}
-                        <LiveSceneCardPreview
-                          animation={isSelected ? { ...pAnim, ...anim } : pAnim}
-                          houses={config?.houses}
-                          height={104}
-                        />
-
-                        <p className="text-xs text-slate-300 leading-relaxed line-clamp-2">
+                        {/* 3. Description */}
+                        <p className="text-[11px] text-[#94a3b8] leading-snug line-clamp-2">
                           {preset.description}
                         </p>
-                      </div>
 
-                      {/* Footer metadata */}
-                      <div className="w-full pt-2.5 border-t border-slate-800/80 flex items-center justify-between text-[11px] font-mono text-slate-400">
-                        <span className="text-cyan-300 font-semibold">{dirLabel}</span>
-                        <span>
-                          {Number((isSelected ? anim.speed : pAnim.speed) || 0.25).toFixed(2)} Hz ·{' '}
-                          {(isSelected ? anim.pulse_count : pAnim.pulse_count) || 1} pulse(s)
-                        </span>
-                        <span
-                          className={`px-2.5 py-0.5 rounded-lg font-bold ${
-                            isSelected
-                              ? 'bg-emerald-400 text-slate-950'
-                              : 'bg-slate-800 text-slate-200 group-hover:bg-cyan-500/25 group-hover:text-cyan-200'
-                          }`}
-                        >
-                          {isSelected ? 'ACTIVE' : 'LAUNCH ▶'}
-                        </span>
+                        {/* 4. Bottom Row: Category • Badge pill on left + ACTIVE / TAP TO SYNC on right */}
+                        <div className="flex items-center justify-between gap-2 pt-1">
+                          <span
+                            className="text-[10px] font-bold px-2 py-0.5 rounded-md truncate"
+                            style={{
+                              backgroundColor: `${primaryCol}26`,
+                              color: primaryCol,
+                            }}
+                          >
+                            {preset.category} • {preset.badge}
+                            {preset.is_customized ? ' • Custom' : ''}
+                          </span>
+                          <span
+                            className={`text-[10px] font-extrabold shrink-0 ${
+                              isSelected ? 'text-[#00f5d4]' : 'text-[#64748b] group-hover:text-slate-300'
+                            }`}
+                          >
+                            {isSelected ? '● ACTIVE' : 'TAP TO SYNC'}
+                          </span>
+                        </div>
                       </div>
-                    </div>
-                  );
-                })}
+                    );
+                  })}
+                </div>
               </div>
             </div>
-          </div>
-        )}
+          )}
 
         {/* TAB 2: 🏠 HOUSES & API KEYS */}
         {activeTab === 'houses' && (
@@ -2882,7 +2847,8 @@ export default function App() {
             </div>
           </div>
         )}
-      </main>
+        </main>
+      </div>
 
       {/* Fixed Thumb-Friendly 5-Tab Bottom Navigation Bar for Mobile & Galaxy Z Fold 7 Cover Screen (<768px) */}
       <nav className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-[#060a15]/95 backdrop-blur-2xl border-t border-slate-800 px-1.5 py-1.5 grid grid-cols-5 gap-1">
