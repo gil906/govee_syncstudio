@@ -2822,8 +2822,16 @@ class MasterAnimationEngine:
         self._last_playlist_switch_mono = time.monotonic_ns() / 1e9
         self.resume_clock()
         self.driver._last_sent_rgb.clear()
+        self.driver._last_sent_sig.clear()
         self._last_schedule_action = trigger_label
         saved = self.store.save(cfg)
+        if preset is not None:
+            await self.driver.apply_cloud_scene_to_all(
+                saved,
+                preset_id=preset["id"],
+                effect=str(merged.get("effect", "")),
+                category=str(preset.get("category", "")),
+            )
         await self.broadcast_snapshot(saved)
         return saved
 
@@ -3118,6 +3126,8 @@ class MasterAnimationEngine:
                 else 0.0,
             },
             "stats": self.driver.stats,
+            "active_cloud_scenes": self.driver._active_cloud_scene,
+            "cloud_errors": self.driver._cloud_last_error,
             "bridges": list(self.driver.bridge_info.values()),
             "recent_logs": [entry.model_dump() for entry in list(self.driver.packet_logs)[:25]],
         }

@@ -1446,6 +1446,20 @@ export default function App() {
             </div>
           )}
 
+          {liveState?.cloud_errors && Object.keys(liveState.cloud_errors).length > 0 && (
+            <div className="bg-amber-950/60 border border-amber-500/50 text-amber-200 px-4 py-2.5 rounded-xl text-xs font-medium flex flex-wrap items-center justify-between gap-2 shadow-lg">
+              <div>
+                <span className="font-extrabold text-amber-300">Govee Cloud Notice: </span>
+                {Object.entries(liveState.cloud_errors)
+                  .map(([cid, err]) => `${cid}: ${err}`)
+                  .join(' · ')}
+              </div>
+              <span className="text-[11px] text-amber-300/90 font-semibold">
+                Auto-retrying every 15s until controller connects to 2.4 GHz Wi-Fi
+              </span>
+            </div>
+          )}
+
           {/* TAB 1: ✨ STUDIO & SCENES (Exact 2-Up Hero Row + Scene Grid from APK) */}
           {(activeTab === 'scenes' || activeTab === 'dashboard') && (
             <div className="space-y-4">

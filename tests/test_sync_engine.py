@@ -261,11 +261,12 @@ def test_per_house_cloud_api_key_and_neighbor_bridge_routing(tmp_path: Path) -> 
             force_send=True,
         )
     )
-    # Should have used house1.govee_api_key and tried segmentedColorRgb then succeeded with colorRgb fallback
-    assert len(sent_requests) == 2
+    # Should have used house1.govee_api_key, sent powerSwitch=1, tried segmentedColorRgb, then succeeded with colorRgb fallback
+    assert len(sent_requests) == 3
     assert sent_requests[0]["headers"]["Govee-API-Key"] == "neighbor-1-secret-api-key"
-    assert sent_requests[0]["json"]["payload"]["capability"]["instance"] == "segmentedColorRgb"
-    assert sent_requests[1]["json"]["payload"]["capability"]["instance"] == "colorRgb"
+    assert sent_requests[0]["json"]["payload"]["capability"]["instance"] == "powerSwitch"
+    assert sent_requests[1]["json"]["payload"]["capability"]["instance"] == "segmentedColorRgb"
+    assert sent_requests[2]["json"]["payload"]["capability"]["instance"] == "colorRgb"
 
 
 def test_api_reorder_houses_and_bridge_endpoints() -> None:

@@ -68,18 +68,28 @@ def _seed_configured_lan_devices(cfg: SystemConfig) -> None:
 async def lifespan(app: FastAPI):
     await driver.start()
     await engine.start()
-    # Trigger an initial background LAN + Cloud scan
+    # Trigger an initial background LAN + Cloud scan and apply active Cloud scene if running
     cfg = store.get()
     _seed_configured_lan_devices(cfg)
     known_ips = [c.ip for h in cfg.houses for c in h.controllers if c.ip]
     house_keys = [h.govee_api_key for h in cfg.houses if h.govee_api_key]
-    asyncio.create_task(
-        driver.scan_lan_and_cloud(
+
+    async def _startup_sync() -> None:
+        await driver.scan_lan_and_cloud(
             known_ips=known_ips,
             api_key=cfg.govee_api_key,
             extra_api_keys=house_keys,
         )
-    )
+        if cfg.animation.running and cfg.active_preset_id:
+            preset = next((p for p in engine.PRESETS if p["id"] == cfg.active_preset_id), None)
+            await driver.apply_cloud_scene_to_all(
+                cfg,
+                preset_id=cfg.active_preset_id,
+                effect=str(cfg.animation.effect.value if hasattr(cfg.animation.effect, "value") else cfg.animation.effect),
+                category=str(preset.get("category", "")) if preset else "",
+            )
+
+    asyncio.create_task(_startup_sync())
     yield
     await engine.stop()
     await driver.stop()
@@ -601,9 +611,18 @@ async def patch_animation(patch: Dict[str, Any]) -> AnimationConfig:
     elif not was_running and cfg.animation.running:
         engine.resume_clock()
 
+    # If the user explicitly changed primary_color or secondary_color (e.g. clicked a color swatch),
+    # exit hardware lightScene mode so the chosen static/custom color is sent directly to the strip.
+    if "primary_color" in patch or "secondary_color" in patch or "accent_color" in patch:
+        driver.clear_active_cloud_scenes()
+        driver._last_sent_rgb.clear()
+        driver._last_sent_sig.clear()
+
     saved = store.save(cfg)
     if was_running and not saved.animation.running and saved.animation.blackout_on_stop:
         await driver.blackout_all_controllers(saved, turn_off=True)
+    elif not was_running and saved.animation.running:
+        await driver.power_on_all_controllers(saved)
     await engine.broadcast_snapshot(saved)
     return saved.animation
 
@@ -614,8 +633,19 @@ async def play_animation() -> Dict[str, Any]:
     cfg.animation.running = True
     engine.resume_clock()
     driver._last_sent_rgb.clear()
+    driver._last_sent_sig.clear()
     driver._last_sent_time.clear()
     saved = store.save(cfg)
+    active_pid = saved.active_preset_id or engine.active_preset_id or ""
+    preset = next((p for p in engine.PRESETS if p["id"] == active_pid), None)
+    await driver.power_on_all_controllers(saved)
+    if preset is not None:
+        await driver.apply_cloud_scene_to_all(
+            saved,
+            preset_id=preset["id"],
+            effect=str(preset.get("animation", {}).get("effect", "")),
+            category=str(preset.get("category", "")),
+        )
     snapshot = await engine.broadcast_snapshot(saved)
     return {
         "running": True,
@@ -775,12 +805,18 @@ def _build_enriched_presets(cfg: SystemConfig) -> List[Dict[str, Any]]:
         default_anim = dict(p["animation"])
         override = cfg.preset_overrides.get(pid, {})
         merged_anim = {**default_anim, **override}
+        govee_scene = driver.resolve_govee_light_scene(
+            pid,
+            effect=str(merged_anim.get("effect", "")),
+            category=str(p.get("category", "")),
+        )
         enriched.append(
             {
                 **p,
                 "animation": merged_anim,
                 "default_animation": default_anim,
                 "is_customized": bool(override),
+                "govee_scene": govee_scene,
             }
         )
     return enriched
@@ -808,7 +844,17 @@ async def apply_preset(preset_id: str) -> SystemConfig:
     engine._last_playlist_switch_mono = time.monotonic_ns() / 1e9
     engine.resume_clock()
     driver._last_sent_rgb.clear()
+    driver._last_sent_sig.clear()
     saved = store.save(cfg)
+
+    # Power on and trigger native Govee Cloud hardware `lightScene` across all enabled houses/controllers
+    await driver.apply_cloud_scene_to_all(
+        saved,
+        preset_id=preset_id,
+        effect=str(merged.get("effect", "")),
+        category=str(preset.get("category", "")),
+    )
+
     await engine.broadcast_snapshot(saved)
     return saved
 
@@ -836,6 +882,11 @@ async def customize_preset(preset_id: str, patch: Dict[str, Any] = Body(...)) ->
         if k in allowed and v is not None:
             current_ovr[k] = v
     cfg.preset_overrides[preset_id] = current_ovr
+
+    if "primary_color" in patch or "secondary_color" in patch or "accent_color" in patch:
+        driver.clear_active_cloud_scenes()
+        driver._last_sent_rgb.clear()
+        driver._last_sent_sig.clear()
 
     # Also apply immediately if this preset is active (or if apply_now is set)
     if cfg.active_preset_id == preset_id or engine.active_preset_id == preset_id or patch.get("apply_now", True):

@@ -315,6 +315,11 @@ class GoveeProtocolDriver:
         self._last_sent_brightness: Dict[str, int] = {}
         self._cloud_last_call: Dict[str, float] = {}
         self._cloud_group_cursor: Dict[str, int] = {}
+        self._cloud_powered_on: Set[str] = set()
+        self._cloud_offline_until: Dict[str, float] = {}
+        self._cloud_last_error: Dict[str, str] = {}
+        self._active_cloud_scene: Dict[str, Dict[str, Any]] = {}
+        self.device_scenes_cache: Dict[str, Dict[str, Dict[str, Any]]] = {}
 
         self.stats = {
             "lan_packets_sent": 0,
@@ -504,15 +509,46 @@ class GoveeProtocolDriver:
             if resp.status_code == 200:
                 body = resp.json()
                 for item in body.get("data", []):
+                    dev_type = str(item.get("type", ""))
+                    caps = item.get("capabilities", [])
+                    is_light = "light" in dev_type.lower() or any(
+                        "color_setting" in str(c.get("type", ""))
+                        or "segment_color_setting" in str(c.get("type", ""))
+                        for c in caps
+                    )
+                    if not is_light:
+                        continue
                     mac = str(item.get("device", "")).upper()
                     sku = str(item.get("sku", "Govee-Cloud"))
                     name = str(item.get("deviceName", sku))
-                    caps = item.get("capabilities", [])
                     has_seg = any(
                         "segment_color_setting" in str(c.get("type", ""))
                         or c.get("instance") == "segmentedColorRgb"
                         for c in caps
                     )
+                    is_online = True
+                    on_off_val: Optional[int] = None
+                    bri_val: Optional[int] = None
+                    try:
+                        st_resp = await client.post(
+                            f"{self.CLOUD_BASE_URL}/device/state",
+                            headers={"Govee-API-Key": clean_key, "Content-Type": "application/json"},
+                            json={"requestId": str(uuid.uuid4()), "payload": {"sku": sku, "device": mac}},
+                        )
+                        if st_resp.status_code == 200:
+                            st_caps = st_resp.json().get("payload", {}).get("capabilities", [])
+                            for sc in st_caps:
+                                inst = sc.get("instance")
+                                val = sc.get("state", {}).get("value")
+                                if inst == "online" and isinstance(val, bool):
+                                    is_online = val
+                                elif inst == "powerSwitch" and isinstance(val, int):
+                                    on_off_val = val
+                                elif inst == "brightness" and isinstance(val, int):
+                                    bri_val = val
+                    except Exception:
+                        pass
+
                     existing = self.discovered_devices.get(mac)
                     dev = DiscoveredDevice(
                         ip=existing.ip if existing else "",
@@ -521,7 +557,9 @@ class GoveeProtocolDriver:
                         name=name,
                         source="cloud" if not (existing and existing.ip) else existing.source,
                         last_seen=time.time(),
-                        online=True,
+                        online=is_online if not (existing and existing.ip) else True,
+                        on_off=on_off_val,
+                        brightness=bri_val,
                         supports_segment_rgb=has_seg,
                     )
                     self.discovered_devices[mac] = dev
@@ -631,6 +669,437 @@ class GoveeProtocolDriver:
         )
         self.packet_logs.appendleft(entry)
 
+    # Built-in Govee OpenAPI v2 Dynamic Scene catalog (from POST /router/api/v1/device/scenes on H705E / H805D)
+    DEFAULT_GOVEE_SCENES: Dict[str, Dict[str, Any]] = {
+        "rainbow": {"name": "Rainbow", "id": 10744, "paramId": 17949},
+        "flow": {"name": "Flow", "id": 10804, "paramId": 18009},
+        "gradient": {"name": "Gradient", "id": 10807, "paramId": 18012},
+        "colorful": {"name": "Colorful", "id": 10803, "paramId": 18008},
+        "stacking": {"name": "Stacking", "id": 10806, "paramId": 18011},
+        "spin": {"name": "Spin", "id": 10799, "paramId": 18004},
+        "fluctuate": {"name": "Fluctuate", "id": 10805, "paramId": 18010},
+        "meteor": {"name": "Meteor", "id": 14161, "paramId": 22809},
+        "fire": {"name": "Fire", "id": 10753, "paramId": 17958},
+        "firefly": {"name": "Firefly", "id": 10752, "paramId": 17957},
+        "aurora": {"name": "Aurora", "id": 10746, "paramId": 17951},
+        "wave": {"name": "Wave", "id": 10748, "paramId": 17953},
+        "thunderstorm": {"name": "Thunderstorm", "id": 14158, "paramId": 22806},
+        "candlelight": {"name": "Candlelight", "id": 10782, "paramId": 17987},
+        "fireworks": {"name": "Fireworks", "id": 10781, "paramId": 17986},
+        "dance party": {"name": "Dance Party", "id": 10778, "paramId": 17983},
+        "party": {"name": "Party", "id": 10779, "paramId": 17984},
+        "carnival": {"name": "Carnival", "id": 10776, "paramId": 17981},
+        "confetti": {"name": "Confetti", "id": 14173, "paramId": 22821},
+        "new years": {"name": "New Years", "id": 10774, "paramId": 17979},
+        "game day": {"name": "Game Day", "id": 10785, "paramId": 17990},
+        "birthday": {"name": "Birthday", "id": 10773, "paramId": 17978},
+        "hooray": {"name": "Hooray", "id": 14175, "paramId": 22823},
+        "music show": {"name": "Music Show", "id": 14171, "paramId": 22819},
+        "flash": {"name": "Flash", "id": 23504, "paramId": 34012},
+        "halloween": {"name": "Halloween", "id": 10764, "paramId": 17969},
+        "halloween b": {"name": "Halloween B", "id": 10765, "paramId": 17970},
+        "halloween c": {"name": "Halloween C", "id": 10766, "paramId": 17971},
+        "halloween d": {"name": "Halloween D", "id": 10767, "paramId": 17972},
+        "halloween v2": {"name": "Halloween", "id": 14491, "paramId": 23302},
+        "mysterious": {"name": "Mysterious", "id": 10813, "paramId": 18018},
+        "karst cave": {"name": "Karst Cave", "id": 10747, "paramId": 17952},
+        "nebula": {"name": "Nebula", "id": 10740, "paramId": 17945},
+        "universe": {"name": "Universe", "id": 10743, "paramId": 17948},
+        "moonlight": {"name": "Moonlight", "id": 10741, "paramId": 17946},
+        "star": {"name": "Star", "id": 10742, "paramId": 17947},
+        "christmas": {"name": "Christmas", "id": 10760, "paramId": 17965},
+        "christmas tree": {"name": "Christmas Tree", "id": 10761, "paramId": 17966},
+        "christmas gift": {"name": "Christmas Gift", "id": 10762, "paramId": 17967},
+        "christmas bell": {"name": "Christmas Bell", "id": 14164, "paramId": 22812},
+        "candy cane": {"name": "Candy Cane", "id": 14165, "paramId": 22813},
+        "christmas eve": {"name": "Christmas Eve", "id": 14166, "paramId": 22814},
+        "christmas wreath": {"name": "Christmas Wreath", "id": 14167, "paramId": 22815},
+        "sled": {"name": "Sled", "id": 10763, "paramId": 17968},
+        "winter wonderland": {"name": "Winter Wonderland", "id": 10787, "paramId": 17992},
+        "delivering gifts": {"name": "Delivering Gifts", "id": 14492, "paramId": 23303},
+        "winter": {"name": "Winter", "id": 10758, "paramId": 17963},
+        "candy": {"name": "Candy", "id": 10798, "paramId": 18003},
+        "dreamlike": {"name": "Dreamlike", "id": 10815, "paramId": 18020},
+        "enthusiastic": {"name": "Enthusiastic", "id": 10812, "paramId": 18017},
+        "active": {"name": "Active", "id": 10819, "paramId": 18024},
+    }
+
+    def resolve_govee_light_scene(
+        self,
+        preset_id: str,
+        effect: str = "",
+        category: str = "",
+        mac: str = "",
+    ) -> Dict[str, Any]:
+        """
+        Map any Studio preset ID or effect to an official Govee hardware `lightScene`
+        (`devices.capabilities.dynamic_scene`, `instance: "lightScene"`, `value: {"id", "paramId"}`).
+        """
+        pid = (preset_id or "").lower()
+        eff = (effect or "").lower()
+        cat = (category or "").lower()
+        cached = self.device_scenes_cache.get((mac or "").upper(), {})
+
+        def _pick(key: str) -> Dict[str, Any]:
+            k = key.lower()
+            if k in cached:
+                return cached[k]
+            return self.DEFAULT_GOVEE_SCENES.get(k, self.DEFAULT_GOVEE_SCENES["rainbow"])
+
+        if "rainbow2" in pid or eff == "govee_rainbow2":
+            return _pick("flow")
+        if "rainbow" in pid or "prism" in pid or eff in ("govee_rainbow1", "rainbow_wave"):
+            return _pick("rainbow")
+
+        if "halloween" in pid or "halloween" in cat or any(
+            w in pid
+            for w in (
+                "witch", "ghost", "vampire", "zombie", "pumpkin", "haunt", "spooky", "reaper",
+                "crypt", "cauldron", "werewolf", "banshee", "poltergeist", "ectoplasm", "skeleton",
+                "spider", "frankenstein", "toxic", "hellfire", "dracula", "voodoo", "scarecrow",
+                "gargoyle", "mummy", "warlock", "coven",
+            )
+        ):
+            if any(w in pid for w in ("thunder", "storm", "lightning", "poltergeist")):
+                return _pick("thunderstorm")
+            if any(w in pid for w in ("hellfire", "inferno", "ember", "brimstone", "pyre")):
+                return _pick("fire")
+            if any(w in pid for w in ("witch", "cauldron", "coven", "warlock", "voodoo", "hocus")):
+                return _pick("halloween b")
+            if any(w in pid for w in ("ghost", "phantom", "banshee", "ectoplasm", "fog", "specter", "wraith")):
+                return _pick("halloween c")
+            if any(w in pid for w in ("vampire", "blood", "dracula", "reaper", "crimson", "fang", "chainsaw")):
+                return _pick("halloween d")
+            if any(w in pid for w in ("zombie", "toxic", "slime", "frankenstein", "ooze", "biohazard", "acid")):
+                return _pick("halloween v2")
+            if any(w in pid for w in ("spider", "cat", "skeleton", "mummy", "gargoyle", "crypt")):
+                return _pick("mysterious")
+            return _pick("halloween")
+
+        if "christmas" in pid or "xmas" in pid or "christmas" in cat or any(
+            w in pid
+            for w in (
+                "santa", "reindeer", "rudolph", "candy_cane", "peppermint", "gingerbread",
+                "nutcracker", "mistletoe", "holly", "wreath", "icicle", "blizzard", "frost",
+                "snow", "bethlehem", "nativity", "yule", "elf", "elves", "kringle", "grinch",
+                "polar", "stocking", "jingle",
+            )
+        ):
+            if any(w in pid for w in ("candy", "peppermint", "gingerbread", "sugar")):
+                return _pick("candy cane")
+            if any(w in pid for w in ("tree", "pine", "evergreen", "spruce", "forest")):
+                return _pick("christmas tree")
+            if any(w in pid for w in ("gift", "present", "workshop", "toy", "elf", "elves")):
+                return _pick("christmas gift")
+            if any(w in pid for w in ("deliver", "stocking", "chimney", "kringle")):
+                return _pick("delivering gifts")
+            if any(w in pid for w in ("bell", "jingle", "carol", "choir", "gold", "angel")):
+                return _pick("christmas bell")
+            if any(w in pid for w in ("eve", "silent", "bethlehem", "midnight", "nativity", "star")):
+                return _pick("christmas eve")
+            if any(w in pid for w in ("wreath", "mistletoe", "holly", "hearth", "garland")):
+                return _pick("christmas wreath")
+            if any(w in pid for w in ("santa", "sleigh", "sled", "reindeer", "rudolph", "dash")):
+                return _pick("sled")
+            if any(w in pid for w in ("icicle", "blizzard", "frost", "snow", "frozen", "polar", "winter", "glacier")):
+                return _pick("winter wonderland")
+            if "aurora" in pid:
+                return _pick("aurora")
+            return _pick("christmas")
+
+        if "diwali" in pid or "diwali" in cat:
+            if "diya" in pid or "candle" in pid or "lamp" in pid:
+                return _pick("candlelight")
+            if "rangoli" in pid:
+                return _pick("colorful")
+            if "lantern" in pid or "spark" in pid or "patakha" in pid:
+                return _pick("fireworks")
+            return _pick("firefly")
+
+        if "firework" in pid or "july" in pid:
+            return _pick("fireworks")
+        if "new_year" in pid or "countdown" in pid:
+            return _pick("new years")
+        if "gameday" in pid or "touchdown" in pid or "sport" in pid:
+            return _pick("game day")
+        if "birthday" in pid or "confetti" in pid:
+            return _pick("confetti")
+        if "party" in pid or "strobe" in pid or "disco" in pid or "rave" in pid:
+            return _pick("dance party")
+        if "aurora" in pid:
+            return _pick("aurora")
+        if "fire" in pid or "flame" in pid or "ember" in pid or eff == "fire_sparkle":
+            return _pick("fire")
+        if "meteor" in pid or "comet" in pid or "shockwave" in pid or eff == "comet":
+            return _pick("meteor")
+        if "supernova" in pid or "galaxy" in pid or "cosmic" in pid:
+            return _pick("universe")
+        if "stack" in pid or eff == "stacking_blocks":
+            return _pick("stacking")
+        if "wipe" in pid or eff == "color_wipe":
+            return _pick("gradient")
+        if "breath" in pid or "pulse" in pid or eff == "breathing":
+            return _pick("fluctuate")
+        return _pick("flow")
+
+    async def fetch_device_scenes(self, api_key: str, sku: str, mac: str) -> Dict[str, Dict[str, Any]]:
+        """
+        Query `POST /router/api/v1/device/scenes` for a specific controller and cache its dynamic scenes.
+        """
+        clean_key = (api_key or "").strip()
+        clean_mac = (mac or "").strip().upper()
+        if not clean_key or not clean_mac:
+            return {}
+        if clean_mac in self.device_scenes_cache and self.device_scenes_cache[clean_mac]:
+            return self.device_scenes_cache[clean_mac]
+
+        own_client = False
+        client = self._http_client
+        if client is None:
+            client = httpx.AsyncClient(timeout=5.0)
+            own_client = True
+
+        scenes_map: Dict[str, Dict[str, Any]] = {}
+        try:
+            resp = await client.post(
+                f"{self.CLOUD_BASE_URL}/device/scenes",
+                headers={"Govee-API-Key": clean_key, "Content-Type": "application/json"},
+                json={"requestId": str(uuid.uuid4()), "payload": {"sku": sku or "H705E", "device": clean_mac}},
+            )
+            if resp.status_code == 200:
+                caps = resp.json().get("payload", {}).get("capabilities", [])
+                for cap in caps:
+                    if cap.get("instance") == "lightScene":
+                        for opt in cap.get("parameters", {}).get("options", []):
+                            nm = " ".join(str(opt.get("name", "")).split()).strip()
+                            val = opt.get("value", {})
+                            if nm and isinstance(val, dict) and "id" in val and "paramId" in val:
+                                scenes_map[nm.lower()] = {
+                                    "name": nm,
+                                    "id": val["id"],
+                                    "paramId": val["paramId"],
+                                }
+                if scenes_map:
+                    self.device_scenes_cache[clean_mac] = scenes_map
+        except Exception as exc:
+            logger.debug("fetch_device_scenes failed for %s: %s", clean_mac, exc)
+        finally:
+            if own_client:
+                await client.aclose()
+        return scenes_map
+
+    async def send_cloud_light_scene(
+        self,
+        house: HouseConfig,
+        ctrl: ControllerConfig,
+        effective_api_key: str,
+        preset_id: str,
+        effect: str = "",
+        category: str = "",
+        brightness: int = 100,
+        verbose_logging: bool = True,
+    ) -> Dict[str, Any]:
+        """
+        Send official Govee OpenAPI v2 `powerSwitch: 1` + `devices.capabilities.dynamic_scene`
+        (`instance: "lightScene"`, `value: {"id": ..., "paramId": ...}`) to a controller.
+        """
+        clean_key = (effective_api_key or "").strip()
+        if not clean_key or not ctrl.mac or ctrl.mac.upper().startswith("AA:BB:CC:DD:EE:"):
+            return {"ok": False, "reason": "missing_api_key_or_mac"}
+
+        t0 = time.perf_counter()
+        if ctrl.mac.upper() not in self.device_scenes_cache:
+            await self.fetch_device_scenes(clean_key, ctrl.sku, ctrl.mac)
+
+        scene_info = self.resolve_govee_light_scene(preset_id, effect=effect, category=category, mac=ctrl.mac)
+        headers = {"Govee-API-Key": clean_key, "Content-Type": "application/json"}
+        target_label = f"cloud:{ctrl.mac[-8:]}" if not ctrl.ip else ctrl.ip
+
+        own_client = False
+        client = self._http_client
+        if client is None:
+            client = httpx.AsyncClient(timeout=4.5)
+            own_client = True
+
+        dev_meta = self.discovered_devices.get(ctrl.mac.upper())
+        try:
+            if ctrl.ip:
+                self._send_udp_json(ctrl.ip, self.control_port, {"msg": {"cmd": "turn", "data": {"value": 1}}})
+            await client.post(
+                f"{self.CLOUD_BASE_URL}/device/control",
+                headers=headers,
+                json={
+                    "requestId": str(uuid.uuid4()),
+                    "payload": {
+                        "sku": ctrl.sku or "H705E",
+                        "device": ctrl.mac,
+                        "capability": {
+                            "type": "devices.capabilities.on_off",
+                            "instance": "powerSwitch",
+                            "value": 1,
+                        },
+                    },
+                },
+            )
+            self.stats["cloud_requests_sent"] += 1
+
+            scene_resp = await client.post(
+                f"{self.CLOUD_BASE_URL}/device/control",
+                headers=headers,
+                json={
+                    "requestId": str(uuid.uuid4()),
+                    "payload": {
+                        "sku": ctrl.sku or "H705E",
+                        "device": ctrl.mac,
+                        "capability": {
+                            "type": "devices.capabilities.dynamic_scene",
+                            "instance": "lightScene",
+                            "value": {
+                                "id": scene_info["id"],
+                                "paramId": scene_info["paramId"],
+                            },
+                        },
+                    },
+                },
+            )
+            self.stats["cloud_requests_sent"] += 1
+
+            ok = scene_resp.status_code == 200
+            err_msg = ""
+            is_offline = False
+            if ok:
+                try:
+                    rj = scene_resp.json()
+                    cap_state = rj.get("capability", {}).get("state", {}) if isinstance(rj.get("capability"), dict) else {}
+                    err_msg = str(cap_state.get("errorMsg") or rj.get("msg") or "")
+                    if rj.get("code", 200) not in (200, "200") or cap_state.get("status") == "failure":
+                        ok = False
+                        is_offline = "offline" in err_msg.lower()
+                except Exception:
+                    pass
+            else:
+                err_msg = f"HTTP {scene_resp.status_code}"
+
+            now_mono = time.monotonic()
+            self._cloud_last_call[ctrl.id] = now_mono
+            self._active_cloud_scene[ctrl.id] = {
+                "preset_id": preset_id,
+                "effect": effect,
+                "category": category,
+                "scene_name": scene_info["name"],
+                "id": scene_info["id"],
+                "paramId": scene_info["paramId"],
+                "applied": ok,
+                "last_attempt": now_mono,
+            }
+
+            if ok:
+                self._cloud_powered_on.add(ctrl.id)
+                self._cloud_offline_until.pop(ctrl.id, None)
+                self._cloud_last_error.pop(ctrl.id, None)
+                if dev_meta is not None:
+                    dev_meta.online = True
+                    dev_meta.on_off = 1
+                self._record_log(
+                    house,
+                    ctrl,
+                    "CLOUD-SCENE",
+                    "lightScene",
+                    f"scene='{scene_info['name']}' (id={scene_info['id']}, paramId={scene_info['paramId']}) -> OK",
+                    (0, 245, 212),
+                    (time.perf_counter() - t0) * 1000.0,
+                    True,
+                    True,
+                    target_override=target_label,
+                )
+            else:
+                self.stats["send_errors"] += 1
+                self._cloud_last_error[ctrl.id] = err_msg or "Failed to apply scene"
+                if is_offline:
+                    self._cloud_offline_until[ctrl.id] = now_mono + 15.0
+                    self._cloud_powered_on.discard(ctrl.id)
+                    if dev_meta is not None:
+                        dev_meta.online = False
+                self._record_log(
+                    house,
+                    ctrl,
+                    "CLOUD-SCENE",
+                    "offline" if is_offline else "lightSceneError",
+                    f"scene='{scene_info['name']}' -> {err_msg}",
+                    (255, 80, 80),
+                    (time.perf_counter() - t0) * 1000.0,
+                    False,
+                    True,
+                    target_override=target_label,
+                )
+            return {
+                "ok": ok,
+                "offline": is_offline,
+                "error": err_msg if not ok else "",
+                "scene": scene_info,
+            }
+        except Exception as exc:
+            self.stats["send_errors"] += 1
+            self._cloud_last_error[ctrl.id] = str(exc)
+            return {"ok": False, "offline": False, "error": str(exc), "scene": scene_info}
+        finally:
+            if own_client:
+                await client.aclose()
+
+    async def apply_cloud_scene_to_all(
+        self,
+        config: SystemConfig,
+        preset_id: str,
+        effect: str = "",
+        category: str = "",
+    ) -> List[Dict[str, Any]]:
+        """
+        Trigger Govee hardware `lightScene` (`devices.capabilities.dynamic_scene`) across all
+        enabled houses & controllers that have a Govee Cloud API key configured.
+        """
+        tasks = []
+        meta = []
+        for house in config.houses:
+            if not house.enabled:
+                continue
+            effective_key = (house.govee_api_key or config.govee_api_key or "").strip()
+            for ctrl in house.controllers:
+                if not ctrl.enabled:
+                    continue
+                if effective_key and ctrl.mac:
+                    eff_bri = (
+                        ctrl.brightness_override
+                        if ctrl.brightness_override is not None
+                        else getattr(config.animation, "intensity", 100)
+                    )
+                    tasks.append(
+                        self.send_cloud_light_scene(
+                            house=house,
+                            ctrl=ctrl,
+                            effective_api_key=effective_key,
+                            preset_id=preset_id,
+                            effect=effect,
+                            category=category,
+                            brightness=eff_bri,
+                            verbose_logging=config.verbose_packet_logging,
+                        )
+                    )
+                    meta.append((house.id, ctrl.id, ctrl.name))
+        if not tasks:
+            return []
+        raw_results = await asyncio.gather(*tasks, return_exceptions=True)
+        out = []
+        for (hid, cid, cname), res in zip(meta, raw_results):
+            if isinstance(res, dict):
+                out.append({"house_id": hid, "controller_id": cid, "controller_name": cname, **res})
+            else:
+                out.append({"house_id": hid, "controller_id": cid, "controller_name": cname, "ok": False, "error": str(res)})
+        return out
+
+    def clear_active_cloud_scenes(self) -> None:
+        """Exit hardware `lightScene` mode so static/custom RGB colors can be sent directly."""
+        self._active_cloud_scene.clear()
+
     async def _send_cloud_control(
         self,
         house: HouseConfig,
@@ -648,6 +1117,10 @@ class GoveeProtocolDriver:
         fallback to whole-device `colorRgb` when segment capability is unsupported or rejected.
         """
         if not effective_api_key or not ctrl.mac:
+            return False
+
+        offline_until = self._cloud_offline_until.get(ctrl.id, 0.0)
+        if now < offline_until and not force_send:
             return False
 
         last_cloud = self._cloud_last_call.get(ctrl.id, 0.0)
@@ -675,8 +1148,70 @@ class GoveeProtocolDriver:
         rep_rgb_int = (rep_rgb[0] << 16) | (rep_rgb[1] << 8) | rep_rgb[2]
 
         headers = {"Govee-API-Key": effective_api_key, "Content-Type": "application/json"}
+        target_label = f"cloud:{ctrl.mac[-8:]}" if not ctrl.ip else ctrl.ip
+
+        def _parse_govee_response(resp_obj: httpx.Response) -> Tuple[bool, bool, str]:
+            if resp_obj.status_code != 200:
+                return False, False, f"HTTP {resp_obj.status_code}"
+            try:
+                rj = resp_obj.json()
+                if isinstance(rj, dict):
+                    code = rj.get("code", 200)
+                    msg = str(rj.get("msg") or "")
+                    cap_state = rj.get("capability", {}).get("state", {}) if isinstance(rj.get("capability"), dict) else {}
+                    err_msg = str(cap_state.get("errorMsg") or msg or "")
+                    if code not in (200, "200") or cap_state.get("status") == "failure":
+                        is_off = "offline" in err_msg.lower()
+                        return False, is_off, err_msg or f"code {code}"
+            except Exception:
+                pass
+            return True, False, "OK"
 
         try:
+            if ctrl.id not in self._cloud_powered_on and any(c > 0 for c in rep_rgb):
+                pwr_resp = await client.post(
+                    f"{self.CLOUD_BASE_URL}/device/control",
+                    headers=headers,
+                    json={
+                        "requestId": str(uuid.uuid4()),
+                        "payload": {
+                            "sku": ctrl.sku or "H705A",
+                            "device": ctrl.mac,
+                            "capability": {
+                                "type": "devices.capabilities.on_off",
+                                "instance": "powerSwitch",
+                                "value": 1,
+                            },
+                        },
+                    },
+                )
+                self.stats["cloud_requests_sent"] += 1
+                pwr_ok, pwr_offline, pwr_err = _parse_govee_response(pwr_resp)
+                if pwr_offline:
+                    self._cloud_offline_until[ctrl.id] = now + 15.0
+                    self._cloud_last_error[ctrl.id] = pwr_err
+                    if dev_meta is not None:
+                        dev_meta.online = False
+                    self.stats["send_errors"] += 1
+                    self._record_log(
+                        house,
+                        ctrl,
+                        "CLOUD",
+                        "offline",
+                        f"{pwr_err} (check 2.4 GHz Wi-Fi & power)",
+                        rep_rgb,
+                        (time.perf_counter() - t_start) * 1000.0,
+                        False,
+                        True,
+                        target_override=target_label,
+                    )
+                    return False
+                if pwr_ok:
+                    self._cloud_powered_on.add(ctrl.id)
+                    self._cloud_last_error.pop(ctrl.id, None)
+                    if dev_meta is not None:
+                        dev_meta.online = True
+
             if prefer_segment:
                 seg_body = {
                     "requestId": str(uuid.uuid4()),
@@ -699,31 +1234,49 @@ class GoveeProtocolDriver:
                     json=seg_body,
                 )
                 self.stats["cloud_requests_sent"] += 1
-                resp_ok = resp.status_code == 200
-                if resp_ok:
-                    try:
-                        rjson = resp.json()
-                        if isinstance(rjson, dict) and rjson.get("code", 200) not in (200, "200"):
-                            resp_ok = False
-                    except Exception:
-                        pass
+                resp_ok, is_offline, err_msg = _parse_govee_response(resp)
 
                 if resp_ok:
+                    self._cloud_offline_until.pop(ctrl.id, None)
+                    self._cloud_last_error.pop(ctrl.id, None)
+                    self._cloud_powered_on.add(ctrl.id)
+                    if dev_meta is not None:
+                        dev_meta.online = True
                     self._record_log(
                         house,
                         ctrl,
                         "CLOUD",
                         "segmentedColorRgb",
-                        f"segs {top_indices[:6]}.. rgb=#{seg_rgb_int:06x} HTTP {resp.status_code}",
+                        f"segs {top_indices[:6]}.. rgb=#{seg_rgb_int:06x} OK",
                         top_rgb,
                         (time.perf_counter() - t_start) * 1000.0,
                         True,
                         verbose_logging,
-                        target_override=f"cloud:{ctrl.mac[-8:]}" if not ctrl.ip else ctrl.ip,
+                        target_override=target_label,
                     )
                     return True
 
-                # Mark device as needing colorRgb fallback and immediately send colorRgb
+                if is_offline:
+                    self._cloud_offline_until[ctrl.id] = now + 15.0
+                    self._cloud_last_error[ctrl.id] = err_msg
+                    self._cloud_powered_on.discard(ctrl.id)
+                    if dev_meta is not None:
+                        dev_meta.online = False
+                    self.stats["send_errors"] += 1
+                    self._record_log(
+                        house,
+                        ctrl,
+                        "CLOUD",
+                        "offline",
+                        f"{err_msg} (check 2.4 GHz Wi-Fi & power)",
+                        top_rgb,
+                        (time.perf_counter() - t_start) * 1000.0,
+                        False,
+                        True,
+                        target_override=target_label,
+                    )
+                    return False
+
                 if dev_meta is not None:
                     dev_meta.supports_segment_rgb = False
 
@@ -745,18 +1298,32 @@ class GoveeProtocolDriver:
                 json=color_body,
             )
             self.stats["cloud_requests_sent"] += 1
-            ok2 = resp2.status_code == 200
+            ok2, is_offline2, err_msg2 = _parse_govee_response(resp2)
+            if is_offline2:
+                self._cloud_offline_until[ctrl.id] = now + 15.0
+                self._cloud_last_error[ctrl.id] = err_msg2
+                self._cloud_powered_on.discard(ctrl.id)
+                if dev_meta is not None:
+                    dev_meta.online = False
+                self.stats["send_errors"] += 1
+            elif ok2:
+                self._cloud_offline_until.pop(ctrl.id, None)
+                self._cloud_last_error.pop(ctrl.id, None)
+                self._cloud_powered_on.add(ctrl.id)
+                if dev_meta is not None:
+                    dev_meta.online = True
+
             self._record_log(
                 house,
                 ctrl,
                 "CLOUD",
-                "colorRgb",
-                f"rgb=#{rep_rgb_int:06x} HTTP {resp2.status_code}",
+                "colorRgb" if ok2 else "offline",
+                f"rgb=#{rep_rgb_int:06x} OK" if ok2 else f"{err_msg2}",
                 rep_rgb,
                 (time.perf_counter() - t_start) * 1000.0,
                 ok2,
-                verbose_logging,
-                target_override=f"cloud:{ctrl.mac[-8:]}" if not ctrl.ip else ctrl.ip,
+                verbose_logging or not ok2,
+                target_override=target_label,
             )
             return ok2
         except Exception as exc:
@@ -849,6 +1416,30 @@ class GoveeProtocolDriver:
                 True,
                 verbose_logging,
             )
+            return
+
+        # 1b. If controller has an active Govee Cloud hardware `lightScene` (`devices.capabilities.dynamic_scene`),
+        # do NOT overwrite it with static `colorwc` / `colorRgb` frames. Retry every 15s if offline.
+        active_scene = self._active_cloud_scene.get(ctrl.id)
+        if active_scene is not None and effective_api_key and ctrl.mac:
+            if prev_bri != effective_brightness and ctrl.ip and lan_enabled:
+                self._send_udp_json(
+                    ctrl.ip,
+                    self.control_port,
+                    {"msg": {"cmd": "brightness", "data": {"value": int(effective_brightness)}}},
+                )
+                self._last_sent_brightness[ctrl.id] = effective_brightness
+            if not active_scene.get("applied") and now >= self._cloud_offline_until.get(ctrl.id, 0.0):
+                await self.send_cloud_light_scene(
+                    house=house,
+                    ctrl=ctrl,
+                    effective_api_key=effective_api_key,
+                    preset_id=active_scene.get("preset_id", ""),
+                    effect=active_scene.get("effect", ""),
+                    category=active_scene.get("category", ""),
+                    brightness=effective_brightness,
+                    verbose_logging=verbose_logging,
+                )
             return
 
         # Build the UDP :4003 command messages for LAN or Neighbor Bridge relay
@@ -975,6 +1566,9 @@ class GoveeProtocolDriver:
         self._last_sent_rgb.clear()
         self._last_sent_sig.clear()
         self._last_sent_time.clear()
+        self._cloud_powered_on.clear()
+        self._cloud_offline_until.clear()
+        self._active_cloud_scene.clear()
 
         blackout_msg = {
             "msg": {
@@ -1078,10 +1672,43 @@ class GoveeProtocolDriver:
                     },
                 )
                 self.stats["cloud_requests_sent"] += 1
-                ok = ok or (resp.status_code == 200)
+                if resp.status_code == 200:
+                    try:
+                        rj = resp.json()
+                        c_state = rj.get("capability", {}).get("state", {}) if isinstance(rj.get("capability"), dict) else {}
+                        if rj.get("code", 200) in (200, "200") and c_state.get("status") != "failure":
+                            ok = True
+                            if turn_on:
+                                self._cloud_powered_on.add(ctrl.id)
+                            else:
+                                self._cloud_powered_on.discard(ctrl.id)
+                    except Exception:
+                        ok = True
             except Exception:
                 pass
         return ok
+
+    async def power_on_all_controllers(self, config: SystemConfig) -> None:
+        """
+        Send hardware power ON (`turn: 1` on LAN/Bridge and `powerSwitch: 1` on Cloud) to all
+        enabled controllers across all enabled houses when starting an animation or selecting a scene.
+        """
+        self._cloud_offline_until.clear()
+        tasks = []
+        for house in config.houses:
+            if not house.enabled:
+                continue
+            effective_key = (house.govee_api_key or config.govee_api_key or "").strip()
+            for ctrl in house.controllers:
+                if not ctrl.enabled:
+                    continue
+                if ctrl.ip and config.lan_enabled:
+                    self._send_udp_json(ctrl.ip, self.control_port, {"msg": {"cmd": "turn", "data": {"value": 1}}})
+                    self.stats["lan_packets_sent"] += 1
+                if house.id in self.connected_bridges or (effective_key and ctrl.mac and not ctrl.ip):
+                    tasks.append(self.send_power_command(ctrl, turn_on=True, api_key=effective_key, house_id=house.id))
+        if tasks:
+            await asyncio.gather(*tasks, return_exceptions=True)
 
     async def test_controller_pulse(
         self,
