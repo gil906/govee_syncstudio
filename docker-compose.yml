@@ -1,0 +1,38 @@
+services:
+  govee-sync:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: govee-lights-sync
+    restart: unless-stopped
+    network_mode: host
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      - PORT=${PORT:-8200}
+      - HOST=${HOST:-0.0.0.0}
+      - DATA_DIR=/mnt/media/govee_lights_sync/data
+      - PUBLIC_BASE_URL=${PUBLIC_BASE_URL:-http://localhost:8200}
+      - OWNER_EMAIL=${OWNER_EMAIL:-owner@example.com}
+      - OWNER_GITHUB_USER=${OWNER_GITHUB_USER:-}
+      - AUTH_SECRET_KEY=${AUTH_SECRET_KEY:-}
+      - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID:-}
+      - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET:-}
+      - GOOGLE_GSI_CLIENT_ID=${GOOGLE_GSI_CLIENT_ID:-}
+      - GOOGLE_DEVPOST_CLIENT_ID=${GOOGLE_DEVPOST_CLIENT_ID:-}
+      - GOOGLE_DEVPOST_CLIENT_SECRET=${GOOGLE_DEVPOST_CLIENT_SECRET:-}
+      - GITHUB_CLIENT_ID=${GITHUB_CLIENT_ID:-}
+      - GITHUB_CLIENT_SECRET=${GITHUB_CLIENT_SECRET:-}
+      - OAUTH_BRIDGE_BASE=${OAUTH_BRIDGE_BASE:-}
+      - DASH_USER=${DASH_USER:-}
+      - DASH_PASS=${DASH_PASS:-}
+      - GOVEE_API_KEY=${GOVEE_API_KEY:-}
+      - GOVEE_LAN_MULTICAST=${GOVEE_LAN_MULTICAST:-239.255.255.250}
+      - GOVEE_LAN_SCAN_PORT=${GOVEE_LAN_SCAN_PORT:-4001}
+      - GOVEE_LAN_LISTEN_PORT=${GOVEE_LAN_LISTEN_PORT:-4002}
+      - GOVEE_LAN_CONTROL_PORT=${GOVEE_LAN_CONTROL_PORT:-4003}
+      - GOVEE_DEFAULT_FPS=${GOVEE_DEFAULT_FPS:-25}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+    volumes:
+      - /mnt/media/govee_lights_sync/data:/mnt/media/govee_lights_sync/data

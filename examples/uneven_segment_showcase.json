@@ -1,0 +1,116 @@
+{
+  "system_name": "Govee Extreme Uneven Segment Compensation Showcase",
+  "govee_api_key": "",
+  "lan_enabled": true,
+  "cloud_fallback_enabled": true,
+  "verbose_packet_logging": true,
+  "houses": [
+    {
+      "id": "house-1",
+      "name": "House 1 (My House - Compact 6 Seg)",
+      "order": 1,
+      "enabled": true,
+      "time_weight": 1.0,
+      "notes": "1 controller with 6 segments; occupies [0.000, 0.333) of the master timeline",
+      "controllers": [
+        {
+          "id": "h1-ctrl-1",
+          "name": "House 1 - Porch Roofline",
+          "ip": "192.168.1.101",
+          "mac": "AA:BB:CC:DD:EE:01",
+          "sku": "H705A",
+          "segment_count": 6,
+          "enabled": true,
+          "reversed": false,
+          "protocol_mode": "auto",
+          "brightness_override": null
+        }
+      ]
+    },
+    {
+      "id": "house-2",
+      "name": "House 2 (Neighbor 1 - 24 Seg)",
+      "order": 2,
+      "enabled": true,
+      "time_weight": 1.0,
+      "notes": "2 controllers (12 + 12 segments); occupies [0.333, 0.667) of the master timeline",
+      "controllers": [
+        {
+          "id": "h2-ctrl-1",
+          "name": "House 2 - Main Eaves",
+          "ip": "192.168.1.102",
+          "mac": "AA:BB:CC:DD:EE:02",
+          "sku": "H705A",
+          "segment_count": 12,
+          "enabled": true,
+          "reversed": false,
+          "protocol_mode": "auto",
+          "brightness_override": null
+        },
+        {
+          "id": "h2-ctrl-2",
+          "name": "House 2 - Garage Peak",
+          "ip": "192.168.1.103",
+          "mac": "AA:BB:CC:DD:EE:03",
+          "sku": "H705A",
+          "segment_count": 12,
+          "enabled": true,
+          "reversed": false,
+          "protocol_mode": "auto",
+          "brightness_override": null
+        }
+      ]
+    },
+    {
+      "id": "house-3",
+      "name": "House 3 (Neighbor 2 - 36 Seg)",
+      "order": 3,
+      "enabled": true,
+      "time_weight": 1.0,
+      "notes": "2 Pro controllers (18 + 18 segments); occupies [0.667, 1.000) of the master timeline",
+      "controllers": [
+        {
+          "id": "h3-ctrl-1",
+          "name": "House 3 - Upper Gable",
+          "ip": "192.168.1.104",
+          "mac": "AA:BB:CC:DD:EE:04",
+          "sku": "H706A",
+          "segment_count": 18,
+          "enabled": true,
+          "reversed": false,
+          "protocol_mode": "auto",
+          "brightness_override": null
+        },
+        {
+          "id": "h3-ctrl-2",
+          "name": "House 3 - Lower Perimeter",
+          "ip": "192.168.1.105",
+          "mac": "AA:BB:CC:DD:EE:05",
+          "sku": "H706A",
+          "segment_count": 18,
+          "enabled": true,
+          "reversed": false,
+          "protocol_mode": "auto",
+          "brightness_override": null
+        }
+      ]
+    }
+  ],
+  "animation": {
+    "running": true,
+    "effect": "multi_house_chase",
+    "speed": 0.25,
+    "direction": "forward",
+    "mapping_mode": "house_normalized",
+    "fps": 25,
+    "intensity": 100,
+    "primary_color": "#00f5d4",
+    "secondary_color": "#7b2cbf",
+    "accent_color": "#ff007f",
+    "background_color": "#060814",
+    "background_dim": 0.08,
+    "tail_length": 0.22,
+    "pulse_count": 1,
+    "supersample": true
+  }
+}

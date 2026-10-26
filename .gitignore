@@ -1,0 +1,30 @@
+# Secrets & local environment
+.env
+.env.*
+!.env.example
+
+# Runtime persistent data & compiled APKs (keep only data/.gitkeep)
+data/*
+!data/.gitkeep
+*.apk
+
+# Android signing keys & credentials
+*.jks
+*.keystore
+mobile/android/key.properties
+mobile/android/local.properties
+
+# Dependencies & build artifacts
+node_modules/
+frontend/node_modules/
+frontend/dist/
+mobile/build/
+mobile/.dart_tool/
+mobile/.flutter-plugins
+mobile/.flutter-plugins-dependencies
+mobile/android/.gradle/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+*.tmp
+*.bak*

@@ -1,0 +1,15 @@
+*.py filter=govee-redact
+*.js filter=govee-redact
+*.jsx filter=govee-redact
+*.ts filter=govee-redact
+*.tsx filter=govee-redact
+*.dart filter=govee-redact
+*.json filter=govee-redact
+*.md filter=govee-redact
+*.yml filter=govee-redact
+*.yaml filter=govee-redact
+*.kts filter=govee-redact
+*.xml filter=govee-redact
+*.html filter=govee-redact
+*.sh filter=govee-redact
+scripts/git_redact_filter.py -filter

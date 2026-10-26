@@ -1,0 +1,126 @@
+{
+  "system_name": "Govee Multi-House Light Sync",
+  "govee_api_key": "",
+  "lan_enabled": true,
+  "cloud_fallback_enabled": true,
+  "verbose_packet_logging": true,
+  "houses": [
+    {
+      "id": "house-1",
+      "name": "Neighbor 1 (Left House)",
+      "order": 1,
+      "enabled": true,
+      "time_weight": 1.0,
+      "connection_type": "govee_cloud",
+      "govee_api_key": "",
+      "bridge_token": "",
+      "notes": "2 Govee controllers across front eaves and garage (separate Wi-Fi - Cloud API or Neighbor Bridge)",
+      "controllers": [
+        {
+          "id": "h1-ctrl-1",
+          "name": "Neighbor 1 - Left Eaves",
+          "ip": "",
+          "mac": "AA:BB:CC:DD:EE:02",
+          "sku": "H705A",
+          "segment_count": 12,
+          "enabled": true,
+          "reversed": false,
+          "protocol_mode": "auto",
+          "brightness_override": null
+        },
+        {
+          "id": "h1-ctrl-2",
+          "name": "Neighbor 1 - Right Garage",
+          "ip": "",
+          "mac": "AA:BB:CC:DD:EE:03",
+          "sku": "H705A",
+          "segment_count": 12,
+          "enabled": true,
+          "reversed": false,
+          "protocol_mode": "auto",
+          "brightness_override": null
+        }
+      ]
+    },
+    {
+      "id": "house-2",
+      "name": "My House (Middle - Me)",
+      "order": 2,
+      "enabled": true,
+      "time_weight": 1.0,
+      "connection_type": "local_lan",
+      "govee_api_key": "",
+      "bridge_token": "",
+      "notes": "Single Govee outdoor controller on my local Wi-Fi (fewer segments, auto-compensated in middle position)",
+      "controllers": [
+        {
+          "id": "h2-ctrl-1",
+          "name": "Govee Outdoor Lights 2 (H705E)",
+          "ip": "192.168.1.83",
+          "mac": "AA:BB:CC:DD:EE:FF:00:02",
+          "sku": "H705E",
+          "segment_count": 9,
+          "enabled": true,
+          "reversed": false,
+          "protocol_mode": "auto",
+          "brightness_override": null
+        }
+      ]
+    },
+    {
+      "id": "house-3",
+      "name": "Neighbor 2 (Right House)",
+      "order": 3,
+      "enabled": true,
+      "time_weight": 1.0,
+      "connection_type": "govee_cloud",
+      "govee_api_key": "",
+      "bridge_token": "",
+      "notes": "2 longer Govee controllers across two-story roofline (separate Wi-Fi - Cloud API or Neighbor Bridge)",
+      "controllers": [
+        {
+          "id": "h3-ctrl-1",
+          "name": "Neighbor 2 - Upper Peak",
+          "ip": "",
+          "mac": "AA:BB:CC:DD:EE:04",
+          "sku": "H706A",
+          "segment_count": 15,
+          "enabled": true,
+          "reversed": false,
+          "protocol_mode": "auto",
+          "brightness_override": null
+        },
+        {
+          "id": "h3-ctrl-2",
+          "name": "Neighbor 2 - Lower Porch",
+          "ip": "",
+          "mac": "AA:BB:CC:DD:EE:05",
+          "sku": "H706A",
+          "segment_count": 15,
+          "enabled": true,
+          "reversed": false,
+          "protocol_mode": "auto",
+          "brightness_override": null
+        }
+      ]
+    }
+  ],
+  "animation": {
+    "running": true,
+    "blackout_on_stop": true,
+    "effect": "multi_house_chase",
+    "speed": 0.25,
+    "direction": "forward",
+    "mapping_mode": "house_normalized",
+    "fps": 25,
+    "intensity": 100,
+    "primary_color": "#00f5d4",
+    "secondary_color": "#7b2cbf",
+    "accent_color": "#ff007f",
+    "background_color": "#060814",
+    "background_dim": 0.08,
+    "tail_length": 0.22,
+    "pulse_count": 1,
+    "supersample": true
+  }
+}

@@ -1,0 +1,9 @@
+node_modules
+frontend/node_modules
+frontend/dist
+mobile
+data/govee-multi-house-sync.apk
+__pycache__
+*.pyc
+.pytest_cache
+data/*.tmp
