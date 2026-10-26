@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 
+const String kAppVersionName = '3.1.0';
+const int kAppVersionCode = 4;
+
 const String kDefaultBackendUrl = String.fromEnvironment(
   'DEFAULT_BACKEND_URL',
   defaultValue: 'https://govee-sync.example.com',

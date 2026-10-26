@@ -22,9 +22,53 @@ class ConfigStore:
         self.data_dir.mkdir(parents=True, exist_ok=True)
         self.config_path = self.data_dir / "config.json"
         self.backup_path = self.data_dir / "config.backup.json"
+        self.saved_keys_path = self.data_dir / ".saved_keys.json"
         self.example_path = Path(example_path) if example_path else (base_dir / "examples" / "default_3_houses.json")
         self._lock = threading.RLock()
         self._config: SystemConfig = self._load_or_init()
+
+    def _read_saved_keys(self) -> dict:
+        if not self.saved_keys_path.exists():
+            return {}
+        try:
+            data = json.loads(self.saved_keys_path.read_text(encoding="utf-8"))
+            return data if isinstance(data, dict) else {}
+        except Exception:
+            return {}
+
+    def _persist_saved_keys(self, cfg: SystemConfig) -> None:
+        current = self._read_saved_keys()
+        if cfg.govee_api_key and cfg.govee_api_key.strip():
+            current["govee_api_key"] = cfg.govee_api_key.strip()
+        house_keys = current.get("house_keys")
+        if not isinstance(house_keys, dict):
+            house_keys = {}
+        for h in cfg.houses:
+            if h.govee_api_key and h.govee_api_key.strip():
+                house_keys[h.id] = h.govee_api_key.strip()
+        current["house_keys"] = house_keys
+        try:
+            self.saved_keys_path.write_text(json.dumps(current, indent=2), encoding="utf-8")
+            os.chmod(self.saved_keys_path, 0o600)
+        except Exception:
+            pass
+
+    def _restore_saved_keys(self, cfg: SystemConfig) -> bool:
+        changed = False
+        saved = self._read_saved_keys()
+        env_api_key = os.environ.get("GOVEE_API_KEY", "").strip()
+        saved_global = str(saved.get("govee_api_key") or env_api_key or "").strip()
+        if saved_global and not cfg.govee_api_key:
+            cfg.govee_api_key = saved_global
+            changed = True
+        house_keys = saved.get("house_keys")
+        if isinstance(house_keys, dict):
+            for h in cfg.houses:
+                sk = str(house_keys.get(h.id) or "").strip()
+                if sk and not h.govee_api_key:
+                    h.govee_api_key = sk
+                    changed = True
+        return changed
 
     def _load_or_init(self) -> SystemConfig:
         with self._lock:
@@ -34,6 +78,7 @@ class ConfigStore:
                     logger.info("Initialized persistent config at %s from %s", self.config_path, self.example_path)
                 else:
                     default_cfg = SystemConfig()
+                    self._restore_saved_keys(default_cfg)
                     self._write_atomic(default_cfg)
                     return default_cfg
 
@@ -49,10 +94,9 @@ class ConfigStore:
                     cfg = SystemConfig()
                 self._write_atomic(cfg)
 
-            env_api_key = os.environ.get("GOVEE_API_KEY", "").strip()
-            if env_api_key and not cfg.govee_api_key:
-                cfg.govee_api_key = env_api_key
+            if self._restore_saved_keys(cfg):
                 self._write_atomic(cfg)
+            self._persist_saved_keys(cfg)
 
             return cfg
 
@@ -70,6 +114,16 @@ class ConfigStore:
 
     def save(self, new_config: SystemConfig) -> SystemConfig:
         with self._lock:
+            # Preserve existing API keys if an incoming payload omitted them
+            if not new_config.govee_api_key and self._config and self._config.govee_api_key:
+                new_config.govee_api_key = self._config.govee_api_key
+            if self._config:
+                prev_house_keys = {h.id: h.govee_api_key for h in self._config.houses if h.govee_api_key}
+                for h in new_config.houses:
+                    if not h.govee_api_key and h.id in prev_house_keys:
+                        h.govee_api_key = prev_house_keys[h.id]
+            self._restore_saved_keys(new_config)
+            self._persist_saved_keys(new_config)
             # Ensure houses are ordered sequentially
             new_config.houses.sort(key=lambda h: (h.order, h.id))
             self._write_atomic(new_config)

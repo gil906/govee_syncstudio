@@ -796,7 +796,7 @@ def test_google_and_github_oauth_authorized_emails_and_apk_endpoints(tmp_path: P
             )
             assert r_apk_info.status_code == 200
             assert r_apk_info.json()["available"] is True
-            assert r_apk_info.json()["download_url"] in ("/api/apk/download", "/api/download/govee-sync.apk")
+            assert r_apk_info.json()["download_url"].startswith(("/api/apk/download", "/api/download/govee-sync.apk"))
 
             r_apk_dl = client.get(
                 "/api/download/govee-sync.apk",
@@ -971,5 +971,111 @@ def test_compute_schedule_status_timezone_and_dst_detection() -> None:
     dt_after_midnight = dt.datetime(2026, 7, 16, 0, 30, 0, tzinfo=la_tz)
     st_overnight = compute_schedule_status(sched_overnight, now_dt=dt_after_midnight)
     assert st_overnight["is_within_active_window"] is True
+
+
+def test_apk_versioning_releases_and_versioned_download() -> None:
+    import json
+    from backend.app.main import app, store
+
+    with TestClient(app) as client:
+        releases_dir = store.data_dir / "releases"
+        releases_dir.mkdir(parents=True, exist_ok=True)
+        v30_apk = releases_dir / "Govee-Sync-Studio-v3.0.0-b3.apk"
+        v31_apk = releases_dir / "Govee-Sync-Studio-v3.1.0-b4.apk"
+        v30_apk.write_bytes(b"PK\x03\x04apk-v3.0.0-payload")
+        v31_apk.write_bytes(b"PK\x03\x04apk-v3.1.0-payload-newer")
+        (store.data_dir / "govee-multi-house-sync.apk").write_bytes(b"PK\x03\x04apk-v3.1.0-payload-newer")
+
+        manifest = {
+            "releases": [
+                {
+                    "version_name": "3.1.0",
+                    "version_code": 4,
+                    "filename": "Govee-Sync-Studio-v3.1.0-b4.apk",
+                    "size_bytes": len(b"PK\x03\x04apk-v3.1.0-payload-newer"),
+                    "sha256": "abcd1234",
+                    "released_at": "2026-10-26T18:30:00Z",
+                    "changelog": ["Added APK versioning & release archive system"],
+                },
+                {
+                    "version_name": "3.0.0",
+                    "version_code": 3,
+                    "filename": "Govee-Sync-Studio-v3.0.0-b3.apk",
+                    "size_bytes": len(b"PK\x03\x04apk-v3.0.0-payload"),
+                    "sha256": "dc4f0c90",
+                    "released_at": "2026-10-26T09:24:26Z",
+                    "changelog": ["Custom 3-House Neon Roofline launcher icon"],
+                },
+            ]
+        }
+        (store.data_dir / "apk_releases.json").write_text(json.dumps(manifest), encoding="utf-8")
+
+        r_info = client.get("/api/apk/info")
+        assert r_info.status_code == 200
+        info_data = r_info.json()
+        assert info_data["available"] is True
+        assert info_data["version_name"] == "3.1.0"
+        assert info_data["version_code"] == 4
+        assert info_data["filename"] == "Govee-Sync-Studio-v3.1.0-b4.apk"
+        assert info_data["download_url"] == "/api/apk/download?version=3.1.0"
+        assert len(info_data["releases"]) == 2
+
+        r_rel = client.get("/api/apk/releases")
+        assert r_rel.status_code == 200
+        rel_data = r_rel.json()
+        assert rel_data["latest_version_name"] == "3.1.0"
+        assert rel_data["latest_version_code"] == 4
+        assert rel_data["count"] == 2
+
+        # Download specific archived version v3.0.0
+        r_dl_30 = client.get("/api/apk/download?version=3.0.0")
+        assert r_dl_30.status_code == 200
+        assert r_dl_30.content == b"PK\x03\x04apk-v3.0.0-payload"
+        assert "Govee-Sync-Studio-v3.0.0-b3.apk" in r_dl_30.headers.get("content-disposition", "")
+
+        # Download latest version v3.1.0
+        r_dl_31 = client.get("/api/apk/download?version=3.1.0")
+        assert r_dl_31.status_code == 200
+        assert r_dl_31.content == b"PK\x03\x04apk-v3.1.0-payload-newer"
+        assert "Govee-Sync-Studio-v3.1.0-b4.apk" in r_dl_31.headers.get("content-disposition", "")
+
+        # Unknown version returns 404
+        r_dl_404 = client.get("/api/apk/download?version=9.9.9")
+        assert r_dl_404.status_code == 404
+
+
+def test_representative_controller_color_animates_across_all_71_presets(tmp_path: Path) -> None:
+    """
+    Verify that compute_representative_controller_color (used for LAN colorwc and Cloud colorRgb)
+    never collapses multi-color scenes into a static muddy grey average, and instead changes RGB
+    vividly over time across a controller's segments for all 71 presets.
+    """
+    from backend.app.models import AnimationConfig
+
+    store = ConfigStore(data_dir=str(tmp_path))
+    driver = GoveeProtocolDriver()
+    engine = MasterAnimationEngine(store=store, driver=driver)
+    cfg = store.get()
+
+    for preset in engine.PRESETS:
+        pid = preset["id"]
+        merged = cfg.animation.model_dump()
+        merged.update(preset["animation"])
+        merged["running"] = True
+        cfg.animation = AnimationConfig.model_validate(merged)
+
+        engine._anchor_mono = 1000.0
+        engine._anchor_phase = 0.0
+        engine._last_speed = cfg.animation.speed
+        engine._paused_at_mono = None
+
+        rep_samples = set()
+        for dt_offset in (0.0, 0.45, 0.90, 1.45, 2.10, 2.85, 3.60):
+            pts, _ = engine.render_frame_at(cfg, now_mono=1000.0 + dt_offset)
+            h2_segs = [(p.r, p.g, p.b) for p in pts if p.house_id == "house-2"]
+            rep_samples.add(compute_representative_controller_color(h2_segs))
+
+        assert len(rep_samples) > 1, f"Preset '{pid}' produced static representative controller color: {rep_samples}"
+
 
 

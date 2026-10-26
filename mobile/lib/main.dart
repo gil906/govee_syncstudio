@@ -167,6 +167,7 @@ class _GoveeStudioHomeScreenState extends State<GoveeStudioHomeScreen>
                 child: Column(
                   children: [
                     if (widget.api.statusBanner != null) _buildStatusBanner(),
+                    if (widget.api.apkUpdateAvailable) _buildApkUpdateBanner(),
                     if (widget.api.needsSignIn) _buildAuthGateBanner(),
                     Expanded(
                       child: isUnfoldedFoldable
@@ -241,6 +242,26 @@ class _GoveeStudioHomeScreenState extends State<GoveeStudioHomeScreen>
                                 ? const Color(0xFF00F5D4)
                                 : const Color(0xFF38BDF8),
                           ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 6, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF7B2CBF).withValues(alpha: 0.22),
+                        borderRadius: BorderRadius.circular(99),
+                        border: Border.all(
+                          color: const Color(0xFFA855F7).withValues(alpha: 0.45),
+                        ),
+                      ),
+                      child: const Text(
+                        'v$kAppVersionName (b$kAppVersionCode)',
+                        style: TextStyle(
+                          fontSize: 9.5,
+                          fontWeight: FontWeight.w700,
+                          color: Color(0xFFE9D5FF),
                         ),
                       ),
                     ),
@@ -319,6 +340,53 @@ class _GoveeStudioHomeScreenState extends State<GoveeStudioHomeScreen>
           InkWell(
             onTap: () => widget.api.setBanner(null),
             child: const Icon(Icons.close, size: 16, color: Colors.white70),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildApkUpdateBanner() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+      decoration: BoxDecoration(
+        color: const Color(0xFF3B0764).withValues(alpha: 0.85),
+        border: Border(
+          bottom: BorderSide(
+            color: const Color(0xFFA855F7).withValues(alpha: 0.5),
+          ),
+        ),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.system_update, size: 18, color: Color(0xFF00F5D4)),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              'New App Update Available: v${widget.api.latestApkVersionName} (Build ${widget.api.latestApkVersionCode})',
+              style: const TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+                color: Colors.white,
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          FilledButton.tonalIcon(
+            style: FilledButton.styleFrom(
+              visualDensity: VisualDensity.compact,
+              backgroundColor: const Color(0xFF00F5D4),
+              foregroundColor: const Color(0xFF060B18),
+            ),
+            onPressed: () => widget.api.downloadApkVersion(
+              version: widget.api.latestApkVersionName,
+            ),
+            icon: const Icon(Icons.download, size: 15),
+            label: Text(
+              'Update to v${widget.api.latestApkVersionName}',
+              style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w800),
+            ),
           ),
         ],
       ),
@@ -439,11 +507,13 @@ class _GoveeStudioHomeScreenState extends State<GoveeStudioHomeScreen>
                   _buildHousesAndApiKeysSection(),
                 ],
               ),
-              // Tab 3: Pro Features & Authorized Users + Endpoint
+              // Tab 3: Pro Features & Authorized Users + Endpoint + APK Version Center
               ListView(
                 padding: const EdgeInsets.fromLTRB(12, 6, 12, 24),
                 children: [
                   _buildProPlaylistAndScheduleCard(),
+                  const SizedBox(height: 12),
+                  _buildApkVersionAndArchiveCard(),
                   const SizedBox(height: 12),
                   _buildAuthorizedUsersCard(),
                   const SizedBox(height: 12),
@@ -590,6 +660,8 @@ class _GoveeStudioHomeScreenState extends State<GoveeStudioHomeScreen>
                 padding: const EdgeInsets.all(14),
                 children: [
                   _buildProPlaylistAndScheduleCard(),
+                  const SizedBox(height: 14),
+                  _buildApkVersionAndArchiveCard(),
                   const SizedBox(height: 14),
                   _buildAuthorizedUsersCard(),
                   const SizedBox(height: 14),
@@ -2565,6 +2637,188 @@ class _GoveeStudioHomeScreenState extends State<GoveeStudioHomeScreen>
                 );
               }).toList(),
             ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ===========================================================================
+  // ANDROID APP VERSION & RELEASE ARCHIVE CARD
+  // ===========================================================================
+
+  Widget _buildApkVersionAndArchiveCard() {
+    final releases = widget.api.apkReleases;
+    final hasUpdate = widget.api.apkUpdateAvailable;
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Icon(Icons.system_update_alt,
+                    color: Color(0xFF00F5D4), size: 19),
+                const SizedBox(width: 8),
+                const Expanded(
+                  child: Text(
+                    'Android App Version & Release Archive',
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ),
+                OutlinedButton.icon(
+                  style: OutlinedButton.styleFrom(
+                    visualDensity: VisualDensity.compact,
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  ),
+                  onPressed: () =>
+                      widget.api.fetchApkInfoSilently(showFeedback: true),
+                  icon: const Icon(Icons.refresh, size: 14),
+                  label: const Text(
+                    'Check Updates',
+                    style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: const Color(0xFF060B18),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: hasUpdate
+                      ? const Color(0xFFA855F7).withValues(alpha: 0.6)
+                      : const Color(0xFF00F5D4).withValues(alpha: 0.35),
+                ),
+              ),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Installed: v$kAppVersionName • Build $kAppVersionCode',
+                          style: TextStyle(
+                            fontSize: 12.5,
+                            fontWeight: FontWeight.w800,
+                            color: Color(0xFF00F5D4),
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          hasUpdate
+                              ? 'Newer build on server: v${widget.api.latestApkVersionName} (Build ${widget.api.latestApkVersionCode})'
+                              : 'Latest server build: v${widget.api.latestApkVersionName} (Build ${widget.api.latestApkVersionCode})',
+                          style: const TextStyle(
+                            fontSize: 11,
+                            color: Color(0xFF94A3B8),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  FilledButton.tonalIcon(
+                    style: FilledButton.styleFrom(
+                      visualDensity: VisualDensity.compact,
+                    ),
+                    onPressed: () => widget.api.downloadApkVersion(
+                      version: widget.api.latestApkVersionName,
+                    ),
+                    icon: const Icon(Icons.download, size: 15),
+                    label: Text(
+                      hasUpdate
+                          ? 'Update v${widget.api.latestApkVersionName}'
+                          : 'Download v${widget.api.latestApkVersionName}',
+                      style: const TextStyle(
+                          fontSize: 11, fontWeight: FontWeight.w700),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            if (releases.isNotEmpty) ...[
+              const SizedBox(height: 10),
+              const Text(
+                'Archived Server APK Versions (Install or Roll Back):',
+                style: TextStyle(
+                  fontSize: 11.5,
+                  fontWeight: FontWeight.w700,
+                  color: Color(0xFFCBD5E1),
+                ),
+              ),
+              const SizedBox(height: 6),
+              for (final rel in releases)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 6),
+                  child: Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF0B1325),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: const Color(0xFF1E293B)),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                'v${rel["version_name"] ?? "3.1.0"} (Build ${rel["version_code"] ?? 4})${rel["version_code"] == kAppVersionCode ? " • Installed" : ""}',
+                                style: const TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                            ),
+                            OutlinedButton.icon(
+                              style: OutlinedButton.styleFrom(
+                                visualDensity: VisualDensity.compact,
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 8, vertical: 3),
+                              ),
+                              onPressed: () => widget.api.downloadApkVersion(
+                                version: (rel['version_name'] ?? '').toString(),
+                              ),
+                              icon: const Icon(Icons.download, size: 13),
+                              label: Text(
+                                'v${rel["version_name"] ?? ""}',
+                                style: const TextStyle(
+                                    fontSize: 11, fontWeight: FontWeight.w700),
+                              ),
+                            ),
+                          ],
+                        ),
+                        if (rel['changelog'] is List &&
+                            (rel['changelog'] as List).isNotEmpty)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 4),
+                            child: Text(
+                              (rel['changelog'] as List)
+                                  .map((e) => '• $e')
+                                  .join('\n'),
+                              style: const TextStyle(
+                                fontSize: 10.5,
+                                color: Color(0xFF94A3B8),
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                ),
+            ],
           ],
         ),
       ),

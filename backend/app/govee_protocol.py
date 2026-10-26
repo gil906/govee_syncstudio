@@ -176,39 +176,61 @@ def build_ptreal_segment_packet(r: int, g: int, b: int, segment_indices: List[in
 
 def compute_representative_controller_color(segment_colors: List[RGBTuple]) -> RGBTuple:
     """
-    Compute the optimal whole-controller RGB color when sending a LAN `colorwc` packet.
-    Instead of a naive flat average (which dims narrow chase pulses on 12-15 segment controllers),
-    weights segments by perceptual energy (max channel^2 + 0.15) so active chase heads remain vivid.
+    Compute the vivid focal RGB color for a controller when sending LAN `colorwc` or Cloud `colorRgb`.
+    Never flat-averages dissimilar colors across all segments (which turns rainbows and multi-color
+    scenes into a static muddy grey):
+    - If the strip has a localized bright chase pulse over a dark background (`min_brightness < 45`
+      and `max_brightness > min_brightness + 50`), tracks the active pulse (returning the focal center
+      segment when the pulse reaches the center, or the brightest active segment scaled by proximity
+      as it approaches/exits) so every controller transitions vividly through Lead -> Mid -> Tail -> Base.
+    - Otherwise (for continuous multi-color scenes like `govee_rainbow1`, `govee_rainbow2`,
+      `rainbow_wave`, `christmas_magic`, `diwali_festival`, `fire_sparkle`, `split_complimentary`, etc.),
+      returns the center focal segment `segment_colors[len(segment_colors) // 2]` so as the wave moves
+      across the house, the controller cycles through 100% pure, saturated scene colors continuously.
     """
     if not segment_colors:
         return (0, 0, 0)
-    if len(segment_colors) == 1:
+    n = len(segment_colors)
+    if n == 1:
         return segment_colors[0]
 
-    peak_energy = max(max(r, g, b) for r, g, b in segment_colors)
-    if peak_energy == 0:
+    energies = [max(r, g, b) for r, g, b in segment_colors]
+    max_brightness = max(energies)
+    if max_brightness == 0:
         return (0, 0, 0)
+    min_brightness = min(energies)
 
-    total_w = 0.0
-    acc_r = 0.0
-    acc_g = 0.0
-    acc_b = 0.0
-    for r, g, b in segment_colors:
-        m = max(r, g, b) / 255.0
-        # Emphasize active/lit segments so chase heads stay sharp on whole-strip LAN controllers
-        w = (m ** 2.4) + 0.04
-        acc_r += r * w
-        acc_g += g * w
-        acc_b += b * w
-        total_w += w
+    mid = n // 2
+    mid_rgb = segment_colors[mid]
+    mid_energy = energies[mid]
 
-    if total_w <= 0:
-        return segment_colors[0]
-    return (
-        max(0, min(255, round(acc_r / total_w))),
-        max(0, min(255, round(acc_g / total_w))),
-        max(0, min(255, round(acc_b / total_w))),
-    )
+    # Localized bright pulse over a dark background
+    if min_brightness < 45 and max_brightness > min_brightness + 50:
+        if mid_energy >= max(45, int(max_brightness * 0.55)):
+            return mid_rgb
+        best_idx, best_rgb = max(
+            enumerate(segment_colors),
+            key=lambda item: (max(item[1]), item[1][0] + item[1][1] + item[1][2], -abs(item[0] - mid)),
+        )
+        max_dist = max(1, mid, n - 1 - mid)
+        dist = abs(best_idx - mid)
+        scale = 1.0 - 0.25 * (dist / max_dist)
+        return (
+            max(0, min(255, round(best_rgb[0] * scale))),
+            max(0, min(255, round(best_rgb[1] * scale))),
+            max(0, min(255, round(best_rgb[2] * scale))),
+        )
+
+    # 2-color block wipe transition across the controller (e.g. color_wipe)
+    first_c, last_c = segment_colors[0], segment_colors[-1]
+    if first_c != last_c and (segment_colors[1] == first_c or segment_colors[-2] == last_c):
+        avg_r = round(sum(c[0] for c in segment_colors) / n)
+        avg_g = round(sum(c[1] for c in segment_colors) / n)
+        avg_b = round(sum(c[2] for c in segment_colors) / n)
+        return (avg_r, avg_g, avg_b)
+
+    # Continuous multi-color scene -> return pure center focal segment color
+    return mid_rgb
 
 
 def group_segments_by_color(
@@ -288,9 +310,11 @@ class GoveeProtocolDriver:
 
         # Delta cache & rate limiters per controller
         self._last_sent_rgb: Dict[str, RGBTuple] = {}
+        self._last_sent_sig: Dict[str, Tuple[RGBTuple, ...]] = {}
         self._last_sent_time: Dict[str, float] = {}
         self._last_sent_brightness: Dict[str, int] = {}
         self._cloud_last_call: Dict[str, float] = {}
+        self._cloud_group_cursor: Dict[str, int] = {}
 
         self.stats = {
             "lan_packets_sent": 0,
@@ -640,8 +664,13 @@ class GoveeProtocolDriver:
 
         dev_meta = self.discovered_devices.get(ctrl.mac.upper())
         prefer_segment = True if dev_meta is None else dev_meta.supports_segment_rgb
-        groups = group_segments_by_color(segment_colors, quantize_step=16, max_groups=2)
-        top_rgb, top_indices = groups[0] if groups else (rep_rgb, list(range(len(segment_colors))))
+        groups = group_segments_by_color(segment_colors, quantize_step=24, max_groups=3)
+        cursor = self._cloud_group_cursor.get(ctrl.id, 0)
+        self._cloud_group_cursor[ctrl.id] = cursor + 1
+        if groups:
+            top_rgb, top_indices = groups[cursor % len(groups)]
+        else:
+            top_rgb, top_indices = rep_rgb, list(range(len(segment_colors)))
         seg_rgb_int = (top_rgb[0] << 16) | (top_rgb[1] << 8) | top_rgb[2]
         rep_rgb_int = (rep_rgb[0] << 16) | (rep_rgb[1] << 8) | rep_rgb[2]
 
@@ -777,13 +806,17 @@ class GoveeProtocolDriver:
         rep_rgb = compute_representative_controller_color(segment_colors)
         now = time.monotonic()
 
-        # Check delta cache so unchanged colors aren't spammed needlessly, while sending periodic keepalives
-        prev_rgb = self._last_sent_rgb.get(ctrl.id)
+        # Check delta cache across representative focal color AND first/last segments so multi-segment motion is never skipped
+        frame_sig = (rep_rgb, segment_colors[0], segment_colors[-1])
+        prev_sig = self._last_sent_sig.get(ctrl.id)
         last_time = self._last_sent_time.get(ctrl.id, 0.0)
         color_delta = (
             999
-            if prev_rgb is None
-            else max(abs(rep_rgb[0] - prev_rgb[0]), abs(rep_rgb[1] - prev_rgb[1]), abs(rep_rgb[2] - prev_rgb[2]))
+            if prev_sig is None
+            else max(
+                max(abs(a[0] - b[0]), abs(a[1] - b[1]), abs(a[2] - b[2]))
+                for a, b in zip(frame_sig, prev_sig)
+            )
         )
 
         if not force_send and color_delta < 2 and (now - last_time) < 0.75:
@@ -791,6 +824,7 @@ class GoveeProtocolDriver:
             return
 
         self._last_sent_rgb[ctrl.id] = rep_rgb
+        self._last_sent_sig[ctrl.id] = frame_sig
         self._last_sent_time[ctrl.id] = now
 
         effective_brightness = ctrl.brightness_override if ctrl.brightness_override is not None else master_intensity
@@ -939,6 +973,7 @@ class GoveeProtocolDriver:
         across LAN, Neighbor Bridges, and Govee Cloud when Stop Sync is triggered.
         """
         self._last_sent_rgb.clear()
+        self._last_sent_sig.clear()
         self._last_sent_time.clear()
 
         blackout_msg = {

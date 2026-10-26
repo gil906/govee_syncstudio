@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import asyncio
+import datetime as dt
+import hashlib
 import json
 import logging
 import os
@@ -1492,7 +1494,7 @@ async def remove_authorized_user(request: Request, email: str) -> Dict[str, Any]
     }
 
 
-# --- Android APK Download & Metadata ---
+# --- Android APK Download, Versioning & Release Archive ---
 
 
 def _resolve_apk_path() -> Path:
@@ -1502,33 +1504,190 @@ def _resolve_apk_path() -> Path:
     return Path("/mnt/media/govee_lights_sync/data/govee-multi-house-sync.apk")
 
 
+def _resolve_release_apk_path(filename: str) -> Optional[Path]:
+    safe_name = Path(filename).name
+    for base in (store.data_dir / "releases", Path("/mnt/media/govee_lights_sync/data/releases")):
+        candidate = base / safe_name
+        if candidate.exists() and candidate.is_file():
+            return candidate
+    return None
+
+
+def _load_apk_releases_manifest() -> List[Dict[str, Any]]:
+    manifest_candidates = [
+        store.data_dir / "apk_releases.json",
+        Path("/mnt/media/govee_lights_sync/data/apk_releases.json"),
+    ]
+    releases: List[Dict[str, Any]] = []
+    for mpath in manifest_candidates:
+        if mpath.exists() and mpath.is_file():
+            try:
+                raw = json.loads(mpath.read_text(encoding="utf-8"))
+                items = raw.get("releases", []) if isinstance(raw, dict) else (raw if isinstance(raw, list) else [])
+                for item in items:
+                    if isinstance(item, dict) and item.get("version_name"):
+                        ver_name = str(item.get("version_name")).strip()
+                        ver_code = int(item.get("version_code") or 1)
+                        fname = str(item.get("filename") or f"Govee-Sync-Studio-v{ver_name}-b{ver_code}.apk")
+                        releases.append(
+                            {
+                                "version_name": ver_name,
+                                "version_code": ver_code,
+                                "filename": fname,
+                                "size_bytes": int(item.get("size_bytes") or 0),
+                                "sha256": str(item.get("sha256") or ""),
+                                "released_at": str(item.get("released_at") or ""),
+                                "changelog": list(item.get("changelog") or []),
+                                "download_url": f"/api/apk/download?version={urllib.parse.quote(ver_name)}",
+                            }
+                        )
+                if releases:
+                    break
+            except Exception:
+                pass
+
+    if not releases:
+        apk_path = _resolve_apk_path()
+        if apk_path.exists() and apk_path.is_file():
+            st = apk_path.stat()
+            h = hashlib.sha256()
+            try:
+                with apk_path.open("rb") as f:
+                    for chunk in iter(lambda: f.read(1024 * 1024), b""):
+                        h.update(chunk)
+                sha_hex = h.hexdigest()
+            except Exception:
+                sha_hex = ""
+            rel_at = dt.datetime.fromtimestamp(st.st_mtime, tz=dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+            releases.append(
+                {
+                    "version_name": "3.1.0",
+                    "version_code": 4,
+                    "filename": "Govee-Sync-Studio-v3.1.0-b4.apk",
+                    "size_bytes": st.st_size,
+                    "sha256": sha_hex,
+                    "released_at": rel_at,
+                    "changelog": [
+                        "APK versioning & release archive system",
+                        "In-app OTA update checker & version rollback list",
+                    ],
+                    "download_url": "/api/apk/download?version=3.1.0",
+                }
+            )
+
+    releases.sort(key=lambda r: int(r.get("version_code") or 0), reverse=True)
+    return releases
+
+
 @app.get("/api/apk/info")
 async def get_apk_info(request: Request) -> Dict[str, Any]:
     auth_manager.require_authenticated_user(request)
+    releases = _load_apk_releases_manifest()
     apk_path = _resolve_apk_path()
-    exists = apk_path.exists() and apk_path.is_file()
-    size_bytes = apk_path.stat().st_size if exists else 0
+    exists = bool(releases) or (apk_path.exists() and apk_path.is_file())
+    if releases:
+        latest = releases[0]
+        return {
+            "available": exists,
+            "version_name": latest["version_name"],
+            "version_code": latest["version_code"],
+            "size_bytes": latest["size_bytes"] or (apk_path.stat().st_size if apk_path.exists() else 0),
+            "sha256": latest["sha256"],
+            "released_at": latest["released_at"],
+            "filename": latest["filename"],
+            "download_url": f"/api/apk/download?version={urllib.parse.quote(latest['version_name'])}",
+            "changelog": latest["changelog"],
+            "requires_auth": True,
+            "releases": releases,
+        }
+
+    size_bytes = apk_path.stat().st_size if (apk_path.exists() and apk_path.is_file()) else 0
     return {
         "available": exists,
+        "version_name": "3.1.0",
+        "version_code": 4,
         "size_bytes": size_bytes,
-        "filename": "govee-multi-house-sync.apk",
-        "download_url": "/api/apk/download",
+        "sha256": "",
+        "released_at": "",
+        "filename": "Govee-Sync-Studio-v3.1.0-b4.apk",
+        "download_url": "/api/apk/download?version=3.1.0",
+        "changelog": [],
         "requires_auth": True,
+        "releases": [],
+    }
+
+
+@app.get("/api/apk/releases")
+async def list_apk_releases(request: Request) -> Dict[str, Any]:
+    auth_manager.require_authenticated_user(request)
+    releases = _load_apk_releases_manifest()
+    latest = releases[0] if releases else {}
+    return {
+        "latest_version_name": latest.get("version_name", "3.1.0"),
+        "latest_version_code": latest.get("version_code", 4),
+        "count": len(releases),
+        "releases": releases,
     }
 
 
 @app.api_route("/api/apk/download", methods=["GET", "HEAD"])
 @app.api_route("/api/download/govee-sync.apk", methods=["GET", "HEAD"])
 @app.api_route("/api/download/govee-multi-house-sync.apk", methods=["GET", "HEAD"])
-async def download_android_apk(request: Request) -> Response:
+async def download_android_apk(request: Request, version: str = "") -> Response:
     auth_manager.require_authenticated_user(request)
+    releases = _load_apk_releases_manifest()
+    clean_ver = version.strip().lstrip("v")
+
+    if clean_ver:
+        matched: Optional[Dict[str, Any]] = None
+        for entry in releases:
+            if (
+                str(entry.get("version_name")) == clean_ver
+                or str(entry.get("version_code")) == clean_ver
+                or str(entry.get("filename")) == version.strip()
+            ):
+                matched = entry
+                break
+        if not matched:
+            raise HTTPException(status_code=404, detail=f"APK version '{version}' is not available")
+        rel_path = _resolve_release_apk_path(matched["filename"])
+        if rel_path is None:
+            # Fallback to latest APK pointer if requesting the latest version in a test environment
+            fallback = _resolve_apk_path()
+            if releases and matched["version_name"] == releases[0]["version_name"] and fallback.exists():
+                rel_path = fallback
+            else:
+                raise HTTPException(status_code=404, detail=f"APK archive file '{matched['filename']}' not found")
+        return FileResponse(
+            path=str(rel_path),
+            media_type="application/vnd.android.package-archive",
+            filename=matched["filename"],
+            headers={"Cache-Control": "private, no-store, no-cache, must-revalidate"},
+        )
+
+    latest = releases[0] if releases else None
+    if latest:
+        rel_path = _resolve_release_apk_path(latest["filename"])
+        if rel_path is not None:
+            return FileResponse(
+                path=str(rel_path),
+                media_type="application/vnd.android.package-archive",
+                filename=latest["filename"],
+                headers={"Cache-Control": "private, no-store, no-cache, must-revalidate"},
+            )
+
     apk_path = _resolve_apk_path()
     if not apk_path.exists() or not apk_path.is_file():
         raise HTTPException(status_code=404, detail="Android APK is not available yet")
+    dl_filename = (
+        latest["filename"]
+        if latest and latest.get("filename")
+        else "Govee-Sync-Studio-v3.1.0-b4.apk"
+    )
     return FileResponse(
         path=str(apk_path),
         media_type="application/vnd.android.package-archive",
-        filename="govee-multi-house-sync.apk",
+        filename=dl_filename,
         headers={"Cache-Control": "private, no-store, no-cache, must-revalidate"},
     )
 

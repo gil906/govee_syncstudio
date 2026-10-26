@@ -35,6 +35,10 @@ class GoveeApiService extends ChangeNotifier {
   double _burstRemainingSec = 0.0;
   final Map<String, List<Color>> _liveHouseColors = {};
 
+  String _latestApkVersionName = kAppVersionName;
+  int _latestApkVersionCode = kAppVersionCode;
+  List<Map<String, dynamic>> _apkReleases = const [];
+
   WebSocket? _ws;
   Timer? _pollTimer;
   Timer? _handoffTimer;
@@ -60,6 +64,13 @@ class GoveeApiService extends ChangeNotifier {
   String get burstLabel => _burstLabel;
   double get burstRemainingSec => _burstRemainingSec;
   Map<String, List<Color>> get liveHouseColors => _liveHouseColors;
+
+  String get installedVersionName => kAppVersionName;
+  int get installedVersionCode => kAppVersionCode;
+  String get latestApkVersionName => _latestApkVersionName;
+  int get latestApkVersionCode => _latestApkVersionCode;
+  bool get apkUpdateAvailable => _latestApkVersionCode > kAppVersionCode;
+  List<Map<String, dynamic>> get apkReleases => _apkReleases;
 
   bool get needsSignIn =>
       _authStatus.authRequired && !_authStatus.authenticated;
@@ -281,6 +292,7 @@ class GoveeApiService extends ChangeNotifier {
 
       if (_authStatus.authenticated || !_authStatus.authRequired) {
         await fetchAuthorizedUsersSilently();
+        await fetchApkInfoSilently();
       }
 
       _connected = true;
@@ -964,6 +976,68 @@ class GoveeApiService extends ChangeNotifier {
       setBanner('Removed $clean from authorized users');
     } catch (e) {
       setBanner('Could not remove user: $e', isError: true);
+    }
+  }
+
+  // --- APK Versioning, OTA Update Check & Archive Download ---
+
+  Future<void> fetchApkInfoSilently({bool showFeedback = false}) async {
+    try {
+      final res = await _httpRequest('GET', '/api/apk/info');
+      if (res is Map) {
+        if (res['version_name'] != null) {
+          _latestApkVersionName = res['version_name'].toString();
+        }
+        if (res['version_code'] is num) {
+          _latestApkVersionCode = (res['version_code'] as num).toInt();
+        }
+        if (res['releases'] is List) {
+          _apkReleases = (res['releases'] as List)
+              .whereType<Map>()
+              .map((m) => Map<String, dynamic>.from(m))
+              .toList();
+        }
+        _safeNotify();
+        if (showFeedback) {
+          if (apkUpdateAvailable) {
+            setBanner(
+              'New APK update v$_latestApkVersionName (Build $_latestApkVersionCode) available!',
+            );
+          } else {
+            setBanner(
+              'App is up to date (v$kAppVersionName • Build $kAppVersionCode)',
+            );
+          }
+        }
+      }
+    } catch (_) {
+      if (showFeedback) {
+        setBanner('Checked APK version (v$kAppVersionName • Build $kAppVersionCode)');
+      }
+    }
+  }
+
+  Future<void> downloadApkVersion({String? version}) async {
+    final verParam = (version ?? '').trim();
+    final qp = <String>[];
+    if (verParam.isNotEmpty) {
+      qp.add('version=${Uri.encodeComponent(verParam)}');
+    }
+    if (_authToken.isNotEmpty) {
+      qp.add('token=${Uri.encodeComponent(_authToken)}');
+    }
+    final query = qp.isEmpty ? '' : '?${qp.join("&")}';
+    final url = '$_baseUrl/api/apk/download$query';
+    setBanner(
+      verParam.isNotEmpty
+          ? 'Downloading Govee Sync Studio APK v$verParam…'
+          : 'Downloading latest Govee Sync Studio APK…',
+    );
+    try {
+      await _platformChannel.invokeMethod('launchExternalUrl', {'url': url});
+    } catch (_) {
+      await Clipboard.setData(ClipboardData(text: url));
+      setBanner('Copied APK download link to clipboard: $url');
     }
   }
 

@@ -376,8 +376,15 @@ export default function App() {
   const [authErrorMsg, setAuthErrorMsg] = useState('');
   const [apkInfo, setApkInfo] = useState({
     available: true,
+    version_name: '3.1.0',
+    version_code: 4,
     size_bytes: 0,
-    download_url: '/api/download/govee-sync.apk',
+    sha256: '',
+    released_at: '',
+    filename: 'Govee-Sync-Studio-v3.1.0-b4.apk',
+    download_url: '/api/apk/download?version=3.1.0',
+    changelog: [],
+    releases: [],
   });
   const [burstBusy, setBurstBusy] = useState('');
 
@@ -454,7 +461,7 @@ export default function App() {
     try {
       const [authRes, apkRes] = await Promise.all([
         apiFetch('/api/auth/status'),
-        fetch('/api/apk/info'),
+        apiFetch('/api/apk/info'),
       ]);
       if (apkRes.ok) {
         setApkInfo(await apkRes.json());
@@ -1189,9 +1196,31 @@ export default function App() {
     ? `${(apkInfo.size_bytes / (1024 * 1024)).toFixed(1)} MB`
     : 'Android APK';
 
-  const apkDownloadHref = authToken
-    ? `/api/apk/download?token=${encodeURIComponent(authToken)}`
-    : '/api/apk/download';
+  const buildApkDownloadHref = (ver = '') => {
+    const params = new URLSearchParams();
+    if (ver) params.set('version', ver);
+    if (authToken) params.set('token', authToken);
+    const qs = params.toString();
+    return qs ? `/api/apk/download?${qs}` : '/api/apk/download';
+  };
+
+  const apkVersionName = apkInfo?.version_name || '3.1.0';
+  const apkVersionCode = apkInfo?.version_code || 4;
+  const apkDownloadHref = buildApkDownloadHref(apkVersionName);
+  const apkReleases =
+    Array.isArray(apkInfo?.releases) && apkInfo.releases.length > 0
+      ? apkInfo.releases
+      : [
+          {
+            version_name: apkVersionName,
+            version_code: apkVersionCode,
+            filename: apkInfo?.filename || `Govee-Sync-Studio-v${apkVersionName}-b${apkVersionCode}.apk`,
+            size_bytes: apkInfo?.size_bytes || 0,
+            sha256: apkInfo?.sha256 || '',
+            released_at: apkInfo?.released_at || '',
+            changelog: apkInfo?.changelog || [],
+          },
+        ];
 
   const allHouses = config?.houses || [];
   const enabledHouseCount = allHouses.filter((h) => h.enabled !== false).length;
@@ -1400,15 +1429,15 @@ export default function App() {
               <span className="hidden sm:inline">Stop &amp; Off</span>
             </button>
 
-            {/* Authenticated Download Android APK Button with ?token= */}
+            {/* Authenticated Download Android APK Button with ?version=&token= */}
             <a
               href={apkDownloadHref}
-              download="govee-multi-house-sync.apk"
+              download={apkInfo?.filename || `Govee-Sync-Studio-v${apkVersionName}-b${apkVersionCode}.apk`}
               className="px-3 py-1.5 rounded-xl bg-gradient-to-r from-cyan-500/20 to-purple-500/25 hover:from-cyan-500/35 hover:to-purple-500/40 text-cyan-200 border border-cyan-400/40 text-xs font-bold flex items-center gap-1.5 transition shadow"
               title="Download the Native Android App (.apk) for Samsung Galaxy Z Fold 7 & Android phones"
             >
               <Download className="w-3.5 h-3.5 text-cyan-300" />
-              <span>📱 Download Android APK</span>
+              <span>📱 Download APK v{apkInfo?.version_name || '3.1.0'}</span>
             </a>
 
             {authStatus?.user && (
@@ -2721,29 +2750,114 @@ export default function App() {
               </div>
             </div>
 
-            {/* Authenticated Android App Download & OAuth Sign-In Card */}
+            {/* Authenticated Android App Download, Version Archive & OAuth Sign-In Card */}
             <div className="lg:col-span-5 space-y-5">
               <div className="bg-[#0c1222]/95 border border-purple-500/35 rounded-2xl p-5 sm:p-6 shadow-2xl space-y-4">
-                <div className="flex items-center gap-3">
-                  <BrandLogo className="w-11 h-11 rounded-xl" />
-                  <div>
-                    <h3 className="text-base font-extrabold text-white">
-                      Native Android App (.apk)
-                    </h3>
-                    <p className="text-xs text-slate-400">
-                      Optimized for Samsung Galaxy Z Fold 7 (Cover &amp; Unfolded Split-Screen)
-                    </p>
+                <div className="flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-3">
+                    <BrandLogo className="w-11 h-11 rounded-xl" />
+                    <div>
+                      <h3 className="text-base font-extrabold text-white">
+                        Android APK Version &amp; Release History Center
+                      </h3>
+                      <p className="text-xs text-slate-400">
+                        Optimized for Samsung Galaxy Z Fold 7 (Cover &amp; Unfolded Split-Screen)
+                      </p>
+                    </div>
                   </div>
+                  <span className="px-2.5 py-1 rounded-full bg-cyan-500/15 border border-cyan-400/40 text-cyan-300 text-[11px] font-extrabold font-mono shrink-0">
+                    v{apkVersionName} · Build {apkVersionCode}
+                  </span>
+                </div>
+
+                {/* Latest Release Highlights */}
+                <div className="p-3.5 rounded-xl bg-slate-900/85 border border-slate-800 space-y-2">
+                  <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] text-slate-300">
+                    <span className="font-bold text-emerald-300">
+                      Latest Release: v{apkVersionName} (Build {apkVersionCode})
+                    </span>
+                    <span className="font-mono text-slate-400">
+                      {apkSizeMb}
+                      {apkInfo?.released_at ? ` · ${apkInfo.released_at.slice(0, 10)}` : ''}
+                    </span>
+                  </div>
+                  {apkInfo?.sha256 && (
+                    <div className="text-[10px] font-mono text-slate-400 truncate">
+                      SHA-256: {apkInfo.sha256.slice(0, 24)}…
+                    </div>
+                  )}
+                  {Array.isArray(apkInfo?.changelog) && apkInfo.changelog.length > 0 && (
+                    <ul className="text-[11px] text-slate-300 list-disc list-inside space-y-0.5 pt-1">
+                      {apkInfo.changelog.map((note, idx) => (
+                        <li key={idx}>{note}</li>
+                      ))}
+                    </ul>
+                  )}
                 </div>
 
                 <a
                   href={apkDownloadHref}
-                  download="govee-multi-house-sync.apk"
+                  download={apkInfo?.filename || `Govee-Sync-Studio-v${apkVersionName}-b${apkVersionCode}.apk`}
                   className="w-full py-3 px-4 rounded-xl bg-gradient-to-r from-cyan-400 via-blue-500 to-purple-600 hover:opacity-95 text-slate-950 font-extrabold text-xs sm:text-sm flex items-center justify-center gap-2 shadow-lg transition"
                 >
                   <Download className="w-4 h-4 stroke-[2.5]" />
-                  📱 Download Android APK ({apkSizeMb})
+                  📱 Download Latest APK v{apkVersionName} ({apkSizeMb})
                 </a>
+
+                {/* Archived APK Versions List (Download Any Version / Rollback) */}
+                <div className="pt-3 border-t border-slate-800 space-y-2">
+                  <div className="text-xs font-bold text-slate-300 flex items-center justify-between">
+                    <span>All Archived APK Releases ({apkReleases.length})</span>
+                    <span className="text-[10px] text-slate-400 font-normal">
+                      Install latest or roll back anytime
+                    </span>
+                  </div>
+                  <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
+                    {apkReleases.map((rel, idx) => {
+                      const isLatest = idx === 0;
+                      const relSizeMb = rel.size_bytes
+                        ? `${(rel.size_bytes / (1024 * 1024)).toFixed(1)} MB`
+                        : '';
+                      const dlHref = buildApkDownloadHref(rel.version_name);
+                      return (
+                        <div
+                          key={`${rel.version_name}-${rel.version_code}`}
+                          className="p-2.5 rounded-xl bg-slate-900/70 border border-slate-800/90 flex flex-col gap-1.5"
+                        >
+                          <div className="flex items-center justify-between gap-2">
+                            <div>
+                              <div className="text-xs font-bold text-white flex items-center gap-1.5">
+                                <span>
+                                  v{rel.version_name} (Build {rel.version_code}
+                                  {isLatest ? ' - Latest' : ''})
+                                </span>
+                              </div>
+                              <div className="text-[10px] text-slate-400 font-mono">
+                                {relSizeMb}
+                                {rel.released_at ? ` · ${rel.released_at.slice(0, 10)}` : ''}
+                              </div>
+                            </div>
+                            <a
+                              href={dlHref}
+                              download={rel.filename || `Govee-Sync-Studio-v${rel.version_name}-b${rel.version_code}.apk`}
+                              className="px-2.5 py-1.5 rounded-lg bg-cyan-500/20 hover:bg-cyan-500/35 text-cyan-200 border border-cyan-500/40 text-[11px] font-bold flex items-center gap-1 shrink-0 transition"
+                            >
+                              <Download className="w-3 h-3" />
+                              <span>⬇ Download v{rel.version_name}</span>
+                            </a>
+                          </div>
+                          {Array.isArray(rel.changelog) && rel.changelog.length > 0 && (
+                            <ul className="text-[10px] text-slate-400 list-disc list-inside space-y-0.5">
+                              {rel.changelog.map((item, cIdx) => (
+                                <li key={cIdx}>{item}</li>
+                              ))}
+                            </ul>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
 
                 <div className="pt-3 border-t border-slate-800 space-y-2.5">
                   <div className="text-xs font-bold text-slate-300">
