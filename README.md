@@ -1,8 +1,30 @@
-# Govee Multi-House Light Sync
+# Govee Multi-House Light Sync Studio
 
-A complete Dockerized central controller and dark-themed Web Studio for synchronizing **Govee Wi-Fi / RGBIC lights across multiple houses** with **zero timing drift** and **real-time uneven segment compensation**.
+A complete Dockerized central controller, glassmorphic React Web Studio, and native **Flutter Android / Samsung Galaxy Z Fold 7** app for synchronizing **Govee Wi-Fi / RGBIC lights across multiple houses** over LAN and Internet with **zero timing drift**, **real-time uneven segment compensation**, **71 holiday & party scenes (with live 3-house animated previews)**, **per-house speed tweening**, and **24/7 autonomous container scheduling (with auto Timezone & Daylight Saving Time)**.
 
-Designed to live in `/mnt/media/govee_lights_sync` with persistent state in `/mnt/media/govee_lights_sync/data`.
+---
+
+## Screenshots & Visual Tour
+
+### 1. Live Multi-House Roofline Studio & Active Scene Tuner (PC / Desktop)
+![Live Studio & 3-House Visualizer](docs/screenshots/01-studio-scenes.png)
+
+### 2. 71 Animated Holiday & Govee Rainbow 1 / Rainbow 2 Scene Cards
+Every scene card renders a live 24 FPS multi-house roofline preview showing how the effect moves across all houses before you select it, with inline per-scene speed and color customization:
+![Halloween & Rainbow Scene Gallery](docs/screenshots/02-halloween-rainbow-scenes.png)
+
+### 3. Adaptive Foldable & Mobile Views (Samsung Galaxy Z Fold 7 Unfolded & Cover Screen)
+| Galaxy Z Fold 7 Unfolded (Spacious 2-Column Studio) | Folded Cover Screen / Mobile View |
+| :---: | :---: |
+| ![Galaxy Z Fold 7 Unfolded](docs/screenshots/05-fold7-unfolded.png) | ![Mobile Cover Screen](docs/screenshots/06-fold7-cover-mobile.png) |
+
+### 4. Dynamic 1..N Houses, Street Order & Per-House Speed Tween Sliders
+Enable/disable individual houses (run on 1, 2, 3, or 4+ houses), reorder street positions (`1st → 2nd → 3rd`), tween speed per house (`0.25x–3.0x` or `Auto Default by Light Count`), and connect neighbors over the internet via Govee Cloud API keys or the 25-FPS WebSocket Bridge:
+![Houses, Street Order & Per-House Speed Tweening](docs/screenshots/03-houses-speed-tween.png)
+
+### 5. 24/7 Autonomous Container Schedule (Auto Timezone & DST) + Playlist Jukebox
+Automatically detects your IANA timezone and Daylight Saving Time (`PDT`/`PST`) and turns physical lights ON and OFF autonomously inside the Docker container even when your phone or browser is closed:
+![24/7 Autonomous Container Schedule & Jukebox](docs/screenshots/04-schedule-jukebox.png)
 
 ---
 
