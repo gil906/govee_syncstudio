@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
-const String kAppVersionName = '3.1.0';
-const int kAppVersionCode = 4;
+const String kAppVersionName = '3.2.0';
+const int kAppVersionCode = 5;
 
 const String kDefaultBackendUrl = String.fromEnvironment(
   'DEFAULT_BACKEND_URL',

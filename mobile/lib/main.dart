@@ -167,6 +167,8 @@ class _GoveeStudioHomeScreenState extends State<GoveeStudioHomeScreen>
                 child: Column(
                   children: [
                     if (widget.api.statusBanner != null) _buildStatusBanner(),
+                    if (widget.api.cloudErrors.isNotEmpty)
+                      _buildCloudErrorsBanner(),
                     if (widget.api.apkUpdateAvailable) _buildApkUpdateBanner(),
                     if (widget.api.needsSignIn) _buildAuthGateBanner(),
                     Expanded(
@@ -340,6 +342,33 @@ class _GoveeStudioHomeScreenState extends State<GoveeStudioHomeScreen>
           InkWell(
             onTap: () => widget.api.setBanner(null),
             child: const Icon(Icons.close, size: 16, color: Colors.white70),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCloudErrorsBanner() {
+    final msg = widget.api.cloudErrors.entries
+        .map((e) => '${e.key}: ${e.value}')
+        .join(' • ');
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+      color: const Color(0xFF78350F).withValues(alpha: 0.85),
+      child: Row(
+        children: [
+          const Icon(Icons.wifi_off, size: 15, color: Color(0xFFFCD34D)),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              'Govee Cloud: $msg (auto-retrying every 15s)',
+              style: const TextStyle(
+                fontSize: 11.5,
+                fontWeight: FontWeight.w600,
+                color: Color(0xFFFEF3C7),
+              ),
+            ),
           ),
         ],
       ),

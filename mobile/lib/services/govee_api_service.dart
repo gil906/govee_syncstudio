@@ -34,6 +34,8 @@ class GoveeApiService extends ChangeNotifier {
   String _burstLabel = '';
   double _burstRemainingSec = 0.0;
   final Map<String, List<Color>> _liveHouseColors = {};
+  Map<String, String> _cloudErrors = const {};
+  Map<String, Map<String, dynamic>> _activeCloudScenes = const {};
 
   String _latestApkVersionName = kAppVersionName;
   int _latestApkVersionCode = kAppVersionCode;
@@ -64,6 +66,8 @@ class GoveeApiService extends ChangeNotifier {
   String get burstLabel => _burstLabel;
   double get burstRemainingSec => _burstRemainingSec;
   Map<String, List<Color>> get liveHouseColors => _liveHouseColors;
+  Map<String, String> get cloudErrors => _cloudErrors;
+  Map<String, Map<String, dynamic>> get activeCloudScenes => _activeCloudScenes;
 
   String get installedVersionName => kAppVersionName;
   int get installedVersionCode => kAppVersionCode;
@@ -332,6 +336,21 @@ class GoveeApiService extends ChangeNotifier {
     }
     if (snap['active_preset_id'] != null) {
       _activePresetId = snap['active_preset_id'].toString();
+    }
+    if (snap['cloud_errors'] is Map) {
+      _cloudErrors = (snap['cloud_errors'] as Map).map(
+        (k, v) => MapEntry(k.toString(), v.toString()),
+      );
+    }
+    if (snap['active_cloud_scenes'] is Map) {
+      final rawScenes = snap['active_cloud_scenes'] as Map;
+      final parsedScenes = <String, Map<String, dynamic>>{};
+      rawScenes.forEach((k, v) {
+        if (v is Map) {
+          parsedScenes[k.toString()] = Map<String, dynamic>.from(v);
+        }
+      });
+      _activeCloudScenes = parsedScenes;
     }
     _burstActive = snap['burst_active'] == true;
     _burstLabel = (snap['burst_label'] ?? '').toString();
