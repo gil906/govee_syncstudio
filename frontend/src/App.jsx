@@ -359,6 +359,7 @@ export default function App() {
     timezone: detectBrowserTimezone(),
     days_of_week: ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'],
     turn_off_lights_on_stop: true,
+    override_govee_app_schedules: false,
   });
   const [savingSchedule, setSavingSchedule] = useState(false);
 
@@ -524,6 +525,7 @@ export default function App() {
                 ? c.schedule.days_of_week
                 : ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'],
             turn_off_lights_on_stop: c.schedule.turn_off_lights_on_stop ?? true,
+            override_govee_app_schedules: Boolean(c.schedule.override_govee_app_schedules),
           });
         }
         // Automatically sync detected IANA timezone if config.schedule.timezone is empty
@@ -592,6 +594,7 @@ export default function App() {
               ? config.schedule.days_of_week
               : prev.days_of_week,
           turn_off_lights_on_stop: config.schedule.turn_off_lights_on_stop ?? true,
+          override_govee_app_schedules: Boolean(config.schedule.override_govee_app_schedules),
         }));
       }
     }
@@ -1683,6 +1686,47 @@ export default function App() {
                           );
                         })}
                       </div>
+
+                      {/* Govee-Side Schedule Control Toggle Bar */}
+                      <div className="pt-2 border-t border-[#1e293b] flex items-center justify-between gap-2">
+                        <div className="min-w-0">
+                          <div className="text-[11px] font-bold text-slate-200 truncate">
+                            Govee App Schedules:{' '}
+                            <span
+                              className={
+                                scheduleDraft.override_govee_app_schedules
+                                  ? 'text-amber-300'
+                                  : 'text-[#00f5d4]'
+                              }
+                            >
+                              {scheduleDraft.override_govee_app_schedules
+                                ? 'Blocked (Sync Studio Overrides)'
+                                : 'Enabled (Coexist with App)'}
+                            </span>
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const nextVal = !scheduleDraft.override_govee_app_schedules;
+                            const updated = {
+                              ...scheduleDraft,
+                              override_govee_app_schedules: nextVal,
+                            };
+                            setScheduleDraft(updated);
+                            handleUpdateSchedule(updated);
+                          }}
+                          className={`px-2.5 py-1 rounded-lg text-[11px] font-extrabold border shrink-0 transition ${
+                            scheduleDraft.override_govee_app_schedules
+                              ? 'bg-amber-500/20 border-amber-400/60 text-amber-200 hover:bg-amber-500/30'
+                              : 'bg-[#00f5d4]/15 border-[#00f5d4]/50 text-[#00f5d4] hover:bg-[#00f5d4]/25'
+                          }`}
+                        >
+                          {scheduleDraft.override_govee_app_schedules
+                            ? 'Allow Govee Schedules'
+                            : 'Block Govee Schedules'}
+                        </button>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -2318,6 +2362,69 @@ export default function App() {
                     className="w-4 h-4 rounded border-slate-700 text-cyan-500 shrink-0"
                   />
                 </label>
+
+                {/* Govee-Side Schedule Control (Allow vs Override Govee Home App Timers) */}
+                <div className="lg:col-span-9 bg-slate-950/90 border border-slate-800 rounded-xl p-3.5 flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <div className="text-xs font-bold text-white flex items-center gap-2">
+                      <span>Govee Home App Schedule Control</span>
+                      <span
+                        className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold ${
+                          scheduleDraft.override_govee_app_schedules
+                            ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40'
+                            : 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
+                        }`}
+                      >
+                        {scheduleDraft.override_govee_app_schedules
+                          ? 'GOVEE APP TIMERS BLOCKED / OVERRIDDEN'
+                          : 'GOVEE APP TIMERS ENABLED'}
+                      </span>
+                    </div>
+                    <div className="text-[11px] text-slate-400 mt-0.5">
+                      {scheduleDraft.override_govee_app_schedules
+                        ? 'Sync Studio watchdog re-asserts its active scene / off state every 45s so Govee Home app timers cannot override your lights.'
+                        : 'Govee Home app timers are allowed to trigger scenes or turn lights on/off between Sync Studio start & stop times.'}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const updated = {
+                          ...scheduleDraft,
+                          override_govee_app_schedules: false,
+                        };
+                        setScheduleDraft(updated);
+                        handleUpdateSchedule(updated);
+                      }}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-extrabold border transition ${
+                        !scheduleDraft.override_govee_app_schedules
+                          ? 'bg-emerald-500/25 border-emerald-400 text-emerald-200'
+                          : 'bg-slate-900 border-slate-700 text-slate-400 hover:text-white'
+                      }`}
+                    >
+                      Enable Govee Schedules
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const updated = {
+                          ...scheduleDraft,
+                          override_govee_app_schedules: true,
+                        };
+                        setScheduleDraft(updated);
+                        handleUpdateSchedule(updated);
+                      }}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-extrabold border transition ${
+                        scheduleDraft.override_govee_app_schedules
+                          ? 'bg-amber-500/25 border-amber-400 text-amber-200'
+                          : 'bg-slate-900 border-slate-700 text-slate-400 hover:text-white'
+                      }`}
+                    >
+                      Disable / Override Govee Schedules
+                    </button>
+                  </div>
+                </div>
 
                 {/* Save Schedule to Container Button (3 cols) */}
                 <div className="lg:col-span-3">

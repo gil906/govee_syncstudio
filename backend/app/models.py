@@ -191,6 +191,10 @@ class ScheduleConfig(BaseModel):
         default=True,
         description="Send hardware power OFF (turn:0) to all Govee controllers at stop_time",
     )
+    override_govee_app_schedules: bool = Field(
+        default=False,
+        description="When True, block/override Govee Home app timers via active state watchdog so only Sync Studio's schedule applies",
+    )
 
 
 OWNER_EMAIL = (os.environ.get("OWNER_EMAIL") or "owner@example.com").strip().lower()

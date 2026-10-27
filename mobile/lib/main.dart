@@ -1672,6 +1672,45 @@ class _GoveeStudioHomeScreenState extends State<GoveeStudioHomeScreen>
                   ),
                 ),
               ),
+              InkWell(
+                borderRadius: BorderRadius.circular(8),
+                onTap: () {
+                  final nextOverride =
+                      !widget.api.config.schedule.overrideGoveeAppSchedules;
+                  widget.api.patchSchedule({
+                    'override_govee_app_schedules': nextOverride,
+                  });
+                },
+                child: Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: widget.api.config.schedule.overrideGoveeAppSchedules
+                        ? const Color(0xFFF59E0B).withValues(alpha: 0.2)
+                        : const Color(0xFF00F5D4).withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(
+                      color:
+                          widget.api.config.schedule.overrideGoveeAppSchedules
+                              ? const Color(0xFFFBBF24)
+                              : const Color(0xFF00F5D4),
+                    ),
+                  ),
+                  child: Text(
+                    widget.api.config.schedule.overrideGoveeAppSchedules
+                        ? 'Govee Sched: OFF'
+                        : 'Govee Sched: ON',
+                    style: TextStyle(
+                      fontSize: 10,
+                      fontWeight: FontWeight.w800,
+                      color:
+                          widget.api.config.schedule.overrideGoveeAppSchedules
+                              ? const Color(0xFFFCD34D)
+                              : const Color(0xFF00F5D4),
+                    ),
+                  ),
+                ),
+              ),
               if (activeScene != null && activeScene.isCustomized)
                 TextButton(
                   style: TextButton.styleFrom(
@@ -2533,6 +2572,26 @@ class _GoveeStudioHomeScreenState extends State<GoveeStudioHomeScreen>
               activeThumbColor: const Color(0xFF00F5D4),
               onChanged: (val) => widget.api
                   .patchSchedule({'turn_off_lights_on_stop': val}),
+            ),
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              title: Text(
+                schedule.overrideGoveeAppSchedules
+                    ? 'Govee App Schedules: Disabled / Overridden'
+                    : 'Govee App Schedules: Enabled (Allowed)',
+                style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
+              ),
+              subtitle: Text(
+                schedule.overrideGoveeAppSchedules
+                    ? 'Sync Studio watchdog overrides Govee Home app timers every 45s'
+                    : 'Allows Govee Home app timers to trigger between Sync Studio start/stop times',
+                style: const TextStyle(fontSize: 11),
+              ),
+              value: !schedule.overrideGoveeAppSchedules,
+              activeThumbColor: const Color(0xFF00F5D4),
+              onChanged: (allowGovee) => widget.api.patchSchedule({
+                'override_govee_app_schedules': !allowGovee,
+              }),
             ),
             const Divider(height: 22),
             SwitchListTile(

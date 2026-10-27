@@ -91,6 +91,7 @@ def compute_schedule_status(
         "timezone": tz_name,
         "days_of_week": sched.days_of_week,
         "turn_off_lights_on_stop": sched.turn_off_lights_on_stop,
+        "override_govee_app_schedules": getattr(sched, "override_govee_app_schedules", False),
         "current_local_time": now_local.strftime("%I:%M:%S %p"),
         "current_local_hhmm": now_hhmm,
         "tz_abbrev": tz_abbrev,
@@ -2933,6 +2934,40 @@ class MasterAnimationEngine:
         """
         return await self._check_schedule_tick(now_dt=now_dt)
 
+    async def enforce_govee_schedule_guard(
+        self,
+        cfg: Optional[SystemConfig] = None,
+        now_mono: Optional[float] = None,
+    ) -> None:
+        """
+        When `cfg.schedule.override_govee_app_schedules` is True ("Block/Disable Govee App Schedules"),
+        periodically re-assert Sync Studio's active scene (while running) or blackout/off state
+        (while stopped) so any timer configured inside the Govee Home mobile app is immediately overridden.
+        """
+        if cfg is None:
+            cfg = self.store.get()
+        if not getattr(cfg.schedule, "override_govee_app_schedules", False):
+            return
+        if now_mono is None:
+            now_mono = time.monotonic_ns() / 1e9
+
+        last_guard = getattr(self, "_last_govee_guard_mono", 0.0)
+        if (now_mono - last_guard) < 45.0:
+            return
+        self._last_govee_guard_mono = now_mono
+
+        if cfg.animation.running:
+            active_pid = cfg.active_preset_id or self.active_preset_id or cfg.schedule.preset_id
+            preset = next((p for p in self.PRESETS if p["id"] == active_pid), None)
+            await self.driver.apply_cloud_scene_to_all(
+                cfg,
+                preset_id=active_pid,
+                effect=str(cfg.animation.effect.value if hasattr(cfg.animation.effect, "value") else cfg.animation.effect),
+                category=str(preset.get("category", "")) if preset else "",
+            )
+        elif cfg.animation.blackout_on_stop and cfg.schedule.turn_off_lights_on_stop:
+            await self.driver.blackout_all_controllers(cfg, turn_off=True)
+
     async def broadcast_snapshot(self, cfg: Optional[SystemConfig] = None) -> Dict[str, Any]:
         """
         Immediately render and push an updated state snapshot to all connected `/ws/live` clients
@@ -2971,6 +3006,9 @@ class MasterAnimationEngine:
             if (now_mono - self._last_schedule_check_mono) >= 15.0:
                 self._last_schedule_check_mono = now_mono
                 await self.check_schedule()
+                cfg_guard = self.store.get()
+                if getattr(cfg_guard.schedule, "override_govee_app_schedules", False):
+                    await self.enforce_govee_schedule_guard(cfg_guard, now_mono)
 
             # 3. Advance Playlist Jukebox if due
             self.advance_playlist_if_due(now_mono)

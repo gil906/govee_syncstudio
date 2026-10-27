@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
-const String kAppVersionName = '3.2.0';
-const int kAppVersionCode = 5;
+const String kAppVersionName = '3.3.0';
+const int kAppVersionCode = 6;
 
 const String kDefaultBackendUrl = String.fromEnvironment(
   'DEFAULT_BACKEND_URL',
@@ -414,6 +414,7 @@ class ScheduleConfig {
   final String timezone;
   final List<String> daysOfWeek;
   final bool turnOffLightsOnStop;
+  final bool overrideGoveeAppSchedules;
   final String tzAbbrev;
   final bool dstActive;
   final String utcOffset;
@@ -436,6 +437,7 @@ class ScheduleConfig {
       'sun',
     ],
     this.turnOffLightsOnStop = true,
+    this.overrideGoveeAppSchedules = false,
     this.tzAbbrev = 'PDT',
     this.dstActive = true,
     this.utcOffset = '-07:00',
@@ -497,6 +499,7 @@ class ScheduleConfig {
     String? timezone,
     List<String>? daysOfWeek,
     bool? turnOffLightsOnStop,
+    bool? overrideGoveeAppSchedules,
     String? tzAbbrev,
     bool? dstActive,
     String? utcOffset,
@@ -511,6 +514,8 @@ class ScheduleConfig {
       timezone: timezone ?? this.timezone,
       daysOfWeek: daysOfWeek ?? this.daysOfWeek,
       turnOffLightsOnStop: turnOffLightsOnStop ?? this.turnOffLightsOnStop,
+      overrideGoveeAppSchedules:
+          overrideGoveeAppSchedules ?? this.overrideGoveeAppSchedules,
       tzAbbrev: tzAbbrev ?? this.tzAbbrev,
       dstActive: dstActive ?? this.dstActive,
       utcOffset: utcOffset ?? this.utcOffset,
@@ -540,6 +545,7 @@ class ScheduleConfig {
           ? const ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun']
           : days,
       turnOffLightsOnStop: json['turn_off_lights_on_stop'] != false,
+      overrideGoveeAppSchedules: json['override_govee_app_schedules'] == true,
       tzAbbrev: (json['tz_abbrev'] ?? phoneInfo.tzAbbrev).toString(),
       dstActive: json['dst_active'] is bool
           ? json['dst_active'] == true
@@ -558,6 +564,7 @@ class ScheduleConfig {
         'timezone': timezone,
         'days_of_week': daysOfWeek,
         'turn_off_lights_on_stop': turnOffLightsOnStop,
+        'override_govee_app_schedules': overrideGoveeAppSchedules,
       };
 }
 
