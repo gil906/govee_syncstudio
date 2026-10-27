@@ -715,19 +715,19 @@ class GoveeProtocolDriver:
     # Explicit 1-to-1 mapping of all 71 Studio Presets to 71 UNIQUE Govee Hardware Dynamic Scenes
     # (verified from POST /router/api/v1/device/scenes across both H705E and H805D)
     PRESET_TO_GOVEE_SCENE: Dict[str, Dict[str, Any]] = {
-        # --- 28 Halloween Presets (each mapped to a distinct Govee hardware scene) ---
+        # --- 28 Halloween Presets (mapped to real Govee Official & DIY scenes) ---
         "halloween_haunted_chase": {"name": "Halloween", "id": 10764, "paramId": 17969},
         "halloween_witch_cauldron": {"name": "Halloween B", "id": 10765, "paramId": 17970},
         "halloween_blood_meteor": {"name": "Halloween D", "id": 10767, "paramId": 17972},
         "halloween_pumpkin_marquee": {"name": "Halloween C", "id": 10766, "paramId": 17971},
-        "halloween_poltergeist_portal": {"name": "Thunderstorm", "id": 14158, "paramId": 22806},
-        "halloween_zombie_outbreak": {"name": "Halloween V2", "id": 14491, "paramId": 23302},
+        "halloween_poltergeist_portal": {"name": "Spooky Halloween AI (DIY)", "diy_name": "spooky halloween ai", "diy_id": 25004667, "id": 14158, "paramId": 22806},
+        "halloween_zombie_outbreak": {"name": "Halloween II", "id": 14491, "paramId": 23302},
         "halloween_frankenstein_lab": {"name": "Flash", "id": 23504, "paramId": 34012},
         "halloween_headless_horseman": {"name": "Meteor", "id": 14161, "paramId": 22809},
         "halloween_beetlejuice_sandworm": {"name": "Karst Cave", "id": 10747, "paramId": 17952},
         "halloween_hellfire_brimstone": {"name": "Fire", "id": 10753, "paramId": 17958},
-        "halloween_phantom_ghost_train": {"name": "Mysterious", "id": 10813, "paramId": 18018},
-        "halloween_shadow_possession": {"name": "Nebula", "id": 10740, "paramId": 17945},
+        "halloween_phantom_ghost_train": {"name": "Halloween Chasing (DIY)", "diy_name": "halloween chasing", "diy_id": 24908117, "id": 10764, "paramId": 17969},
+        "halloween_shadow_possession": {"name": "Orange & Purple (DIY)", "diy_name": "orange and purple", "diy_id": 24907990, "id": 10765, "paramId": 17970},
         "halloween_black_widow_lair": {"name": "Night", "id": 10795, "paramId": 18000},
         "halloween_haunted_heartbeat": {"name": "Profound", "id": 10811, "paramId": 18016},
         "halloween_candy_corn_parade": {"name": "Fall", "id": 10757, "paramId": 17962},
@@ -744,7 +744,7 @@ class GoveeProtocolDriver:
         "halloween_rainbow2_skeleton_rave": {"name": "Dancing", "id": 10800, "paramId": 18005},
         "halloween_rainbow1_full_spectrum": {"name": "Gradient", "id": 10807, "paramId": 18012},
         "halloween_rainbow2_warlock_crystal": {"name": "Milky Way", "id": 14159, "paramId": 22807},
-        # --- 28 Christmas Presets (each mapped to a distinct Govee hardware scene) ---
+        # --- 28 Christmas Presets (mapped to real Govee Official & DIY scenes) ---
         "xmas_sleigh_ride": {"name": "Sled", "id": 10763, "paramId": 17968},
         "xmas_candy_cane": {"name": "Candy Cane", "id": 14165, "paramId": 22813},
         "xmas_frozen_aurora": {"name": "Winter Wonderland", "id": 10787, "paramId": 17992},
@@ -762,7 +762,7 @@ class GoveeProtocolDriver:
         "xmas_mistletoe_harmony": {"name": "Christmas Wreath", "id": 14167, "paramId": 22815},
         "xmas_rainbow1_classic_C9": {"name": "Christmas Bell", "id": 14164, "paramId": 22812},
         "xmas_rainbow2_c9_blocks": {"name": "Colorful", "id": 10803, "paramId": 18008},
-        "xmas_rainbow1_peppermint_silk": {"name": "Candy", "id": 10798, "paramId": 18003},
+        "xmas_rainbow1_peppermint_silk": {"name": "Red White Running (DIY)", "diy_name": "red white running", "diy_id": 25240693, "id": 14165, "paramId": 22813},
         "xmas_rainbow2_candy_shoppe": {"name": "Amusement", "id": 14172, "paramId": 22820},
         "xmas_rainbow1_arctic_aurora": {"name": "Aurora", "id": 10746, "paramId": 17951},
         "xmas_rainbow2_glacier_blocks": {"name": "Lake", "id": 14162, "paramId": 22810},
@@ -895,40 +895,30 @@ class GoveeProtocolDriver:
         accent_hex: str = "#ff007f",
     ) -> Dict[str, Any]:
         """
-        Immediately paint all `0..N-1` segments on the physical Govee strip using
-        `gradientToggle` + 3-group `segmentedColorRgb` with the scene's EXACT `primary_color`,
-        `secondary_color`, and `accent_color` from the app preview, then let the live frame
-        engine rotate those exact segment colors across the strip (never sending a mismatched
-        built-in Govee scene or overwriting segments with 1-color `colorwc`).
+        Send a single atomic Govee OpenAPI v2 `lightScene` or `diyScene` command (`POST /device/control`),
+        locking `_active_cloud_scene[ctrl.id]` before awaiting HTTP so the 25 FPS loop never triggers
+        HTTP 429 rate limits or overwrites the scene with `colorwc`. Automatically retries once on HTTP 429.
         """
         clean_key = (effective_api_key or "").strip()
         if not clean_key or not ctrl.mac or ctrl.mac.upper().startswith("AA:BB:CC:DD:EE:"):
             return {"ok": False, "reason": "missing_api_key_or_mac"}
 
-        # Clear any static lock so the continuous multi-segment chaser animates the strip
-        self._active_cloud_scene.pop(ctrl.id, None)
-
-        def _hex_to_scaled_int(h: str, scale: float) -> Tuple[RGBTuple, int]:
-            s = (h or "#00f5d4").strip().lstrip("#")
-            if len(s) != 6:
-                s = "00f5d4"
-            try:
-                r = max(0, min(255, round(int(s[0:2], 16) * scale)))
-                g = max(0, min(255, round(int(s[2:4], 16) * scale)))
-                b = max(0, min(255, round(int(s[4:6], 16) * scale)))
-            except ValueError:
-                r, g, b = 0, 245, 212
-            return (r, g, b), (r << 16) | (g << 8) | b
-
-        bri_scale = max(0.05, min(1.0, brightness / 100.0))
-        p_rgb, p_int = _hex_to_scaled_int(primary_hex, bri_scale)
-        s_rgb, s_int = _hex_to_scaled_int(secondary_hex, bri_scale)
-        a_rgb, a_int = _hex_to_scaled_int(accent_hex, bri_scale)
-
         t0 = time.perf_counter()
-        n_segs = max(3, int(ctrl.segment_count or 9))
-        eff_lower = (effect or "").lower()
-        use_gradient = 1 if eff_lower in ("govee_rainbow1", "rainbow_wave", "breathing_pulse", "color_wipe") else 0
+        scene_info = self.resolve_govee_light_scene(preset_id, effect=effect, category=category, mac=ctrl.mac)
+        now_mono = time.monotonic()
+
+        # Pre-register active cloud scene IMMEDIATELY before any await so 25 FPS loop never sends colorwc / 429s
+        self._active_cloud_scene[ctrl.id] = {
+            "preset_id": preset_id,
+            "effect": effect,
+            "category": category,
+            "scene_name": scene_info["name"],
+            "id": scene_info["id"],
+            "paramId": scene_info["paramId"],
+            "applied": True,
+            "last_attempt": now_mono,
+        }
+        self._cloud_last_call[ctrl.id] = now_mono
 
         headers = {"Govee-API-Key": clean_key, "Content-Type": "application/json"}
         target_label = f"cloud:{ctrl.mac[-8:]}" if not ctrl.ip else ctrl.ip
@@ -941,31 +931,81 @@ class GoveeProtocolDriver:
 
         dev_meta = self.discovered_devices.get(ctrl.mac.upper())
         try:
-            # 1. Set gradientToggle (1 = smooth gradient blend, 0 = crisp multi-segment blocks)
-            grad_resp = await client.post(
+            # Determine if this preset uses a Govee DIY scene (`diyScene`) or Official `lightScene`
+            diy_val = None
+            if scene_info.get("diy_name"):
+                # Lookup controller's own DIY scene ID by name if cached, else use diy_id on My House H705E
+                diy_map = getattr(self, "device_diy_cache", {}).get(ctrl.mac.upper(), {})
+                if not diy_map:
+                    try:
+                        d_resp = await client.post(
+                            f"{self.CLOUD_BASE_URL}/device/diy-scenes",
+                            headers=headers,
+                            json={"requestId": str(uuid.uuid4()), "payload": {"sku": ctrl.sku or "H705E", "device": ctrl.mac}},
+                        )
+                        if d_resp.status_code == 200:
+                            d_caps = d_resp.json().get("payload", {}).get("capabilities", [])
+                            for dc in d_caps:
+                                if dc.get("instance") == "diyScene":
+                                    for opt in dc.get("parameters", {}).get("options", []):
+                                        d_nm = " ".join(str(opt.get("name", "")).split()).strip().lower()
+                                        if d_nm and opt.get("value") is not None:
+                                            diy_map[d_nm] = opt["value"]
+                            if not hasattr(self, "device_diy_cache"):
+                                self.device_diy_cache = {}
+                            self.device_diy_cache[ctrl.mac.upper()] = diy_map
+                    except Exception:
+                        pass
+                diy_val = diy_map.get(scene_info["diy_name"].lower())
+
+            if diy_val is not None:
+                cap_payload = {
+                    "type": "devices.capabilities.dynamic_scene",
+                    "instance": "diyScene",
+                    "value": diy_val,
+                }
+            else:
+                cap_payload = {
+                    "type": "devices.capabilities.dynamic_scene",
+                    "instance": "lightScene",
+                    "value": {
+                        "paramId": scene_info["paramId"],
+                        "id": scene_info["id"],
+                    },
+                }
+
+            req_json = {
+                "requestId": str(uuid.uuid4()),
+                "payload": {
+                    "sku": ctrl.sku or "H705E",
+                    "device": ctrl.mac,
+                    "capability": cap_payload,
+                },
+            }
+            scene_resp = await client.post(
                 f"{self.CLOUD_BASE_URL}/device/control",
                 headers=headers,
-                json={
-                    "requestId": str(uuid.uuid4()),
-                    "payload": {
-                        "sku": ctrl.sku or "H705E",
-                        "device": ctrl.mac,
-                        "capability": {
-                            "type": "devices.capabilities.toggle",
-                            "instance": "gradientToggle",
-                            "value": use_gradient,
-                        },
-                    },
-                },
+                json=req_json,
             )
             self.stats["cloud_requests_sent"] += 1
 
-            ok = grad_resp.status_code == 200
+            # If Govee returns HTTP 429 due to a recent burst, wait 1.2s and retry once
+            if scene_resp.status_code == 429:
+                await asyncio.sleep(1.2)
+                req_json["requestId"] = str(uuid.uuid4())
+                scene_resp = await client.post(
+                    f"{self.CLOUD_BASE_URL}/device/control",
+                    headers=headers,
+                    json=req_json,
+                )
+                self.stats["cloud_requests_sent"] += 1
+
+            ok = scene_resp.status_code == 200
             err_msg = ""
             is_offline = False
             if ok:
                 try:
-                    rj = grad_resp.json()
+                    rj = scene_resp.json()
                     cap_state = rj.get("capability", {}).get("state", {}) if isinstance(rj.get("capability"), dict) else {}
                     err_msg = str(cap_state.get("errorMsg") or rj.get("msg") or "")
                     if rj.get("code", 200) not in (200, "200") or cap_state.get("status") == "failure":
@@ -974,44 +1014,14 @@ class GoveeProtocolDriver:
                 except Exception:
                     pass
             else:
-                err_msg = f"HTTP {grad_resp.status_code}"
-
-            if not is_offline:
-                # 2. Immediately paint all N segments with the scene's 3 exact colors (Lead, Mid, Tail)
-                palette_groups = [
-                    (p_rgb, p_int, [i for i in range(n_segs) if i % 3 == 0]),
-                    (s_rgb, s_int, [i for i in range(n_segs) if i % 3 == 1]),
-                    (a_rgb, a_int, [i for i in range(n_segs) if i % 3 == 2]),
-                ]
-                for grp_rgb, grp_int, grp_idxs in palette_groups:
-                    if not grp_idxs:
-                        continue
-                    seg_resp = await client.post(
-                        f"{self.CLOUD_BASE_URL}/device/control",
-                        headers=headers,
-                        json={
-                            "requestId": str(uuid.uuid4()),
-                            "payload": {
-                                "sku": ctrl.sku or "H705E",
-                                "device": ctrl.mac,
-                                "capability": {
-                                    "type": "devices.capabilities.segment_color_setting",
-                                    "instance": "segmentedColorRgb",
-                                    "value": {
-                                        "segment": grp_idxs,
-                                        "rgb": grp_int,
-                                    },
-                                },
-                            },
-                        },
-                    )
-                    self.stats["cloud_requests_sent"] += 1
-                    ok = ok or (seg_resp.status_code == 200)
+                err_msg = f"HTTP {scene_resp.status_code}"
 
             now_done = time.monotonic()
             self._cloud_last_call[ctrl.id] = now_done
+            self._active_cloud_scene[ctrl.id]["applied"] = ok
+            self._active_cloud_scene[ctrl.id]["last_attempt"] = now_done
 
-            if ok and not is_offline:
+            if ok:
                 self._cloud_powered_on.add(ctrl.id)
                 self._cloud_offline_until.pop(ctrl.id, None)
                 self._cloud_last_error.pop(ctrl.id, None)
@@ -1021,10 +1031,10 @@ class GoveeProtocolDriver:
                 self._record_log(
                     house,
                     ctrl,
-                    "CLOUD-PALETTE",
-                    "segmentedColorRgb",
-                    f"preset='{preset_id}' colors=[{primary_hex},{secondary_hex},{accent_hex}] grad={use_gradient} -> OK",
-                    p_rgb,
+                    "CLOUD-SCENE",
+                    "diyScene" if diy_val is not None else "lightScene",
+                    f"scene='{scene_info['name']}' -> OK",
+                    (0, 245, 212),
                     (time.perf_counter() - t0) * 1000.0,
                     True,
                     True,
@@ -1041,9 +1051,9 @@ class GoveeProtocolDriver:
                 self._record_log(
                     house,
                     ctrl,
-                    "CLOUD-PALETTE",
-                    "offline" if is_offline else "segmentedError",
-                    f"preset='{preset_id}' -> {err_msg}",
+                    "CLOUD-SCENE",
+                    "offline" if is_offline else "lightSceneError",
+                    f"scene='{scene_info['name']}' -> {err_msg}",
                     (255, 80, 80),
                     (time.perf_counter() - t0) * 1000.0,
                     False,
@@ -1051,15 +1061,17 @@ class GoveeProtocolDriver:
                     target_override=target_label,
                 )
             return {
-                "ok": ok and not is_offline,
+                "ok": ok,
                 "offline": is_offline,
-                "error": err_msg if (not ok or is_offline) else "",
-                "colors": [primary_hex, secondary_hex, accent_hex],
+                "error": err_msg if not ok else "",
+                "scene": scene_info,
             }
         except Exception as exc:
             self.stats["send_errors"] += 1
             self._cloud_last_error[ctrl.id] = str(exc)
-            return {"ok": False, "offline": False, "error": str(exc)}
+            if ctrl.id in self._active_cloud_scene:
+                self._active_cloud_scene[ctrl.id]["applied"] = False
+            return {"ok": False, "offline": False, "error": str(exc), "scene": scene_info}
         finally:
             if own_client:
                 await client.aclose()
@@ -1072,11 +1084,8 @@ class GoveeProtocolDriver:
         category: str = "",
     ) -> List[Dict[str, Any]]:
         """
-        Immediately paint the active scene's exact 3-color palette (`primary_color`, `secondary_color`,
-        `accent_color`) across all segments of all enabled Cloud controllers via `segmentedColorRgb` +
-        `gradientToggle`, then allow the live animation engine to rotate those exact colors across segments.
+        Trigger Govee hardware `lightScene` or `diyScene` across all enabled houses & controllers.
         """
-        self._active_cloud_scene.clear()
         tasks = []
         meta = []
         p_hex = getattr(config.animation, "primary_color", "#00f5d4")
