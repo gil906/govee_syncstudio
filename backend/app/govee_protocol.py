@@ -715,84 +715,1018 @@ class GoveeProtocolDriver:
     # Explicit 1-to-1 mapping of all 71 Studio Presets to 71 UNIQUE Govee Hardware Dynamic Scenes
     # (verified from POST /router/api/v1/device/scenes across both H705E and H805D)
     PRESET_TO_GOVEE_SCENE: Dict[str, Dict[str, Any]] = {
-        # --- 28 Halloween Presets (mapped to real Govee Official & DIY scenes) ---
-        "halloween_haunted_chase": {"name": "Halloween", "id": 10764, "paramId": 17969},
-        "halloween_witch_cauldron": {"name": "Halloween B", "id": 10765, "paramId": 17970},
-        "halloween_blood_meteor": {"name": "Halloween D", "id": 10767, "paramId": 17972},
-        "halloween_pumpkin_marquee": {"name": "Halloween C", "id": 10766, "paramId": 17971},
-        "halloween_poltergeist_portal": {"name": "Spooky Halloween AI (DIY)", "diy_name": "spooky halloween ai", "diy_id": 25004667, "id": 14158, "paramId": 22806},
-        "halloween_zombie_outbreak": {"name": "Halloween II", "id": 14491, "paramId": 23302},
-        "halloween_frankenstein_lab": {"name": "Flash", "id": 23504, "paramId": 34012},
-        "halloween_headless_horseman": {"name": "Meteor", "id": 14161, "paramId": 22809},
-        "halloween_beetlejuice_sandworm": {"name": "Karst Cave", "id": 10747, "paramId": 17952},
-        "halloween_hellfire_brimstone": {"name": "Fire", "id": 10753, "paramId": 17958},
-        "halloween_phantom_ghost_train": {"name": "Halloween Chasing (DIY)", "diy_name": "halloween chasing", "diy_id": 24908117, "id": 10764, "paramId": 17969},
-        "halloween_shadow_possession": {"name": "Orange & Purple (DIY)", "diy_name": "orange and purple", "diy_id": 24907990, "id": 10765, "paramId": 17970},
-        "halloween_black_widow_lair": {"name": "Night", "id": 10795, "paramId": 18000},
-        "halloween_haunted_heartbeat": {"name": "Profound", "id": 10811, "paramId": 18016},
-        "halloween_candy_corn_parade": {"name": "Fall", "id": 10757, "paramId": 17962},
-        "halloween_pharaoh_curse": {"name": "Sunset Glow", "id": 10739, "paramId": 17944},
-        "halloween_rainbow1_spooky_prism": {"name": "Rainbow", "id": 10744, "paramId": 17949},
-        "halloween_rainbow2_monster_blocks": {"name": "Stacking", "id": 10806, "paramId": 18011},
-        "halloween_rainbow1_hocus_pocus": {"name": "Dreamlike", "id": 10815, "paramId": 18020},
-        "halloween_rainbow2_candy_corn_blocks": {"name": "Cornfield", "id": 10749, "paramId": 17954},
-        "halloween_rainbow1_ectoplasm_wave": {"name": "Forest", "id": 10745, "paramId": 17950},
-        "halloween_rainbow2_dracula_castle": {"name": "Sunset", "id": 10738, "paramId": 17943},
-        "halloween_rainbow1_pumpkin_spice": {"name": "Rustling leaves", "id": 10750, "paramId": 17955},
-        "halloween_rainbow2_goblin_parade": {"name": "Spin", "id": 10799, "paramId": 18004},
-        "halloween_rainbow1_witches_brew": {"name": "Twilight", "id": 10794, "paramId": 17999},
-        "halloween_rainbow2_skeleton_rave": {"name": "Dancing", "id": 10800, "paramId": 18005},
-        "halloween_rainbow1_full_spectrum": {"name": "Gradient", "id": 10807, "paramId": 18012},
-        "halloween_rainbow2_warlock_crystal": {"name": "Milky Way", "id": 14159, "paramId": 22807},
-        # --- 28 Christmas Presets (mapped to real Govee Official & DIY scenes) ---
-        "xmas_sleigh_ride": {"name": "Sled", "id": 10763, "paramId": 17968},
-        "xmas_candy_cane": {"name": "Candy Cane", "id": 14165, "paramId": 22813},
-        "xmas_frozen_aurora": {"name": "Winter Wonderland", "id": 10787, "paramId": 17992},
-        "xmas_nutcracker_marquee": {"name": "Christmas", "id": 10760, "paramId": 17965},
-        "xmas_rudolph_dash": {"name": "Delivering Gifts", "id": 14492, "paramId": 23303},
-        "xmas_north_pole_beacon": {"name": "Christmas Tree", "id": 10761, "paramId": 17966},
-        "xmas_grinch_heist": {"name": "Leprechaun", "id": 10788, "paramId": 17993},
-        "xmas_polar_express": {"name": "Winter", "id": 10758, "paramId": 17963},
-        "xmas_gingerbread_village": {"name": "Christmas Gift", "id": 10762, "paramId": 17967},
-        "xmas_arctic_blizzard": {"name": "Downpour", "id": 10759, "paramId": 17964},
-        "xmas_yule_log_hearth": {"name": "Warm", "id": 10816, "paramId": 18021},
-        "xmas_elf_workshop_ribbon": {"name": "Children's Day", "id": 14169, "paramId": 22817},
-        "xmas_star_of_bethlehem": {"name": "Christmas Eve", "id": 14166, "paramId": 22814},
-        "xmas_sugar_plum_fairy": {"name": "Dreamland", "id": 10818, "paramId": 18023},
-        "xmas_mistletoe_harmony": {"name": "Christmas Wreath", "id": 14167, "paramId": 22815},
-        "xmas_rainbow1_classic_C9": {"name": "Christmas Bell", "id": 14164, "paramId": 22812},
-        "xmas_rainbow2_c9_blocks": {"name": "Colorful", "id": 10803, "paramId": 18008},
-        "xmas_rainbow1_peppermint_silk": {"name": "Red White Running (DIY)", "diy_name": "red white running", "diy_id": 25240693, "id": 14165, "paramId": 22813},
-        "xmas_rainbow2_candy_shoppe": {"name": "Amusement", "id": 14172, "paramId": 22820},
-        "xmas_rainbow1_arctic_aurora": {"name": "Aurora", "id": 10746, "paramId": 17951},
-        "xmas_rainbow2_glacier_blocks": {"name": "Lake", "id": 14162, "paramId": 22810},
-        "xmas_rainbow1_royal_nativity": {"name": "Star", "id": 10742, "paramId": 17947},
-        "xmas_rainbow2_toy_soldier": {"name": "Swing", "id": 10802, "paramId": 18007},
-        "xmas_rainbow1_pastel_macaron": {"name": "Cherry blossoms", "id": 10754, "paramId": 17959},
-        "xmas_rainbow2_jingle_bell_rock": {"name": "Music Show", "id": 14171, "paramId": 22819},
-        "xmas_rainbow1_full_spectrum": {"name": "Flower Parade", "id": 14174, "paramId": 22822},
-        "xmas_rainbow2_wreath_and_holly": {"name": "Saint Patrick's Day", "id": 10783, "paramId": 17988},
-        "xmas_frost_vs_flame": {"name": "ZDP Duo", "id": 23508, "paramId": 34016},
-        # --- 4 Diwali Presets ---
-        "diwali_golden_diya": {"name": "Candlelight", "id": 10782, "paramId": 17987},
-        "diwali_rangoli_wave": {"name": "Flower Field", "id": 10751, "paramId": 17956},
-        "diwali_firecracker_sparkle": {"name": "Hooray", "id": 14175, "paramId": 22823},
-        "diwali_aarti_flame": {"name": "Sunrise", "id": 10737, "paramId": 17942},
-        # --- 3 Center-Out Presets ---
-        "center_supernova": {"name": "Universe", "id": 10743, "paramId": 17948},
-        "center_golden_ripple": {"name": "Morning", "id": 10792, "paramId": 17997},
-        "center_serpent_clash": {"name": "ZDP Trio", "id": 23509, "paramId": 34017},
-        # --- 4 Cyber & Party Presets ---
-        "cyber_chase": {"name": "Flow", "id": 10804, "paramId": 18009},
-        "dual_comet_pingpong": {"name": "Active", "id": 10819, "paramId": 18024},
-        "seamless_rainbow": {"name": "Enthusiastic", "id": 10812, "paramId": 18017},
-        "harmonic_pulse": {"name": "Fluctuate", "id": 10805, "paramId": 18010},
-        # --- 4 Celebrations Presets ---
-        "seahawks_gameday": {"name": "Game Day", "id": 10785, "paramId": 17990},
-        "july4_fireworks": {"name": "Fireworks", "id": 10781, "paramId": 17986},
-        "holiday_marquee": {"name": "Carnival", "id": 10776, "paramId": 17981},
-        "hearth_fire": {"name": "Firefly", "id": 10752, "paramId": 17957},
-    }
+        "halloween_haunted_chase": {
+                "name": "Halloween",
+                "id": 10764,
+                "paramId": 17969
+        },
+        "halloween_witch_cauldron": {
+                "name": "Halloween B",
+                "id": 10765,
+                "paramId": 17970
+        },
+        "halloween_blood_meteor": {
+                "name": "Halloween D",
+                "id": 10767,
+                "paramId": 17972
+        },
+        "halloween_pumpkin_marquee": {
+                "name": "Halloween C",
+                "id": 10766,
+                "paramId": 17971
+        },
+        "halloween_poltergeist_portal": {
+                "name": "Spooky Halloween AI (DIY)",
+                "diy_name": "spooky halloween ai",
+                "diy_id": 25004667,
+                "id": 14158,
+                "paramId": 22806
+        },
+        "halloween_zombie_outbreak": {
+                "name": "Halloween II",
+                "id": 14491,
+                "paramId": 23302
+        },
+        "halloween_frankenstein_lab": {
+                "name": "Flash",
+                "id": 23504,
+                "paramId": 34012
+        },
+        "halloween_headless_horseman": {
+                "name": "Meteor",
+                "id": 14161,
+                "paramId": 22809
+        },
+        "halloween_beetlejuice_sandworm": {
+                "name": "Karst Cave",
+                "id": 10747,
+                "paramId": 17952
+        },
+        "halloween_hellfire_brimstone": {
+                "name": "Fire",
+                "id": 10753,
+                "paramId": 17958
+        },
+        "halloween_phantom_ghost_train": {
+                "name": "Halloween Chasing (DIY)",
+                "diy_name": "halloween chasing",
+                "diy_id": 24908117,
+                "id": 10764,
+                "paramId": 17969
+        },
+        "halloween_shadow_possession": {
+                "name": "Orange & Purple (DIY)",
+                "diy_name": "orange and purple",
+                "diy_id": 24907990,
+                "id": 10765,
+                "paramId": 17970
+        },
+        "halloween_black_widow_lair": {
+                "name": "Night",
+                "id": 10795,
+                "paramId": 18000
+        },
+        "halloween_haunted_heartbeat": {
+                "name": "Profound",
+                "id": 10811,
+                "paramId": 18016
+        },
+        "halloween_candy_corn_parade": {
+                "name": "Fall",
+                "id": 10757,
+                "paramId": 17962
+        },
+        "halloween_pharaoh_curse": {
+                "name": "Sunset Glow",
+                "id": 10739,
+                "paramId": 17944
+        },
+        "halloween_rainbow1_spooky_prism": {
+                "name": "Rainbow",
+                "id": 10744,
+                "paramId": 17949
+        },
+        "halloween_rainbow2_monster_blocks": {
+                "name": "Stacking",
+                "id": 10806,
+                "paramId": 18011
+        },
+        "halloween_rainbow1_hocus_pocus": {
+                "name": "Dreamlike",
+                "id": 10815,
+                "paramId": 18020
+        },
+        "halloween_rainbow2_candy_corn_blocks": {
+                "name": "Cornfield",
+                "id": 10749,
+                "paramId": 17954
+        },
+        "halloween_rainbow1_ectoplasm_wave": {
+                "name": "Forest",
+                "id": 10745,
+                "paramId": 17950
+        },
+        "halloween_rainbow2_dracula_castle": {
+                "name": "Sunset",
+                "id": 10738,
+                "paramId": 17943
+        },
+        "halloween_rainbow1_pumpkin_spice": {
+                "name": "Rustling leaves",
+                "id": 10750,
+                "paramId": 17955
+        },
+        "halloween_rainbow2_goblin_parade": {
+                "name": "Spin",
+                "id": 10799,
+                "paramId": 18004
+        },
+        "halloween_rainbow1_witches_brew": {
+                "name": "Twilight",
+                "id": 10794,
+                "paramId": 17999
+        },
+        "halloween_rainbow2_skeleton_rave": {
+                "name": "Dancing",
+                "id": 10800,
+                "paramId": 18005
+        },
+        "halloween_rainbow1_full_spectrum": {
+                "name": "Gradient",
+                "id": 10807,
+                "paramId": 18012
+        },
+        "halloween_rainbow2_warlock_crystal": {
+                "name": "Milky Way",
+                "id": 14159,
+                "paramId": 22807
+        },
+        "xmas_sleigh_ride": {
+                "name": "Sled",
+                "id": 10763,
+                "paramId": 17968
+        },
+        "xmas_candy_cane": {
+                "name": "Candy Cane",
+                "id": 14165,
+                "paramId": 22813
+        },
+        "xmas_frozen_aurora": {
+                "name": "Winter Wonderland",
+                "id": 10787,
+                "paramId": 17992
+        },
+        "xmas_nutcracker_marquee": {
+                "name": "Christmas",
+                "id": 10760,
+                "paramId": 17965
+        },
+        "xmas_rudolph_dash": {
+                "name": "Delivering Gifts",
+                "id": 14492,
+                "paramId": 23303
+        },
+        "xmas_north_pole_beacon": {
+                "name": "Christmas Tree",
+                "id": 10761,
+                "paramId": 17966
+        },
+        "xmas_grinch_heist": {
+                "name": "Leprechaun",
+                "id": 10788,
+                "paramId": 17993
+        },
+        "xmas_polar_express": {
+                "name": "Winter",
+                "id": 10758,
+                "paramId": 17963
+        },
+        "xmas_gingerbread_village": {
+                "name": "Christmas Gift",
+                "id": 10762,
+                "paramId": 17967
+        },
+        "xmas_arctic_blizzard": {
+                "name": "Downpour",
+                "id": 10759,
+                "paramId": 17964
+        },
+        "xmas_yule_log_hearth": {
+                "name": "Warm",
+                "id": 10816,
+                "paramId": 18021
+        },
+        "xmas_elf_workshop_ribbon": {
+                "name": "Children's Day",
+                "id": 14169,
+                "paramId": 22817
+        },
+        "xmas_star_of_bethlehem": {
+                "name": "Christmas Eve",
+                "id": 14166,
+                "paramId": 22814
+        },
+        "xmas_sugar_plum_fairy": {
+                "name": "Dreamland",
+                "id": 10818,
+                "paramId": 18023
+        },
+        "xmas_mistletoe_harmony": {
+                "name": "Christmas Wreath",
+                "id": 14167,
+                "paramId": 22815
+        },
+        "xmas_rainbow1_classic_C9": {
+                "name": "Christmas Bell",
+                "id": 14164,
+                "paramId": 22812
+        },
+        "xmas_rainbow2_c9_blocks": {
+                "name": "Colorful",
+                "id": 10803,
+                "paramId": 18008
+        },
+        "xmas_rainbow1_peppermint_silk": {
+                "name": "Red White Running (DIY)",
+                "diy_name": "red white running",
+                "diy_id": 25240693,
+                "id": 14165,
+                "paramId": 22813
+        },
+        "xmas_rainbow2_candy_shoppe": {
+                "name": "Amusement",
+                "id": 14172,
+                "paramId": 22820
+        },
+        "xmas_rainbow1_arctic_aurora": {
+                "name": "Aurora",
+                "id": 10746,
+                "paramId": 17951
+        },
+        "xmas_rainbow2_glacier_blocks": {
+                "name": "Lake",
+                "id": 14162,
+                "paramId": 22810
+        },
+        "xmas_rainbow1_royal_nativity": {
+                "name": "Star",
+                "id": 10742,
+                "paramId": 17947
+        },
+        "xmas_rainbow2_toy_soldier": {
+                "name": "Swing",
+                "id": 10802,
+                "paramId": 18007
+        },
+        "xmas_rainbow1_pastel_macaron": {
+                "name": "Cherry blossoms",
+                "id": 10754,
+                "paramId": 17959
+        },
+        "xmas_rainbow2_jingle_bell_rock": {
+                "name": "Music Show",
+                "id": 14171,
+                "paramId": 22819
+        },
+        "xmas_rainbow1_full_spectrum": {
+                "name": "Flower Parade",
+                "id": 14174,
+                "paramId": 22822
+        },
+        "xmas_rainbow2_wreath_and_holly": {
+                "name": "Saint Patrick's Day",
+                "id": 10783,
+                "paramId": 17988
+        },
+        "xmas_frost_vs_flame": {
+                "name": "ZDP Duo",
+                "id": 23508,
+                "paramId": 34016
+        },
+        "diwali_golden_diya": {
+                "name": "Candlelight",
+                "id": 10782,
+                "paramId": 17987
+        },
+        "diwali_rangoli_wave": {
+                "name": "Flower Field",
+                "id": 10751,
+                "paramId": 17956
+        },
+        "diwali_firecracker_sparkle": {
+                "name": "Hooray",
+                "id": 14175,
+                "paramId": 22823
+        },
+        "diwali_aarti_flame": {
+                "name": "Sunrise",
+                "id": 10737,
+                "paramId": 17942
+        },
+        "center_supernova": {
+                "name": "Universe",
+                "id": 10743,
+                "paramId": 17948
+        },
+        "center_golden_ripple": {
+                "name": "Morning",
+                "id": 10792,
+                "paramId": 17997
+        },
+        "center_serpent_clash": {
+                "name": "ZDP Trio",
+                "id": 23509,
+                "paramId": 34017
+        },
+        "cyber_chase": {
+                "name": "Flow",
+                "id": 10804,
+                "paramId": 18009
+        },
+        "dual_comet_pingpong": {
+                "name": "Active",
+                "id": 10819,
+                "paramId": 18024
+        },
+        "seamless_rainbow": {
+                "name": "Enthusiastic",
+                "id": 10812,
+                "paramId": 18017
+        },
+        "harmonic_pulse": {
+                "name": "Fluctuate",
+                "id": 10805,
+                "paramId": 18010
+        },
+        "seahawks_gameday": {
+                "name": "Game Day",
+                "id": 10785,
+                "paramId": 17990
+        },
+        "july4_fireworks": {
+                "name": "Fireworks",
+                "id": 10781,
+                "paramId": 17986
+        },
+        "holiday_marquee": {
+                "name": "Carnival",
+                "id": 10776,
+                "paramId": 17981
+        },
+        "hearth_fire": {
+                "name": "Firefly",
+                "id": 10752,
+                "paramId": 17957
+        },
+        "ai_halloween_upside_down_rift": {
+                "name": "Thunderstorm",
+                "id": 14158,
+                "paramId": 22806
+        },
+        "ai_halloween_proton_stream": {
+                "name": "Halloween B",
+                "id": 10765,
+                "paramId": 17970
+        },
+        "ai_halloween_salem_blood_moon": {
+                "name": "Halloween D",
+                "id": 10767,
+                "paramId": 17972
+        },
+        "ai_halloween_cyber_jack": {
+                "name": "Halloween C",
+                "id": 10766,
+                "paramId": 17971
+        },
+        "ai_halloween_banshee_mist": {
+                "name": "Mysterious",
+                "id": 10813,
+                "paramId": 18018
+        },
+        "ai_xmas_griswold_overload": {
+                "name": "Christmas",
+                "id": 10760,
+                "paramId": 17965
+        },
+        "ai_xmas_krampus_vs_santa": {
+                "name": "Sled",
+                "id": 10763,
+                "paramId": 17968
+        },
+        "ai_xmas_elsa_ice_palace": {
+                "name": "Winter Wonderland",
+                "id": 10787,
+                "paramId": 17992
+        },
+        "ai_xmas_hot_cocoa_hearth": {
+                "name": "Christmas Eve",
+                "id": 14166,
+                "paramId": 22814
+        },
+        "ai_xmas_nutcracker_finale": {
+                "name": "Christmas Gift",
+                "id": 10762,
+                "paramId": 17967
+        },
+        "ai_diwali_lotus_mandala": {
+                "name": "Candlelight",
+                "id": 10782,
+                "paramId": 17987
+        },
+        "ai_cyber_tokyo_drift": {
+                "name": "Dance Party",
+                "id": 10778,
+                "paramId": 17983
+        },
+        "diy_halloween_chasing": {
+                "name": "Halloween Chasing (DIY)",
+                "diy_name": "halloween chasing",
+                "diy_id": 24908117,
+                "id": 10764,
+                "paramId": 17969
+        },
+        "diy_spooky_halloween_ai": {
+                "name": "Spooky Halloween AI (DIY)",
+                "diy_name": "spooky halloween ai",
+                "diy_id": 25004667,
+                "id": 14158,
+                "paramId": 22806
+        },
+        "diy_orange_and_purple": {
+                "name": "Orange & Purple (DIY)",
+                "diy_name": "orange and purple",
+                "diy_id": 24907990,
+                "id": 10765,
+                "paramId": 17970
+        },
+        "diy_red_white_running": {
+                "name": "Red White Running (DIY)",
+                "diy_name": "red white running",
+                "diy_id": 25240693,
+                "id": 14165,
+                "paramId": 22813
+        },
+        "govee_official_meteor_14161": {
+                "name": "Meteor",
+                "id": 14161,
+                "paramId": 22809
+        },
+        "govee_official_karst_cave_10747": {
+                "name": "Karst Cave",
+                "id": 10747,
+                "paramId": 17952
+        },
+        "govee_official_cornfield_10749": {
+                "name": "Cornfield",
+                "id": 10749,
+                "paramId": 17954
+        },
+        "govee_official_halloween_c_10766": {
+                "name": "Halloween C",
+                "id": 10766,
+                "paramId": 17971
+        },
+        "govee_official_halloween_d_10767": {
+                "name": "Halloween D",
+                "id": 10767,
+                "paramId": 17972
+        },
+        "govee_official_firefly_10752": {
+                "name": "Firefly",
+                "id": 10752,
+                "paramId": 17957
+        },
+        "govee_official_fire_10753": {
+                "name": "Fire",
+                "id": 10753,
+                "paramId": 17958
+        },
+        "govee_official_cherry_blossoms_10754": {
+                "name": "Cherry blossoms",
+                "id": 10754,
+                "paramId": 17959
+        },
+        "govee_official_spring_10755": {
+                "name": "Spring",
+                "id": 10755,
+                "paramId": 17960
+        },
+        "govee_official_summer_10756": {
+                "name": "Summer",
+                "id": 10756,
+                "paramId": 17961
+        },
+        "govee_official_fall_10757": {
+                "name": "Fall",
+                "id": 10757,
+                "paramId": 17962
+        },
+        "govee_official_winter_10758": {
+                "name": "Winter",
+                "id": 10758,
+                "paramId": 17963
+        },
+        "govee_official_downpour_10759": {
+                "name": "Downpour",
+                "id": 10759,
+                "paramId": 17964
+        },
+        "govee_official_thunderstorm_14158": {
+                "name": "Thunderstorm",
+                "id": 14158,
+                "paramId": 22806
+        },
+        "govee_official_milky_way_14159": {
+                "name": "Milky Way",
+                "id": 14159,
+                "paramId": 22807
+        },
+        "govee_official_earth_14160": {
+                "name": "Earth",
+                "id": 14160,
+                "paramId": 22808
+        },
+        "govee_official_lake_14162": {
+                "name": "Lake",
+                "id": 14162,
+                "paramId": 22810
+        },
+        "govee_official_spring_wind_14163": {
+                "name": "Spring Wind",
+                "id": 14163,
+                "paramId": 22811
+        },
+        "govee_official_sky_15268": {
+                "name": "Sky",
+                "id": 15268,
+                "paramId": 24085
+        },
+        "govee_official_sailboat_15269": {
+                "name": "Sailboat",
+                "id": 15269,
+                "paramId": 24086
+        },
+        "govee_official_sunrise_10737": {
+                "name": "Sunrise",
+                "id": 10737,
+                "paramId": 17942
+        },
+        "govee_official_sunset_10738": {
+                "name": "Sunset",
+                "id": 10738,
+                "paramId": 17943
+        },
+        "govee_official_sunset_glow_10739": {
+                "name": "Sunset Glow",
+                "id": 10739,
+                "paramId": 17944
+        },
+        "govee_official_nebula_10740": {
+                "name": "Nebula",
+                "id": 10740,
+                "paramId": 17945
+        },
+        "govee_official_moonlight_10741": {
+                "name": "Moonlight",
+                "id": 10741,
+                "paramId": 17946
+        },
+        "govee_official_star_10742": {
+                "name": "Star",
+                "id": 10742,
+                "paramId": 17947
+        },
+        "govee_official_universe_10743": {
+                "name": "Universe",
+                "id": 10743,
+                "paramId": 17948
+        },
+        "govee_official_rainbow_10744": {
+                "name": "Rainbow",
+                "id": 10744,
+                "paramId": 17949
+        },
+        "govee_official_forest_10745": {
+                "name": "Forest",
+                "id": 10745,
+                "paramId": 17950
+        },
+        "govee_official_aurora_10746": {
+                "name": "Aurora",
+                "id": 10746,
+                "paramId": 17951
+        },
+        "govee_official_wave_10748": {
+                "name": "Wave",
+                "id": 10748,
+                "paramId": 17953
+        },
+        "govee_official_rustling_leaves_10750": {
+                "name": "Rustling leaves",
+                "id": 10750,
+                "paramId": 17955
+        },
+        "govee_official_flower_field_10751": {
+                "name": "Flower Field",
+                "id": 10751,
+                "paramId": 17956
+        },
+        "govee_official_christmas_10760": {
+                "name": "Christmas",
+                "id": 10760,
+                "paramId": 17965
+        },
+        "govee_official_christmas_tree_10761": {
+                "name": "Christmas Tree",
+                "id": 10761,
+                "paramId": 17966
+        },
+        "govee_official_christmas_gift_10762": {
+                "name": "Christmas Gift",
+                "id": 10762,
+                "paramId": 17967
+        },
+        "govee_official_sled_10763": {
+                "name": "Sled",
+                "id": 10763,
+                "paramId": 17968
+        },
+        "govee_official_halloween_10764": {
+                "name": "Halloween",
+                "id": 10764,
+                "paramId": 17969
+        },
+        "govee_official_halloween_b_10765": {
+                "name": "Halloween B",
+                "id": 10765,
+                "paramId": 17970
+        },
+        "govee_official_easter_10768": {
+                "name": "Easter",
+                "id": 10768,
+                "paramId": 17973
+        },
+        "govee_official_mother_s_day_10769": {
+                "name": "Mother's Day",
+                "id": 10769,
+                "paramId": 17974
+        },
+        "govee_official_mother_s_day_b_10770": {
+                "name": "Mother's Day B",
+                "id": 10770,
+                "paramId": 17975
+        },
+        "govee_official_father_s_day_10771": {
+                "name": "Father's Day",
+                "id": 10771,
+                "paramId": 17976
+        },
+        "govee_official_father_s_dayb_10772": {
+                "name": "Father's DayB",
+                "id": 10772,
+                "paramId": 17977
+        },
+        "govee_official_birthday_10773": {
+                "name": "Birthday",
+                "id": 10773,
+                "paramId": 17978
+        },
+        "govee_official_new_years_10774": {
+                "name": "New Years",
+                "id": 10774,
+                "paramId": 17979
+        },
+        "govee_official_thanksgiving_10775": {
+                "name": "Thanksgiving",
+                "id": 10775,
+                "paramId": 17980
+        },
+        "govee_official_carnival_10776": {
+                "name": "Carnival",
+                "id": 10776,
+                "paramId": 17981
+        },
+        "govee_official_valentine_s_day_10777": {
+                "name": "Valentine's Day",
+                "id": 10777,
+                "paramId": 17982
+        },
+        "govee_official_dance_party_10778": {
+                "name": "Dance Party",
+                "id": 10778,
+                "paramId": 17983
+        },
+        "govee_official_party_10779": {
+                "name": "Party",
+                "id": 10779,
+                "paramId": 17984
+        },
+        "govee_official_dine_together_10780": {
+                "name": "Dine Together",
+                "id": 10780,
+                "paramId": 17985
+        },
+        "govee_official_fireworks_10781": {
+                "name": "Fireworks",
+                "id": 10781,
+                "paramId": 17986
+        },
+        "govee_official_candlelight_10782": {
+                "name": "Candlelight",
+                "id": 10782,
+                "paramId": 17987
+        },
+        "govee_official_saint_patrick_s_day_10783": {
+                "name": "Saint Patrick's Day",
+                "id": 10783,
+                "paramId": 17988
+        },
+        "govee_official_hanukkah_10784": {
+                "name": "Hanukkah",
+                "id": 10784,
+                "paramId": 17989
+        },
+        "govee_official_game_day_10785": {
+                "name": "Game Day",
+                "id": 10785,
+                "paramId": 17990
+        },
+        "govee_official_baby_shower_10786": {
+                "name": "Baby Shower",
+                "id": 10786,
+                "paramId": 17991
+        },
+        "govee_official_winter_wonderland_10787": {
+                "name": "Winter Wonderland",
+                "id": 10787,
+                "paramId": 17992
+        },
+        "govee_official_leprechaun_10788": {
+                "name": "Leprechaun",
+                "id": 10788,
+                "paramId": 17993
+        },
+        "govee_official_christmas_bell_14164": {
+                "name": "Christmas Bell",
+                "id": 14164,
+                "paramId": 22812
+        },
+        "govee_official_candy_cane_14165": {
+                "name": "Candy Cane",
+                "id": 14165,
+                "paramId": 22813
+        },
+        "govee_official_christmas_eve_14166": {
+                "name": "Christmas Eve",
+                "id": 14166,
+                "paramId": 22814
+        },
+        "govee_official_christmas_wreath_14167": {
+                "name": "Christmas Wreath",
+                "id": 14167,
+                "paramId": 22815
+        },
+        "govee_official_easter_egg_14168": {
+                "name": "Easter Egg",
+                "id": 14168,
+                "paramId": 22816
+        },
+        "govee_official_children_s_day_14169": {
+                "name": "Children's Day",
+                "id": 14169,
+                "paramId": 22817
+        },
+        "govee_official_beer_festival_14170": {
+                "name": "Beer Festival",
+                "id": 14170,
+                "paramId": 22818
+        },
+        "govee_official_music_show_14171": {
+                "name": "Music Show",
+                "id": 14171,
+                "paramId": 22819
+        },
+        "govee_official_amusement_14172": {
+                "name": "Amusement",
+                "id": 14172,
+                "paramId": 22820
+        },
+        "govee_official_confetti_14173": {
+                "name": "Confetti",
+                "id": 14173,
+                "paramId": 22821
+        },
+        "govee_official_flower_parade_14174": {
+                "name": "Flower Parade",
+                "id": 14174,
+                "paramId": 22822
+        },
+        "govee_official_halloween_14491": {
+                "name": "Halloween",
+                "id": 14491,
+                "paramId": 23302
+        },
+        "govee_official_delivering_gifts_14492": {
+                "name": "Delivering Gifts",
+                "id": 14492,
+                "paramId": 23303
+        },
+        "govee_official_white_light_10789": {
+                "name": "White Light",
+                "id": 10789,
+                "paramId": 17994
+        },
+        "govee_official_bright_10791": {
+                "name": "Bright",
+                "id": 10791,
+                "paramId": 17996
+        },
+        "govee_official_morning_10792": {
+                "name": "Morning",
+                "id": 10792,
+                "paramId": 17997
+        },
+        "govee_official_afternoon_10793": {
+                "name": "Afternoon",
+                "id": 10793,
+                "paramId": 17998
+        },
+        "govee_official_twilight_10794": {
+                "name": "Twilight",
+                "id": 10794,
+                "paramId": 17999
+        },
+        "govee_official_night_10795": {
+                "name": "Night",
+                "id": 10795,
+                "paramId": 18000
+        },
+        "govee_official_leisure_10796": {
+                "name": "Leisure",
+                "id": 10796,
+                "paramId": 18001
+        },
+        "govee_official_refreshing_10797": {
+                "name": "Refreshing",
+                "id": 10797,
+                "paramId": 18002
+        },
+        "govee_official_candy_10798": {
+                "name": "Candy",
+                "id": 10798,
+                "paramId": 18003
+        },
+        "govee_official_spin_10799": {
+                "name": "Spin",
+                "id": 10799,
+                "paramId": 18004
+        },
+        "govee_official_dancing_10800": {
+                "name": "Dancing",
+                "id": 10800,
+                "paramId": 18005
+        },
+        "govee_official_sports_10801": {
+                "name": "Sports",
+                "id": 10801,
+                "paramId": 18006
+        },
+        "govee_official_swing_10802": {
+                "name": "Swing",
+                "id": 10802,
+                "paramId": 18007
+        },
+        "govee_official_colorful_10803": {
+                "name": "Colorful",
+                "id": 10803,
+                "paramId": 18008
+        },
+        "govee_official_flow_10804": {
+                "name": "Flow",
+                "id": 10804,
+                "paramId": 18009
+        },
+        "govee_official_fluctuate_10805": {
+                "name": "Fluctuate",
+                "id": 10805,
+                "paramId": 18010
+        },
+        "govee_official_stacking_10806": {
+                "name": "Stacking",
+                "id": 10806,
+                "paramId": 18011
+        },
+        "govee_official_beer_14493": {
+                "name": "Beer",
+                "id": 14493,
+                "paramId": 23304
+        },
+        "govee_official_gradient_10807": {
+                "name": "Gradient",
+                "id": 10807,
+                "paramId": 18012
+        },
+        "govee_official_romantic_10808": {
+                "name": "Romantic",
+                "id": 10808,
+                "paramId": 18013
+        },
+        "govee_official_quiet_10809": {
+                "name": "Quiet",
+                "id": 10809,
+                "paramId": 18014
+        },
+        "govee_official_happy_10810": {
+                "name": "Happy",
+                "id": 10810,
+                "paramId": 18015
+        },
+        "govee_official_profound_10811": {
+                "name": "Profound",
+                "id": 10811,
+                "paramId": 18016
+        },
+        "govee_official_enthusiastic_10812": {
+                "name": "Enthusiastic",
+                "id": 10812,
+                "paramId": 18017
+        },
+        "govee_official_mysterious_10813": {
+                "name": "Mysterious",
+                "id": 10813,
+                "paramId": 18018
+        },
+        "govee_official_soothing_10814": {
+                "name": "Soothing",
+                "id": 10814,
+                "paramId": 18019
+        },
+        "govee_official_dreamlike_10815": {
+                "name": "Dreamlike",
+                "id": 10815,
+                "paramId": 18020
+        },
+        "govee_official_warm_10816": {
+                "name": "Warm",
+                "id": 10816,
+                "paramId": 18021
+        },
+        "govee_official_leisurely_10817": {
+                "name": "Leisurely",
+                "id": 10817,
+                "paramId": 18022
+        },
+        "govee_official_dreamland_10818": {
+                "name": "Dreamland",
+                "id": 10818,
+                "paramId": 18023
+        },
+        "govee_official_active_10819": {
+                "name": "Active",
+                "id": 10819,
+                "paramId": 18024
+        },
+        "govee_official_hooray_14175": {
+                "name": "Hooray",
+                "id": 14175,
+                "paramId": 22823
+        },
+        "govee_official_flash_23504": {
+                "name": "Flash",
+                "id": 23504,
+                "paramId": 34012
+        },
+        "govee_official_gary_23505": {
+                "name": "Gary",
+                "id": 23505,
+                "paramId": 34013
+        },
+        "govee_official_judy_23506": {
+                "name": "Judy",
+                "id": 23506,
+                "paramId": 34014
+        },
+        "govee_official_nick_23507": {
+                "name": "Nick",
+                "id": 23507,
+                "paramId": 34015
+        },
+        "govee_official_zdp_duo_23508": {
+                "name": "ZDP Duo",
+                "id": 23508,
+                "paramId": 34016
+        },
+        "govee_official_zdp_trio_23509": {
+                "name": "ZDP Trio",
+                "id": 23509,
+                "paramId": 34017
+        },
+        "govee_official_a_m_33896": {
+                "name": "A&M",
+                "id": 33896,
+                "paramId": 46134
+        }
+}
 
     DEFAULT_GOVEE_SCENES: Dict[str, Dict[str, Any]] = {
         v["name"].lower(): v for v in PRESET_TO_GOVEE_SCENE.values()

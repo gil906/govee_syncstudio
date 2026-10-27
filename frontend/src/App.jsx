@@ -337,6 +337,7 @@ function detectBrowserTimezone() {
 export default function App() {
   const [activeTab, setActiveTab] = useState('scenes');
   const [sceneCategory, setSceneCategory] = useState('all');
+  const [sceneSubcategory, setSceneSubcategory] = useState('all'); // 'all', 'official', 'ai_custom', 'diy'
   const [activePresetId, setActivePresetId] = useState('cyber_chase');
   const [config, setConfig] = useState(null);
   const [liveState, setLiveState] = useState(null);
@@ -1185,10 +1186,16 @@ export default function App() {
   const playlist = config?.playlist || { enabled: false, interval_sec: 60, preset_ids: [] };
   const liveSched = liveState?.schedule_status || scheduleStatus || {};
   const isRunning = anim.running ?? true;
-  const filteredPresets =
+  const categoryPresets =
     sceneCategory === 'all'
       ? presets
       : presets.filter((p) => p.category === sceneCategory);
+  const filteredPresets =
+    sceneSubcategory === 'all'
+      ? categoryPresets
+      : categoryPresets.filter(
+          (p) => (p.scene_source || 'ai_custom') === sceneSubcategory
+        );
   const selectedPreset =
     presets.find((p) => p.id === activePresetId) || presets[0] || null;
   const selectedAnim = selectedPreset
@@ -1800,6 +1807,47 @@ export default function App() {
                       >
                         <span>{cat.label}</span>
                         <span className="text-[11px] opacity-80">({count})</span>
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {/* Subcategory Filter Bar (All Types | Official Govee | AI & Custom | My Govee DIY) */}
+                <div className="flex items-center gap-2 overflow-x-auto pb-1 no-scrollbar">
+                  {[
+                    { id: 'all', label: 'All Types', count: categoryPresets.length },
+                    {
+                      id: 'official',
+                      label: '🏷️ Official Govee',
+                      count: categoryPresets.filter((p) => p.scene_source === 'official').length,
+                    },
+                    {
+                      id: 'ai_custom',
+                      label: '🤖 AI & Custom Designs',
+                      count: categoryPresets.filter(
+                        (p) => (p.scene_source || 'ai_custom') === 'ai_custom'
+                      ).length,
+                    },
+                    {
+                      id: 'diy',
+                      label: '🛠️ My Govee DIY',
+                      count: categoryPresets.filter((p) => p.scene_source === 'diy').length,
+                    },
+                  ].map((sub) => {
+                    const active = sceneSubcategory === sub.id;
+                    return (
+                      <button
+                        key={sub.id}
+                        type="button"
+                        onClick={() => setSceneSubcategory(sub.id)}
+                        className={`px-2.5 py-1 rounded-full text-[11px] font-extrabold whitespace-nowrap border transition flex items-center gap-1 shrink-0 ${
+                          active
+                            ? 'bg-purple-500/25 text-purple-200 border-purple-400'
+                            : 'bg-[#060b18] hover:bg-slate-900 text-slate-400 border-[#1e293b]'
+                        }`}
+                      >
+                        <span>{sub.label}</span>
+                        <span className="text-[10px] opacity-80">({sub.count})</span>
                       </button>
                     );
                   })}

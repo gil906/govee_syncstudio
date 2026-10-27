@@ -605,6 +605,7 @@ export default function LiveSceneCardPreview({
   animation,
   houses,
   liveSegments = null,
+  viewMode = '2d',
   height = 104,
   compact = true,
   className = '',
@@ -613,6 +614,7 @@ export default function LiveSceneCardPreview({
   const animRef = useRef(animation);
   const housesRef = useRef(houses);
   const liveSegsRef = useRef(liveSegments);
+  const viewModeRef = useRef(viewMode);
 
   useEffect(() => {
     animRef.current = animation;
@@ -625,6 +627,10 @@ export default function LiveSceneCardPreview({
   useEffect(() => {
     liveSegsRef.current = liveSegments;
   }, [liveSegments]);
+
+  useEffect(() => {
+    viewModeRef.current = viewMode;
+  }, [viewMode]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -732,6 +738,180 @@ export default function LiveSceneCardPreview({
 
       let cumulativeWeight = 0;
       let globalSegCursor = 0;
+      const vMode = viewModeRef.current || '2d';
+
+      if (vMode !== '2d') {
+        const focusId = vMode.startsWith('3d:') ? vMode.slice(3) : null;
+        const render3dHouses = focusId
+          ? cfgHouses.filter((h) => h.id === focusId)
+          : cfgHouses;
+        const active3d = render3dHouses.length > 0 ? render3dHouses : cfgHouses;
+        const cnt3d = Math.max(1, active3d.length);
+        const singleZoom = cnt3d === 1;
+        const pad3d = singleZoom ? Math.max(36, W * 0.14) : 16;
+        const gap3d = cnt3d <= 1 ? 0 : 18;
+        const slotW = Math.max(60, W - pad3d * 2 - gap3d * (cnt3d - 1)) / cnt3d;
+
+        for (let idx = 0; idx < cnt3d; idx++) {
+          const house = active3d[idx];
+          const slotLeft = pad3d + idx * (slotW + gap3d);
+          const frontW = slotW * (singleZoom ? 0.66 : 0.70);
+          const dxDepth = slotW * 0.22;
+          const dyDepth = H * 0.23;
+
+          const flX = slotLeft + (slotW - frontW - dxDepth) * 0.5;
+          const flY = H * 0.55;
+          const frX = flX + frontW;
+          const frY = flY;
+          const blX = flX + dxDepth;
+          const blY = flY - dyDepth;
+          const brX = frX + dxDepth;
+          const brY = frY - dyDepth;
+          const wallH = H * 0.22;
+          const ridgeL = [
+            (flX + blX) * 0.5 + frontW * 0.18,
+            (flY + blY) * 0.5 - H * 0.11,
+          ];
+          const ridgeR = [
+            (frX + brX) * 0.5 - frontW * 0.18,
+            (frY + brY) * 0.5 - H * 0.11,
+          ];
+
+          const rawH = sourceHouses
+            ? sourceHouses.find((sh) => sh.id === house.id)
+            : null;
+          const ctrls = rawH?.controllers || [];
+          const segWalls = [];
+          const hasCustomZones = ctrls.some(
+            (c) => Array.isArray(c.wall_zones) && c.wall_zones.length > 0
+          );
+          if (hasCustomZones) {
+            ctrls.forEach((c) => {
+              if (c.enabled === false) return;
+              const zList = c.wall_zones || [];
+              let added = 0;
+              zList.forEach((z) => {
+                const n = Number(z.segments || 0);
+                for (let k = 0; k < n; k++) {
+                  segWalls.push(z.wall || 'front');
+                  added++;
+                }
+              });
+              while (added < (c.segment_count || 9)) {
+                segWalls.push('front');
+                added++;
+              }
+            });
+          } else if (house.isCenter || ctrls.length <= 1) {
+            for (let k = 0; k < house.rawSegs; k++) segWalls.push('front');
+          } else {
+            const fCnt = Math.round(house.rawSegs * 0.35);
+            const lCnt = Math.round(house.rawSegs * 0.22);
+            const rCnt = Math.round(house.rawSegs * 0.22);
+            const bCnt = Math.max(0, house.rawSegs - fCnt - lCnt - rCnt);
+            for (let k = 0; k < fCnt; k++) segWalls.push('front');
+            for (let k = 0; k < lCnt; k++) segWalls.push('left');
+            for (let k = 0; k < rCnt; k++) segWalls.push('right');
+            for (let k = 0; k < bCnt; k++) segWalls.push('back');
+          }
+
+          const wallCols = { front: [], left: [], right: [], back: [] };
+          const totalS = Math.max(1, segWalls.length);
+          for (let s = 0; s < totalS; s++) {
+            const wName = segWalls[s] || 'front';
+            const u = (s + 0.5) / totalS;
+            const cRgb = isRunning
+              ? evaluateEffectAtPoint(u, unwrappedPhase, elapsedSec, anim)
+              : [30, 41, 59];
+            wallCols[wName] = wallCols[wName] || [];
+            wallCols[wName].push(cRgb);
+          }
+
+          const repCol =
+            wallCols.front.length > 0
+              ? wallCols.front[Math.floor(wallCols.front.length / 2)]
+              : [0, 245, 212];
+
+          // Front & Right 3D walls
+          ctx.fillStyle = `rgba(${repCol[0]}, ${repCol[1]}, ${repCol[2]}, 0.16)`;
+          ctx.strokeStyle = house.isCenter ? 'rgba(0,245,212,0.5)' : '#334155';
+          ctx.lineWidth = 1.2;
+          ctx.beginPath();
+          ctx.moveTo(flX, flY);
+          ctx.lineTo(frX, frY);
+          ctx.lineTo(frX, frY + wallH);
+          ctx.lineTo(flX, flY + wallH);
+          ctx.closePath();
+          ctx.fill();
+          ctx.stroke();
+
+          ctx.fillStyle = '#080e1e';
+          ctx.beginPath();
+          ctx.moveTo(frX, frY);
+          ctx.lineTo(brX, brY);
+          ctx.lineTo(brX, brY + wallH);
+          ctx.lineTo(frX, frY + wallH);
+          ctx.closePath();
+          ctx.fill();
+          ctx.stroke();
+
+          // 3D Roof planes
+          const drawPoly = (pts, fill) => {
+            ctx.fillStyle = fill;
+            ctx.strokeStyle = 'rgba(71,85,105,0.75)';
+            ctx.beginPath();
+            ctx.moveTo(pts[0][0], pts[0][1]);
+            for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i][0], pts[i][1]);
+            ctx.closePath();
+            ctx.fill();
+            ctx.stroke();
+          };
+          drawPoly([[blX, blY], [brX, brY], ridgeR, ridgeL], 'rgba(15,23,42,0.85)');
+          drawPoly([[flX, flY], [blX, blY], ridgeL], 'rgba(17,28,53,0.88)');
+          drawPoly([[frX, frY], [brX, brY], ridgeR], 'rgba(22,34,64,0.9)');
+          drawPoly([[flX, flY], [frX, frY], ridgeR, ridgeL], 'rgba(27,42,78,0.88)');
+
+          const drawEaveLeds = (x1, y1, x2, y2, cols, isFront) => {
+            if (!cols || cols.length === 0) return;
+            const rLed = singleZoom ? 4.2 : 3.2;
+            cols.forEach(([r, g, b], i) => {
+              const t = cols.length === 1 ? 0.5 : (i + 0.5) / cols.length;
+              const px = x1 + (x2 - x1) * t;
+              const py = y1 + (y2 - y1) * t;
+              if (isRunning) {
+                ctx.fillStyle = `rgba(${r},${g},${b},${isFront ? 0.4 : 0.25})`;
+                ctx.beginPath();
+                ctx.arc(px, py, rLed * 2.1, 0, Math.PI * 2);
+                ctx.fill();
+              }
+              ctx.fillStyle = `rgb(${r},${g},${b})`;
+              ctx.beginPath();
+              ctx.arc(px, py, isFront ? rLed : rLed * 0.85, 0, Math.PI * 2);
+              ctx.fill();
+            });
+          };
+          drawEaveLeds(blX, blY, brX, brY, wallCols.back, false);
+          drawEaveLeds(blX, blY, flX, flY, wallCols.left, false);
+          drawEaveLeds(frX, frY, brX, brY, wallCols.right, false);
+          drawEaveLeds(flX, flY, frX, frY, wallCols.front, true);
+
+          ctx.fillStyle = house.isCenter ? '#00f5d4' : '#cbd5e1';
+          ctx.font = 'bold 11px Inter, system-ui, sans-serif';
+          ctx.textAlign = 'center';
+          const sideSum =
+            wallCols.left.length + wallCols.right.length + wallCols.back.length;
+          const summary =
+            sideSum > 0
+              ? `Front:${wallCols.front.length} • Sides/Back:${sideSum}`
+              : `Front Only (${wallCols.front.length} segs)`;
+          ctx.fillText(
+            `${house.label.split('•')[0].trim()} — 3D (${summary})`,
+            slotLeft + slotW * 0.5,
+            groundY + 15
+          );
+        }
+        return;
+      }
 
       for (let idx = 0; idx < count; idx++) {
         const house = cfgHouses[idx];

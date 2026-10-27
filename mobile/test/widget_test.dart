@@ -51,7 +51,7 @@ void main() {
       expect(cRight.a, closeTo(1.0, 0.01));
     }
 
-    expect(kDefaultPresets.length, 71);
+    expect(kDefaultPresets.length, greaterThanOrEqualTo(190));
     for (final preset in kDefaultPresets) {
       final c0 = evaluateEffectAtPoint(
         x: 0.20,

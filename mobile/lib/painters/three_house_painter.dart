@@ -377,6 +377,472 @@ class ThreeHouseScenePreview extends StatelessWidget {
   }
 }
 
+/// Isometric 3D House Roofline & 4-Wall Perimeter Painter (`Front`, `Left Side`, `Right Side`, `Back`).
+/// Supports both:
+/// - **All Enabled Houses 3D View** (`focusHouseId == null`): dynamically lays out `1..N` enabled houses side-by-side in 3D isometric perspective.
+/// - **Single House 3D View** (`focusHouseId != null`): zooms into one specific house in 3D with full `FRONT`, `LEFT`, `RIGHT`, and `BACK` wall badges and LED counts.
+class Isometric3DHousePainter extends CustomPainter {
+  final AnimationConfig animation;
+  final List<HouseConfig> houses;
+  final double elapsedSec;
+  final String? focusHouseId;
+  final Map<String, List<Color>>? liveHouseColors;
+
+  Isometric3DHousePainter({
+    required this.animation,
+    required this.houses,
+    required this.elapsedSec,
+    this.focusHouseId,
+    this.liveHouseColors,
+    super.repaint,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final rect = Offset.zero & size;
+    final skyPaint = Paint()
+      ..shader = const LinearGradient(
+        begin: Alignment.topCenter,
+        end: Alignment.bottomCenter,
+        colors: [
+          Color(0xFF040711),
+          Color(0xFF0B142B),
+          Color(0xFF060A16),
+        ],
+      ).createShader(rect);
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(rect, const Radius.circular(14)),
+      skyPaint,
+    );
+
+    // Subtle 3D perspective street grid lines at bottom
+    final streetY = size.height * 0.86;
+    final streetPaint = Paint()
+      ..color = const Color(0xFF1E293B).withValues(alpha: 0.7)
+      ..strokeWidth = 1.2;
+    canvas.drawLine(
+      Offset(10, streetY),
+      Offset(size.width - 10, streetY),
+      streetPaint,
+    );
+
+    final ordered = (houses.isEmpty
+            ? SystemConfig.defaultThreeHouses().houses
+            : List<HouseConfig>.from(houses))
+      ..sort((a, b) => a.order.compareTo(b.order));
+    final enabledList = ordered.where((h) => h.enabled).toList();
+    final activeList = enabledList.isNotEmpty ? enabledList : ordered;
+
+    final List<HouseConfig> renderHouses;
+    if (focusHouseId != null && focusHouseId!.isNotEmpty) {
+      final match = ordered.where((h) => h.id == focusHouseId).toList();
+      renderHouses = match.isNotEmpty ? match : [activeList.first];
+    } else {
+      renderHouses = activeList;
+    }
+
+    final count = math.max(1, renderHouses.length);
+    final singleZoom = count == 1;
+    final padX = singleZoom ? math.max(24.0, size.width * 0.14) : 12.0;
+    final gap = count <= 1 ? 0.0 : (count > 3 ? 10.0 : 16.0);
+    final usableW =
+        math.max(60.0, size.width - padX * 2 - gap * (count - 1));
+    final slotW = usableW / count;
+
+    final totalWeight = activeList.fold<double>(
+      0.0,
+      (acc, h) => acc + math.max(0.1, h.timeWeight),
+    );
+    final unwrappedPhase = elapsedSec * animation.speed;
+
+    for (int idx = 0; idx < count; idx++) {
+      final house = renderHouses[idx];
+      final orderIdx = activeList.indexWhere((h) => h.id == house.id);
+      final effIdx = orderIdx >= 0 ? orderIdx : idx;
+      double prevWeight = 0.0;
+      for (int j = 0; j < effIdx && j < activeList.length; j++) {
+        prevWeight += math.max(0.1, activeList[j].timeWeight);
+      }
+      final houseStartNorm =
+          totalWeight > 0 ? prevWeight / totalWeight : effIdx / math.max(1, activeList.length);
+      final houseSpanNorm = totalWeight > 0
+          ? math.max(0.1, house.timeWeight) / totalWeight
+          : 1.0 / math.max(1, activeList.length);
+
+      final isMe = house.isMyHouse;
+      final slotLeft = padX + idx * (slotW + gap);
+
+      // Isometric 3D roof box coordinates:
+      // Front eave: FL (front-left) -> FR (front-right)
+      // Receding depth vector: (+dxDepth, -dyDepth) so all 4 walls (Front, Right, Back, Left) are visible in 3D
+      final frontW = slotW * (singleZoom ? 0.68 : 0.72);
+      final dxDepth = slotW * (singleZoom ? 0.24 : 0.22);
+      final dyDepth = size.height * (singleZoom ? 0.26 : 0.22);
+
+      final flX = slotLeft + (slotW - frontW - dxDepth) * 0.5;
+      final flY = size.height * (singleZoom ? 0.54 : 0.56);
+      final frX = flX + frontW;
+      final frY = flY;
+
+      final blX = flX + dxDepth;
+      final blY = flY - dyDepth;
+      final brX = frX + dxDepth;
+      final brY = frY - dyDepth;
+
+      final FL = Offset(flX, flY);
+      final FR = Offset(frX, frY);
+      final BR = Offset(brX, brY);
+      final BL = Offset(blX, blY);
+
+      final wallH = size.height * (singleZoom ? 0.23 : 0.21);
+      final FLGround = Offset(FL.dx, FL.dy + wallH);
+      final FRGround = Offset(FR.dx, FR.dy + wallH);
+      final BRGround = Offset(BR.dx, BR.dy + wallH);
+
+      final ridgeL = Offset(
+        (FL.dx + BL.dx) * 0.5 + frontW * 0.18,
+        (FL.dy + BL.dy) * 0.5 - size.height * 0.11,
+      );
+      final ridgeR = Offset(
+        (FR.dx + BR.dx) * 0.5 - frontW * 0.18,
+        (FR.dy + BR.dy) * 0.5 - size.height * 0.11,
+      );
+
+      final segWalls = house.allSegmentWalls;
+      final segTotal = math.max(1, segWalls.length);
+      final liveCols = liveHouseColors?[house.id];
+
+      final wallColors = <String, List<Color>>{
+        'front': [],
+        'right': [],
+        'back': [],
+        'left': [],
+      };
+
+      for (int s = 0; s < segTotal; s++) {
+        final wName = segWalls[s];
+        Color col;
+        if (!house.enabled || !animation.running) {
+          col = const Color(0xFF1E293B);
+        } else if (liveCols != null && liveCols.isNotEmpty) {
+          final mi = ((s / segTotal) * liveCols.length)
+              .floor()
+              .clamp(0, liveCols.length - 1);
+          col = liveCols[mi];
+        } else {
+          final localU = (s + 0.5) / segTotal;
+          final normX = (houseStartNorm + localU * houseSpanNorm).clamp(0.0, 0.9999);
+          col = evaluateEffectAtPoint(
+            x: normX,
+            unwrappedPhase: unwrappedPhase,
+            elapsedSec: elapsedSec,
+            anim: animation,
+          );
+          if (animation.zoneMode == 'front_only_quiet_sides' && wName != 'front') {
+            col = Color.fromARGB(
+              col.a.round(),
+              (col.r * 255.0 * 0.18).round(),
+              (col.g * 255.0 * 0.18).round(),
+              (col.b * 255.0 * 0.18).round(),
+            );
+          }
+        }
+        wallColors[wName]?.add(col);
+      }
+
+      final frontCols = wallColors['front']!;
+      final repCol = frontCols.isNotEmpty
+          ? frontCols[frontCols.length ~/ 2]
+          : const Color(0xFF00F5D4);
+
+      // 1. Draw Front Wall & Right Side Wall in 3D
+      final frontWallPath = Path()
+        ..moveTo(FL.dx, FL.dy)
+        ..lineTo(FR.dx, FR.dy)
+        ..lineTo(FRGround.dx, FRGround.dy)
+        ..lineTo(FLGround.dx, FLGround.dy)
+        ..close();
+      canvas.drawPath(
+        frontWallPath,
+        Paint()
+          ..shader = LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [
+              repCol.withValues(alpha: animation.running ? 0.22 : 0.06),
+              const Color(0xFF0D162C),
+            ],
+          ).createShader(Rect.fromPoints(FL, FRGround)),
+      );
+      canvas.drawPath(
+        frontWallPath,
+        Paint()
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 1.1
+          ..color = isMe
+              ? const Color(0xFF00F5D4).withValues(alpha: 0.45)
+              : const Color(0xFF334155),
+      );
+
+      final rightWallPath = Path()
+        ..moveTo(FR.dx, FR.dy)
+        ..lineTo(BR.dx, BR.dy)
+        ..lineTo(BRGround.dx, BRGround.dy)
+        ..lineTo(FRGround.dx, FRGround.dy)
+        ..close();
+      canvas.drawPath(
+        rightWallPath,
+        Paint()..color = const Color(0xFF080E1E).withValues(alpha: 0.92),
+      );
+      canvas.drawPath(
+        rightWallPath,
+        Paint()
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 1.0
+          ..color = const Color(0xFF1E293B),
+      );
+
+      // 2. Draw 3D Isometric Roof Planes (Back/Left shaded, Front/Right lit)
+      final roofBackPath = Path()
+        ..moveTo(BL.dx, BL.dy)
+        ..lineTo(BR.dx, BR.dy)
+        ..lineTo(ridgeR.dx, ridgeR.dy)
+        ..lineTo(ridgeL.dx, ridgeL.dy)
+        ..close();
+      canvas.drawPath(
+        roofBackPath,
+        Paint()..color = const Color(0xFF0F172A).withValues(alpha: 0.82),
+      );
+
+      final roofLeftPath = Path()
+        ..moveTo(FL.dx, FL.dy)
+        ..lineTo(BL.dx, BL.dy)
+        ..lineTo(ridgeL.dx, ridgeL.dy)
+        ..close();
+      canvas.drawPath(
+        roofLeftPath,
+        Paint()..color = const Color(0xFF111C35).withValues(alpha: 0.85),
+      );
+
+      final roofRightPath = Path()
+        ..moveTo(FR.dx, FR.dy)
+        ..lineTo(BR.dx, BR.dy)
+        ..lineTo(ridgeR.dx, ridgeR.dy)
+        ..close();
+      canvas.drawPath(
+        roofRightPath,
+        Paint()..color = const Color(0xFF162240).withValues(alpha: 0.88),
+      );
+
+      final roofFrontPath = Path()
+        ..moveTo(FL.dx, FL.dy)
+        ..lineTo(FR.dx, FR.dy)
+        ..lineTo(ridgeR.dx, ridgeR.dy)
+        ..lineTo(ridgeL.dx, ridgeL.dy)
+        ..close();
+      canvas.drawPath(
+        roofFrontPath,
+        Paint()..color = const Color(0xFF1B2A4E).withValues(alpha: 0.85),
+      );
+
+      // Draw 3D roof wireframe edges
+      final edgePaint = Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1.3
+        ..color = const Color(0xFF475569).withValues(alpha: 0.75);
+      canvas.drawPath(roofBackPath, edgePaint);
+      canvas.drawPath(roofLeftPath, edgePaint);
+      canvas.drawPath(roofRightPath, edgePaint);
+      canvas.drawPath(roofFrontPath, edgePaint);
+
+      // 3. Helper to draw glowing LED segments along any of the 4 3D eaves (Back, Left, Right, Front)
+      final ledR = singleZoom ? 4.4 : (count > 2 ? 3.1 : 3.7);
+      final bloomPaint = Paint()
+        ..maskFilter = MaskFilter.blur(BlurStyle.normal, singleZoom ? 7.0 : 5.0);
+
+      void drawWallLeds(Offset pStart, Offset pEnd, List<Color> cols, bool isFrontWall) {
+        if (cols.isEmpty) {
+          // Dashed unlit eave line when house has 0 segments on this side (e.g. My House sides/back)
+          canvas.drawLine(
+            pStart,
+            pEnd,
+            Paint()
+              ..color = const Color(0xFF334155).withValues(alpha: 0.35)
+              ..strokeWidth = 1.2,
+          );
+          return;
+        }
+        final n = cols.length;
+        for (int i = 0; i < n; i++) {
+          final t = n == 1 ? 0.5 : (i + 0.5) / n;
+          final pt = Offset(
+            pStart.dx + (pEnd.dx - pStart.dx) * t,
+            pStart.dy + (pEnd.dy - pStart.dy) * t,
+          );
+          final c = cols[i];
+          if (animation.running && house.enabled) {
+            bloomPaint.color = c.withValues(alpha: isFrontWall ? 0.85 : 0.65);
+            canvas.drawCircle(pt, ledR * (isFrontWall ? 2.0 : 1.6), bloomPaint);
+          }
+          canvas.drawCircle(
+            pt,
+            isFrontWall ? ledR : ledR * 0.88,
+            Paint()..color = c,
+          );
+        }
+      }
+
+      // Paint back & side eaves first, then front eave in foreground
+      drawWallLeds(BL, BR, wallColors['back']!, false);
+      drawWallLeds(BL, FL, wallColors['left']!, false);
+      drawWallLeds(FR, BR, wallColors['right']!, false);
+      drawWallLeds(FL, FR, wallColors['front']!, true);
+
+      // 4. Wall segment count callouts in single-house 3D zoom mode (or compact summary in multi-house 3D)
+      final counts = house.wallSegmentCounts;
+      if (singleZoom) {
+        void drawBadge(String text, Offset center, Color accent) {
+          final tp = TextPainter(
+            text: TextSpan(
+              text: text,
+              style: TextStyle(
+                color: accent,
+                fontSize: 10.5,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+            textDirection: TextDirection.ltr,
+          )..layout();
+          final bgRect = RRect.fromRectAndRadius(
+            Rect.fromCenter(
+              center: center,
+              width: tp.width + 12,
+              height: tp.height + 6,
+            ),
+            const Radius.circular(6),
+          );
+          canvas.drawRRect(
+            bgRect,
+            Paint()..color = const Color(0xFF060B18).withValues(alpha: 0.88),
+          );
+          canvas.drawRRect(
+            bgRect,
+            Paint()
+              ..style = PaintingStyle.stroke
+              ..strokeWidth = 1.0
+              ..color = accent.withValues(alpha: 0.6),
+          );
+          tp.paint(
+            canvas,
+            Offset(center.dx - tp.width * 0.5, center.dy - tp.height * 0.5),
+          );
+        }
+
+        drawBadge(
+          'FRONT (STREET): ${counts["front"]} segs',
+          Offset((FL.dx + FR.dx) * 0.5, FL.dy + 16),
+          const Color(0xFF00F5D4),
+        );
+        drawBadge(
+          'LEFT: ${counts["left"]} segs',
+          Offset(FL.dx - 26, (FL.dy + BL.dy) * 0.5),
+          counts['left']! > 0 ? const Color(0xFFC084FC) : const Color(0xFF64748B),
+        );
+        drawBadge(
+          'RIGHT: ${counts["right"]} segs',
+          Offset(BR.dx + 26, (FR.dy + BR.dy) * 0.5),
+          counts['right']! > 0 ? const Color(0xFFC084FC) : const Color(0xFF64748B),
+        );
+        drawBadge(
+          'BACK: ${counts["back"]} segs',
+          Offset((BL.dx + BR.dx) * 0.5, BL.dy - 14),
+          counts['back']! > 0 ? const Color(0xFFFBBF24) : const Color(0xFF64748B),
+        );
+      }
+
+      // Bottom house label
+      final sideTotal = (counts['left'] ?? 0) + (counts['right'] ?? 0) + (counts['back'] ?? 0);
+      final wallSummary = sideTotal > 0
+          ? 'Front:${counts["front"]} • Sides/Back:$sideTotal'
+          : 'Front Only (${counts["front"]} segs)';
+      final labelText = singleZoom
+          ? '${house.name} — 3D Roofline ($wallSummary)'
+          : '#${effIdx + 1} ${house.name.split("(").first.trim()} ($wallSummary)';
+
+      final tp = TextPainter(
+        text: TextSpan(
+          text: labelText,
+          style: TextStyle(
+            color: isMe ? const Color(0xFF00F5D4) : const Color(0xFFE2E8F0),
+            fontSize: singleZoom ? 11.5 : 10.0,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        textDirection: TextDirection.ltr,
+        maxLines: 1,
+        ellipsis: '…',
+      )..layout(maxWidth: slotW - 4);
+      tp.paint(
+        canvas,
+        Offset(
+          slotLeft + (slotW - tp.width) * 0.5,
+          streetY + 3,
+        ),
+      );
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant Isometric3DHousePainter oldDelegate) {
+    return oldDelegate.elapsedSec != elapsedSec ||
+        oldDelegate.focusHouseId != focusHouseId ||
+        oldDelegate.animation != animation ||
+        oldDelegate.houses.length != houses.length;
+  }
+}
+
+class Isometric3DScenePreview extends StatelessWidget {
+  final Animation<double> clock;
+  final AnimationConfig animation;
+  final List<HouseConfig> houses;
+  final String? focusHouseId;
+  final double height;
+  final Map<String, List<Color>>? liveHouseColors;
+
+  const Isometric3DScenePreview({
+    super.key,
+    required this.clock,
+    required this.animation,
+    required this.houses,
+    this.focusHouseId,
+    this.height = 175,
+    this.liveHouseColors,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: height,
+      width: double.infinity,
+      child: AnimatedBuilder(
+        animation: clock,
+        builder: (context, _) {
+          final elapsedSec = clock.value * 60.0;
+          return CustomPaint(
+            painter: Isometric3DHousePainter(
+              animation: animation,
+              houses: houses,
+              elapsedSec: elapsedSec,
+              focusHouseId: focusHouseId,
+              liveHouseColors: liveHouseColors,
+            ),
+          );
+        },
+      ),
+    );
+  }
+}
+
 /// Custom in-app brand logo widget painted with `CustomPainter`:
 /// Deep midnight obsidian rounded background (`#060B18`) with 3 glowing architectural
 /// house rooflines side-by-side (Left `#00F5D4`, Middle `#A855F7` & `#FBBF24`, Right `#FF007F`)

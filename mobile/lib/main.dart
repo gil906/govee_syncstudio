@@ -1,3 +1,4 @@
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'models/govee_models.dart';
@@ -89,6 +90,8 @@ class _GoveeStudioHomeScreenState extends State<GoveeStudioHomeScreen>
   late final AnimationController _masterClock;
   int _selectedNavIndex = 0; // 0: Studio/All, 1: Scenes, 2: Houses, 3: Pro & Access
   String _selectedCategory = 'All';
+  String _selectedSubcategory = 'all'; // 'all', 'official', 'ai_custom', 'diy'
+  String _visualizerViewMode = '2d'; // '2d', '3d_all', or '3d:<houseId>'
 
   final TextEditingController _tokenController = TextEditingController();
   final TextEditingController _newEmailController = TextEditingController();
@@ -143,11 +146,17 @@ class _GoveeStudioHomeScreenState extends State<GoveeStudioHomeScreen>
   }
 
   List<PresetScene> get _filteredPresets {
-    if (_selectedCategory == 'All') {
-      return widget.api.presets;
+    final byCat = _selectedCategory == 'All'
+        ? widget.api.presets
+        : widget.api.presets
+            .where((p) =>
+                p.category.toLowerCase() == _selectedCategory.toLowerCase())
+            .toList();
+    if (_selectedSubcategory == 'all') {
+      return byCat;
     }
-    return widget.api.presets
-        .where((p) => p.category.toLowerCase() == _selectedCategory.toLowerCase())
+    return byCat
+        .where((p) => p.sceneSource == _selectedSubcategory)
         .toList();
   }
 
@@ -768,19 +777,120 @@ class _GoveeStudioHomeScreenState extends State<GoveeStudioHomeScreen>
   // LIVE 3-HOUSE VISUALIZER + TRANSPORT CONTROLS
   // ===========================================================================
 
+  Widget _buildVisualizerModeBar(List<HouseConfig> houses, {bool compact = false}) {
+    final enabledHouses = houses.where((h) => h.enabled).toList();
+    final targetHouses = enabledHouses.isNotEmpty ? enabledHouses : houses;
+    final modes = <(String, String, IconData)>[
+      ('2d', '2D Front', Icons.view_array_outlined),
+      ('3d_all', '3D All (${targetHouses.length})', Icons.view_in_ar),
+      for (int i = 0; i < targetHouses.length; i++)
+        (
+          '3d:${targetHouses[i].id}',
+          '3D: ${targetHouses[i].isMyHouse ? "My House" : targetHouses[i].name.split("(").first.trim()}',
+          Icons.threed_rotation,
+        ),
+    ];
+
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Row(
+        children: modes.map((m) {
+          final isSel = _visualizerViewMode == m.$1;
+          return Padding(
+            padding: const EdgeInsets.only(right: 6),
+            child: InkWell(
+              borderRadius: BorderRadius.circular(99),
+              onTap: () => setState(() => _visualizerViewMode = m.$1),
+              child: Container(
+                padding: EdgeInsets.symmetric(
+                  horizontal: compact ? 8 : 10,
+                  vertical: compact ? 3 : 4,
+                ),
+                decoration: BoxDecoration(
+                  color: isSel
+                      ? const Color(0xFF00F5D4).withValues(alpha: 0.20)
+                      : const Color(0xFF060B18),
+                  borderRadius: BorderRadius.circular(99),
+                  border: Border.all(
+                    color: isSel
+                        ? const Color(0xFF00F5D4)
+                        : const Color(0xFF1E293B),
+                  ),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      m.$3,
+                      size: compact ? 12 : 13.5,
+                      color: isSel
+                          ? const Color(0xFF00F5D4)
+                          : const Color(0xFF94A3B8),
+                    ),
+                    const SizedBox(width: 4),
+                    Text(
+                      m.$2,
+                      style: TextStyle(
+                        fontSize: compact ? 10 : 11,
+                        fontWeight: FontWeight.w800,
+                        color: isSel
+                            ? const Color(0xFF00F5D4)
+                            : const Color(0xFFCBD5E1),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          );
+        }).toList(),
+      ),
+    );
+  }
+
+  Widget _buildActiveVisualizerCanvas(
+    AnimationConfig anim,
+    List<HouseConfig> houses, {
+    required double height,
+    required bool compact,
+  }) {
+    if (_visualizerViewMode == '2d') {
+      return ThreeHouseScenePreview(
+        clock: _masterClock,
+        animation: anim,
+        houses: houses,
+        liveHouseColors: widget.api.liveHouseColors,
+        height: height,
+        compact: compact,
+      );
+    }
+    final focusId = _visualizerViewMode.startsWith('3d:')
+        ? _visualizerViewMode.substring(3)
+        : null;
+    return Isometric3DScenePreview(
+      clock: _masterClock,
+      animation: anim,
+      houses: houses,
+      focusHouseId: focusId,
+      liveHouseColors: widget.api.liveHouseColors,
+      height: height,
+    );
+  }
+
   Widget _buildCompactPinnedVisualizerCard() {
     final anim = widget.api.config.animation;
+    final houses = widget.api.config.sortedHouses;
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(10),
         child: Column(
           children: [
-            ThreeHouseScenePreview(
-              clock: _masterClock,
-              animation: anim,
-              houses: widget.api.config.sortedHouses,
-              liveHouseColors: widget.api.liveHouseColors,
-              height: 82,
+            _buildVisualizerModeBar(houses, compact: true),
+            const SizedBox(height: 6),
+            _buildActiveVisualizerCanvas(
+              anim,
+              houses,
+              height: _visualizerViewMode == '2d' ? 82 : 112,
               compact: true,
             ),
             const SizedBox(height: 8),
@@ -850,12 +960,12 @@ class _GoveeStudioHomeScreenState extends State<GoveeStudioHomeScreen>
                 ),
               ],
             ),
-            const SizedBox(height: 10),
-            ThreeHouseScenePreview(
-              clock: _masterClock,
-              animation: anim,
-              houses: houses,
-              liveHouseColors: widget.api.liveHouseColors,
+            const SizedBox(height: 8),
+            _buildVisualizerModeBar(houses, compact: false),
+            const SizedBox(height: 8),
+            _buildActiveVisualizerCanvas(
+              anim,
+              houses,
               height: 142,
               compact: false,
             ),
@@ -1427,6 +1537,53 @@ class _GoveeStudioHomeScreenState extends State<GoveeStudioHomeScreen>
                     ),
                   );
                 }).toList(),
+              ),
+            ),
+            const SizedBox(height: 6),
+            SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                children: [
+                  for (final sub in [
+                    ('all', 'All Types'),
+                    ('official', '🏷️ Official Govee'),
+                    ('ai_custom', '🤖 AI & Custom'),
+                    ('diy', '🛠️ My Govee DIY'),
+                  ])
+                    Padding(
+                      padding: const EdgeInsets.only(right: 6),
+                      child: InkWell(
+                        borderRadius: BorderRadius.circular(99),
+                        onTap: () =>
+                            setState(() => _selectedSubcategory = sub.$1),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 10, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: _selectedSubcategory == sub.$1
+                                ? const Color(0xFFA855F7).withValues(alpha: 0.22)
+                                : const Color(0xFF060B18),
+                            borderRadius: BorderRadius.circular(99),
+                            border: Border.all(
+                              color: _selectedSubcategory == sub.$1
+                                  ? const Color(0xFFC084FC)
+                                  : const Color(0xFF1E293B),
+                            ),
+                          ),
+                          child: Text(
+                            sub.$2,
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w800,
+                              color: _selectedSubcategory == sub.$1
+                                  ? const Color(0xFFE9D5FF)
+                                  : const Color(0xFF94A3B8),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
               ),
             ),
             if (showInlineTuner) ...[
@@ -3433,45 +3590,174 @@ class _HouseEditorCardState extends State<_HouseEditorCard> {
           for (final ctrl in house.controllers)
             Padding(
               padding: const EdgeInsets.only(top: 6),
-              child: Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF0B1325),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Row(
-                  children: [
-                    const Icon(Icons.lightbulb_outline,
-                        size: 16, color: Color(0xFF00F5D4)),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        '${ctrl.name} • ${ctrl.sku} (${ctrl.segmentCount} segs)${ctrl.ip.isNotEmpty ? " • ${ctrl.ip}" : ""}',
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(fontSize: 12),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    FilledButton.tonalIcon(
-                      style: FilledButton.styleFrom(
-                        visualDensity: VisualDensity.compact,
-                      ),
-                      onPressed: () => widget.api.testPhysicalLight(
-                        ctrl.id,
-                        color: widget.api.config.animation.primaryColor,
-                      ),
-                      icon: const Icon(Icons.flash_on, size: 15),
-                      label: const Text(
-                        'Test Physical Light',
-                        style: TextStyle(
-                            fontSize: 11, fontWeight: FontWeight.w700),
-                      ),
-                    ),
-                  ],
+              child: _buildControllerCardWithZoneSplit(house, ctrl),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildControllerCardWithZoneSplit(
+      HouseConfig house, ControllerConfig ctrl) {
+    final segWalls = ctrl.getSegmentWalls(
+      defaultSecondWall:
+          (!house.isMyHouse && house.controllers.length > 1) ? 'right' : 'front',
+    );
+    final frontSegs = segWalls.where((w) => w == 'front').length;
+    final secondWall =
+        segWalls.firstWhere((w) => w != 'front', orElse: () => 'right');
+    final sideSegs = math.max(0, ctrl.segmentCount - frontSegs);
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      decoration: BoxDecoration(
+        color: const Color(0xFF0B1325),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: const Color(0xFF1E293B)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.lightbulb_outline,
+                  size: 16, color: Color(0xFF00F5D4)),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  '${ctrl.name} • ${ctrl.sku} (${ctrl.segmentCount} segs)${ctrl.ip.isNotEmpty ? " • ${ctrl.ip}" : ""}',
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                      fontSize: 12, fontWeight: FontWeight.w600),
                 ),
               ),
-            ),
+              const SizedBox(width: 8),
+              FilledButton.tonalIcon(
+                style: FilledButton.styleFrom(
+                  visualDensity: VisualDensity.compact,
+                ),
+                onPressed: () => widget.api.testPhysicalLight(
+                  ctrl.id,
+                  color: widget.api.config.animation.primaryColor,
+                ),
+                icon: const Icon(Icons.flash_on, size: 15),
+                label: const Text(
+                  'Test Light',
+                  style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                '3D Split — Front: $frontSegs segs',
+                style: const TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                  color: Color(0xFF00F5D4),
+                ),
+              ),
+              Text(
+                '${secondWall.toUpperCase()}: $sideSegs segs',
+                style: const TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                  color: Color(0xFFC084FC),
+                ),
+              ),
+            ],
+          ),
+          Slider(
+            value: frontSegs.toDouble().clamp(0.0, ctrl.segmentCount.toDouble()),
+            min: 0,
+            max: ctrl.segmentCount.toDouble(),
+            divisions: math.max(1, ctrl.segmentCount),
+            activeColor: const Color(0xFF00F5D4),
+            onChanged: (v) {
+              final newFront = v.round();
+              final rem = math.max(0, ctrl.segmentCount - newFront);
+              final zones = <Map<String, dynamic>>[];
+              if (newFront > 0) {
+                zones.add({'wall': 'front', 'segments': newFront});
+              }
+              if (rem > 0) {
+                zones.add({'wall': secondWall, 'segments': rem});
+              }
+              widget.api.updateControllerWallZones(ctrl.id, zones);
+            },
+          ),
+          Wrap(
+            spacing: 6,
+            runSpacing: 6,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              const Text(
+                '2nd Wall:',
+                style: TextStyle(fontSize: 10.5, color: Color(0xFF94A3B8)),
+              ),
+              for (final wOpt in ['left', 'right', 'back'])
+                InkWell(
+                  borderRadius: BorderRadius.circular(6),
+                  onTap: () {
+                    final rem = math.max(1, ctrl.segmentCount - frontSegs);
+                    final fCnt = math.max(0, ctrl.segmentCount - rem);
+                    final zones = <Map<String, dynamic>>[];
+                    if (fCnt > 0) {
+                      zones.add({'wall': 'front', 'segments': fCnt});
+                    }
+                    zones.add({'wall': wOpt, 'segments': rem});
+                    widget.api.updateControllerWallZones(ctrl.id, zones);
+                  },
+                  child: Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: (secondWall == wOpt && sideSegs > 0)
+                          ? const Color(0xFFA855F7).withValues(alpha: 0.25)
+                          : const Color(0xFF060B18),
+                      borderRadius: BorderRadius.circular(6),
+                      border: Border.all(
+                        color: (secondWall == wOpt && sideSegs > 0)
+                            ? const Color(0xFFC084FC)
+                            : const Color(0xFF1E293B),
+                      ),
+                    ),
+                    child: Text(
+                      wOpt.toUpperCase(),
+                      style: const TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ),
+                ),
+              OutlinedButton.icon(
+                style: OutlinedButton.styleFrom(
+                  visualDensity: VisualDensity.compact,
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                ),
+                onPressed: () {
+                  final cornerIdx =
+                      (frontSegs - 1).clamp(0, ctrl.segmentCount - 1);
+                  widget.api.locateControllerSegment(ctrl.id, cornerIdx);
+                },
+                icon: const Icon(Icons.my_location,
+                    size: 13, color: Color(0xFFFBBF24)),
+                label: Text(
+                  'Spotlight Corner #${math.max(1, frontSegs)}',
+                  style: const TextStyle(
+                    fontSize: 10.5,
+                    fontWeight: FontWeight.w700,
+                    color: Color(0xFFFCD34D),
+                  ),
+                ),
+              ),
+            ],
+          ),
         ],
       ),
     );

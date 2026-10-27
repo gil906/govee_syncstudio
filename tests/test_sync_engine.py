@@ -831,7 +831,7 @@ def test_all_71_presets_produce_lively_non_static_animations(tmp_path: Path) -> 
     engine = MasterAnimationEngine(store=store, driver=driver)
     cfg = store.get()
 
-    assert len(engine.PRESETS) == 71
+    assert len(engine.PRESETS) >= 190
 
     for preset in engine.PRESETS:
         pid = preset["id"]

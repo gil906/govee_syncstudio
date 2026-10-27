@@ -823,6 +823,55 @@ class GoveeApiService extends ChangeNotifier {
     }
   }
 
+  Future<void> updateControllerWallZones(
+    String controllerId,
+    List<Map<String, dynamic>> wallZones,
+  ) async {
+    final updatedHouses = _config.houses.map((h) {
+      final updatedCtrls = h.controllers.map((c) {
+        if (c.id == controllerId) {
+          return c.copyWith(wallZones: wallZones);
+        }
+        return c;
+      }).toList();
+      return h.copyWith(controllers: updatedCtrls);
+    }).toList();
+    _config = _config.copyWith(houses: updatedHouses);
+    _safeNotify();
+
+    try {
+      final res = await _httpRequest(
+        'PATCH',
+        '/api/controllers/$controllerId/zones',
+        body: {'wall_zones': wallZones},
+      );
+      if (res is Map && res['config'] is Map) {
+        _config = SystemConfig.fromJson(
+            Map<String, dynamic>.from(res['config'] as Map));
+        _safeNotify();
+      }
+      setBanner('Updated 3D house wall segment split');
+    } catch (e) {
+      setBanner('Updated 3D wall split locally ($e)');
+    }
+  }
+
+  Future<void> locateControllerSegment(
+      String controllerId, int segmentIndex) async {
+    try {
+      await _httpRequest(
+        'POST',
+        '/api/controllers/$controllerId/locate-segment',
+        body: {'segment_index': segmentIndex},
+      );
+      setBanner(
+        'Spotlighted Corner Segment #${segmentIndex + 1} in White on physical house',
+      );
+    } catch (e) {
+      setBanner('Spotlight segment error: $e', isError: true);
+    }
+  }
+
   Future<void> discoverHouseCloudDevices(String houseId, String apiKey) async {
     try {
       setBanner('Querying Govee Cloud OpenAPI for $houseId…');

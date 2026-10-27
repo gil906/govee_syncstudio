@@ -58,17 +58,28 @@ export default function NeighborhoodPreview({
   onTriggerBurst,
   burstBusy = '',
 }) {
+  const [viewMode, setViewMode] = React.useState('2d'); // '2d', '3d_all', or '3d:<houseId>'
   const segments = liveState?.segments || [];
   const houses = [...(config?.houses || [])].sort((a, b) => (a.order || 1) - (b.order || 1));
   const enabledHouses = houses.filter((h) => h.enabled !== false);
+  const targetHouses = enabledHouses.length > 0 ? enabledHouses : houses;
   const isRunning = liveState?.running ?? config?.animation?.running ?? true;
   const blackoutOnStop =
     liveState?.blackout_on_stop ?? config?.animation?.blackout_on_stop ?? false;
   const fps = liveState?.measured_fps ?? config?.animation?.fps ?? 25;
   const driftMs = liveState?.clock_drift_ms ?? 0.08;
 
+  const viewModes = [
+    { id: '2d', label: '2D Front' },
+    { id: '3d_all', label: `3D All (${targetHouses.length} Houses)` },
+    ...targetHouses.map((h, i) => ({
+      id: `3d:${h.id}`,
+      label: `3D: #${i + 1} ${(h.name || `House ${i + 1}`).split('(')[0].trim()}`,
+    })),
+  ];
+
   return (
-    <div className="bg-[#0c1324] border border-[#1e293b] rounded-2xl p-4 shadow-xl space-y-3.5">
+    <div className="bg-[#0c1324] border border-[#1e293b] rounded-2xl p-4 shadow-xl space-y-3">
       {/* Compact Header Row matching Flutter APK */}
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-2 min-w-0">
@@ -107,11 +118,33 @@ export default function NeighborhoodPreview({
         </div>
       </div>
 
-      {/* Unified Night-Sky 3-House Architectural Canvas (Exact match to Flutter APK ThreeHouseScenePreview) */}
+      {/* 2D Front vs 3D All Enabled Houses vs 3D Single House Mode Selector */}
+      <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5 no-scrollbar">
+        {viewModes.map((vm) => {
+          const active = viewMode === vm.id;
+          return (
+            <button
+              key={vm.id}
+              type="button"
+              onClick={() => setViewMode(vm.id)}
+              className={`px-2.5 py-1 rounded-full text-[11px] font-extrabold border shrink-0 transition ${
+                active
+                  ? 'bg-[#00f5d4]/20 text-[#00f5d4] border-[#00f5d4]'
+                  : 'bg-[#060b18] text-slate-300 border-[#1e293b] hover:text-white'
+              }`}
+            >
+              {vm.label}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Unified Night-Sky 2D or 3D Isometric Architectural Canvas */}
       <LiveSceneCardPreview
         animation={{ ...(config?.animation || {}), running: isRunning }}
         houses={houses}
         liveSegments={segments}
+        viewMode={viewMode}
         height={165}
         compact={false}
       />
