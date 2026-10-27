@@ -128,6 +128,60 @@ void main() {
     expect(find.text('Z FOLD 7 STUDIO'), findsOneWidget);
     expect(find.byType(NavigationRail), findsOneWidget);
     expect(find.text('Live 3-House Animated Scene Gallery'), findsWidgets);
+    expect(find.byType(Isometric3DScenePreview), findsWidgets);
+    expect(find.text('🏗️ Design House & Lights'), findsWidgets);
+  });
+
+  test('HouseArchitecture defaults: House 1 triangle gable, House 2 & 3 multi-section, and JSON round-trip', () {
+    final h1Arch = HouseArchitecture.defaultForHouse('house-1', 1);
+    expect(h1Arch.presetStyle, 'a_frame_gable');
+    expect(h1Arch.defaultViewMode, '3d');
+    expect(h1Arch.frontSections.first.shape, 'triangle_gable');
+    expect(h1Arch.frontSections.first.hasDoor, isTrue);
+
+    final h2Arch = HouseArchitecture.defaultForHouse('house-2', 2);
+    expect(h2Arch.presetStyle, 'craftsman_multi_section');
+    expect(h2Arch.frontSections.length, greaterThanOrEqualTo(3));
+    expect(
+      h2Arch.frontSections.any((s) => s.id == 'sec-garage-square' && s.shape == 'flat_eave' && s.hasGarage),
+      isTrue,
+    );
+    expect(
+      h2Arch.frontSections.any((s) => s.id == 'sec-entry-gable' && s.shape == 'triangle_gable'),
+      isTrue,
+    );
+    expect(
+      h2Arch.frontSections.any((s) => s.id == 'sec-upper-dormer' && s.shape == 'dormer_peak' && s.story == 2),
+      isTrue,
+    );
+
+    final h3Arch = HouseArchitecture.defaultForHouse('house-3', 3);
+    expect(h3Arch.presetStyle, 'two_story_estate');
+    expect(
+      h3Arch.frontSections.any((s) => s.id == 'sec-left-tower-gable' && s.shape == 'steep_gable'),
+      isTrue,
+    );
+    expect(
+      h3Arch.frontSections.any((s) => s.id == 'sec-center-flat-fascia' && s.shape == 'flat_eave'),
+      isTrue,
+    );
+    expect(
+      h3Arch.frontSections.any((s) => s.id == 'sec-right-garage-gable' && s.shape == 'triangle_gable'),
+      isTrue,
+    );
+
+    // Verify all 5 architectural presets exist and serialize cleanly
+    expect(kArchitecturePresets.keys, containsAll([
+      'a_frame_gable',
+      'craftsman_multi_section',
+      'two_story_estate',
+      'modern_stepped',
+      'colonial_dormer',
+    ]));
+
+    final roundTrip = HouseArchitecture.fromJson(h2Arch.toJson());
+    expect(roundTrip.presetStyle, 'craftsman_multi_section');
+    expect(roundTrip.sections.length, h2Arch.sections.length);
   });
 }
 

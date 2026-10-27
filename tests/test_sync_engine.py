@@ -1079,4 +1079,211 @@ def test_representative_controller_color_animates_across_all_71_presets(tmp_path
         assert len(rep_samples) > 1, f"Preset '{pid}' produced static representative controller color: {rep_samples}"
 
 
+def test_house_architecture_presets_api_and_3d_roofline_geometry(tmp_path: Path) -> None:
+    """
+    Verify:
+    - Default architectures for House 1 (a_frame_gable triangle peak), House 2 (craftsman_multi_section),
+      and House 3 (two_story_estate).
+    - GET /api/architecture/presets returns all 5 templates.
+    - PATCH /api/houses/house-1/architecture updates sections (triangle gable + flat eave + dormer),
+      camera angles, default_view_mode, and controller section_spans / custom_nodes.
+    - PATCH /api/controllers/{controller_id}/zones syncs wall_zones from section_spans.
+    - build_virtual_strip_map and render_frame_at populate section_id, arch_x, arch_y, arch_z with
+      peak elevation at the middle of a triangle_gable.
+    """
+    store = ConfigStore(data_dir=str(tmp_path))
+    cfg = store.get()
+    houses_by_id = {h.id: h for h in cfg.houses}
+
+    h1 = houses_by_id["house-1"]
+    h2 = houses_by_id["house-2"]
+    h3 = houses_by_id["house-3"]
+
+    assert h1.architecture is not None
+    assert h1.architecture.preset_style == "a_frame_gable"
+    assert any(s.id == "sec-main-gable" and s.shape == "triangle_gable" for s in h1.architecture.sections)
+
+    assert h2.architecture is not None
+    assert h2.architecture.preset_style == "craftsman_multi_section"
+    h2_sec_ids = {s.id for s in h2.architecture.sections}
+    assert {"sec-garage-square", "sec-entry-gable", "sec-upper-dormer", "sec-left-eave", "sec-right-eave", "sec-back-eave"}.issubset(
+        h2_sec_ids
+    )
+
+    assert h3.architecture is not None
+    assert h3.architecture.preset_style == "two_story_estate"
+    h3_sec_ids = {s.id for s in h3.architecture.sections}
+    assert {
+        "sec-left-tower-gable",
+        "sec-center-flat-fascia",
+        "sec-right-garage-gable",
+        "sec-left-wing",
+        "sec-right-wing",
+        "sec-back-wing",
+    }.issubset(h3_sec_ids)
+
+    # Check build_virtual_strip_map populates section_id, arch_x, arch_y, arch_z with peak at middle of triangle_gable
+    slots = build_virtual_strip_map(cfg)
+    h1_slots = [s for s in slots if s.house.id == "house-1"]
+    assert len(h1_slots) > 2
+    assert all(s.section_id == "sec-main-gable" for s in h1_slots)
+    mid_idx = len(h1_slots) // 2
+    assert h1_slots[mid_idx].arch_y > h1_slots[0].arch_y + 0.25
+    assert h1_slots[mid_idx].arch_y > h1_slots[-1].arch_y + 0.25
+    assert abs(h1_slots[mid_idx].arch_x - 0.50) < 0.08
+    assert h1_slots[0].arch_x < h1_slots[mid_idx].arch_x < h1_slots[-1].arch_x
+
+    from backend.app.main import app
+
+    with TestClient(app) as client:
+        client.post("/api/config/reset")
+
+        # 1. GET /api/architecture/presets returns all 5 templates
+        r_presets = client.get("/api/architecture/presets")
+        assert r_presets.status_code == 200
+        presets = r_presets.json().get("presets", [])
+        assert len(presets) == 5
+        preset_ids = {p["preset_style"] for p in presets}
+        assert preset_ids == {
+            "a_frame_gable",
+            "craftsman_multi_section",
+            "two_story_estate",
+            "modern_stepped",
+            "colonial_dormer",
+        }
+
+        # 2. PATCH /api/houses/house-1/architecture updates sections, camera angles, default_view_mode, and controller mappings
+        patch_payload = {
+            "architecture": {
+                "preset_style": "custom_hybrid",
+                "default_view_mode": "2d",
+                "camera_yaw": -35.0,
+                "camera_pitch": 28.0,
+                "camera_zoom": 1.25,
+                "siding_color": "#1f2937",
+                "trim_color": "#38bdf8",
+                "roof_color": "#0f172a",
+                "sections": [
+                    {
+                        "id": "sec-main-gable",
+                        "label": "Custom Front Triangle Peak",
+                        "shape": "triangle_gable",
+                        "wall": "front",
+                        "story": 1,
+                        "x_start": 0.05,
+                        "x_end": 0.55,
+                        "eave_height": 0.50,
+                        "peak_height": 0.92,
+                        "peak_offset": 0.50,
+                        "depth_offset": 0.10,
+                        "has_garage": False,
+                        "has_door": True,
+                        "window_style": "picture",
+                    },
+                    {
+                        "id": "sec-garage-flat",
+                        "label": "Right Garage Flat Eave",
+                        "shape": "flat_eave",
+                        "wall": "front",
+                        "story": 1,
+                        "x_start": 0.55,
+                        "x_end": 0.95,
+                        "eave_height": 0.48,
+                        "peak_height": 0.48,
+                        "peak_offset": 0.50,
+                        "depth_offset": 0.16,
+                        "has_garage": True,
+                        "has_door": False,
+                        "window_style": "modern_grid",
+                    },
+                    {
+                        "id": "sec-upper-dormer",
+                        "label": "Upper Dormer Peak",
+                        "shape": "dormer_peak",
+                        "wall": "front",
+                        "story": 2,
+                        "x_start": 0.20,
+                        "x_end": 0.50,
+                        "eave_height": 0.68,
+                        "peak_height": 0.96,
+                        "peak_offset": 0.50,
+                        "depth_offset": -0.05,
+                        "has_garage": False,
+                        "has_door": False,
+                        "window_style": "arched",
+                    },
+                ],
+            },
+            "controller_mappings": [
+                {
+                    "controller_id": "h1-ctrl-1",
+                    "section_spans": [
+                        {"section_id": "sec-main-gable", "wall": "front", "segments": 9, "direction": "ltr"},
+                        {"section_id": "sec-garage-flat", "wall": "front", "segments": 3, "direction": "ltr"},
+                    ],
+                    "custom_nodes": [
+                        {"x": 0.05, "y": 0.50, "z": 0.10, "wall": "front", "label": "Left Corner"},
+                        {"x": 0.30, "y": 0.92, "z": 0.10, "wall": "front", "label": "Gable Apex"},
+                    ],
+                },
+                {
+                    "controller_id": "h1-ctrl-2",
+                    "section_spans": [
+                        {"section_id": "sec-garage-flat", "wall": "front", "segments": 6, "direction": "ltr"},
+                        {"section_id": "sec-upper-dormer", "wall": "front", "segments": 6, "direction": "rtl"},
+                    ],
+                },
+            ],
+        }
+        r_patch = client.patch("/api/houses/house-1/architecture", json=patch_payload)
+        assert r_patch.status_code == 200
+        body = r_patch.json()
+        assert body["ok"] is True
+        updated_h1 = body["house"]
+        assert updated_h1["architecture"]["default_view_mode"] == "2d"
+        assert updated_h1["architecture"]["camera_yaw"] == -35.0
+        assert updated_h1["architecture"]["camera_pitch"] == 28.0
+        assert updated_h1["architecture"]["camera_zoom"] == 1.25
+        assert len(updated_h1["architecture"]["sections"]) == 3
+        ctrl1 = next(c for c in updated_h1["controllers"] if c["id"] == "h1-ctrl-1")
+        assert len(ctrl1["section_spans"]) == 2
+        assert len(ctrl1["custom_nodes"]) == 2
+        assert ctrl1["wall_zones"] == [{"wall": "front", "segments": 12}]
+
+        from backend.app.models import SystemConfig
+
+        # Verify triangle_gable peak elevation at segment index 4 (middle of 9 segments on sec-main-gable)
+        live_cfg = SystemConfig.model_validate(body["config"])
+        patched_slots = build_virtual_strip_map(live_cfg)
+        c1_gable_slots = [
+            s for s in patched_slots if s.controller.id == "h1-ctrl-1" and s.section_id == "sec-main-gable"
+        ]
+        assert len(c1_gable_slots) == 9
+        assert abs(c1_gable_slots[0].arch_y - 0.50) < 1e-3
+        assert abs(c1_gable_slots[4].arch_y - 0.92) < 1e-3
+        assert abs(c1_gable_slots[8].arch_y - 0.50) < 1e-3
+
+        # 3. PATCH /api/controllers/h2-ctrl-1/zones with section_spans and custom_nodes
+        r_zones = client.patch(
+            "/api/controllers/h2-ctrl-1/zones",
+            json={
+                "section_spans": [
+                    {"section_id": "sec-garage-square", "wall": "front", "segments": 4, "direction": "ltr"},
+                    {"section_id": "sec-entry-gable", "wall": "front", "segments": 5, "direction": "ltr"},
+                ],
+                "custom_nodes": [
+                    {"x": 0.04, "y": 0.48, "z": 0.16, "wall": "front", "label": "Garage Start"},
+                ],
+            },
+        )
+        assert r_zones.status_code == 200
+        z_body = r_zones.json()
+        assert z_body["ok"] is True
+        assert len(z_body["controller"]["section_spans"]) == 2
+        assert z_body["controller"]["wall_zones"] == [{"wall": "front", "segments": 9}]
+
+        client.post("/api/config/reset")
+
+
+
 

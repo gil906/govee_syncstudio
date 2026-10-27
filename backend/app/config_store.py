@@ -8,7 +8,7 @@ import threading
 from pathlib import Path
 from typing import Optional
 
-from .models import SystemConfig
+from .models import SystemConfig, default_house_architecture
 
 logger = logging.getLogger("govee_sync.config")
 
@@ -84,7 +84,22 @@ class ConfigStore:
 
             try:
                 raw = json.loads(self.config_path.read_text(encoding="utf-8"))
+                needs_arch_persist = False
+                if isinstance(raw, dict) and isinstance(raw.get("houses"), list):
+                    for h_raw in raw["houses"]:
+                        if isinstance(h_raw, dict):
+                            if not h_raw.get("architecture") or not h_raw.get("architecture", {}).get("sections"):
+                                needs_arch_persist = True
+                            for c_raw in h_raw.get("controllers") or []:
+                                if isinstance(c_raw, dict) and (
+                                    "section_spans" not in c_raw or "custom_nodes" not in c_raw
+                                ):
+                                    needs_arch_persist = True
                 cfg = SystemConfig.model_validate(raw)
+                for h in cfg.houses:
+                    if h.architecture is None or not h.architecture.sections:
+                        h.architecture = default_house_architecture(h.id, h.order)
+                        needs_arch_persist = True
             except Exception as exc:
                 logger.error("Failed to parse %s (%s); loading default 3-house topology", self.config_path, exc)
                 if self.example_path.exists():
@@ -92,9 +107,10 @@ class ConfigStore:
                     cfg = SystemConfig.model_validate(raw)
                 else:
                     cfg = SystemConfig()
+                needs_arch_persist = True
                 self._write_atomic(cfg)
 
-            if self._restore_saved_keys(cfg):
+            if self._restore_saved_keys(cfg) or needs_arch_persist:
                 self._write_atomic(cfg)
             self._persist_saved_keys(cfg)
 
@@ -119,9 +135,16 @@ class ConfigStore:
                 new_config.govee_api_key = self._config.govee_api_key
             if self._config:
                 prev_house_keys = {h.id: h.govee_api_key for h in self._config.houses if h.govee_api_key}
+                prev_houses_by_id = {h.id: h for h in self._config.houses}
                 for h in new_config.houses:
                     if not h.govee_api_key and h.id in prev_house_keys:
                         h.govee_api_key = prev_house_keys[h.id]
+                    if h.architecture is None or not h.architecture.sections:
+                        prev_h = prev_houses_by_id.get(h.id)
+                        if prev_h and prev_h.architecture and prev_h.architecture.sections:
+                            h.architecture = prev_h.architecture.model_copy(deep=True)
+                        else:
+                            h.architecture = default_house_architecture(h.id, h.order)
             self._restore_saved_keys(new_config)
             self._persist_saved_keys(new_config)
             # Ensure houses are ordered sequentially

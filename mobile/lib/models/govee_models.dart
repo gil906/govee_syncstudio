@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
-const String kAppVersionName = '3.5.0';
-const int kAppVersionCode = 8;
+const String kAppVersionName = '3.6.0';
+const int kAppVersionCode = 9;
 
 const String kDefaultBackendUrl = String.fromEnvironment(
   'DEFAULT_BACKEND_URL',
@@ -16,6 +16,778 @@ const String kOwnerEmail = String.fromEnvironment(
   defaultValue: 'owner@example.com',
 );
 
+/// Represents one architectural roof/wall section of a house in 2D and 3D space.
+class ArchSection {
+  final String id;
+  final String label;
+  /// `'triangle_gable'`, `'steep_gable'`, `'flat_eave'`, `'hip_roof'`, `'shed_slope'`, `'dormer_peak'`
+  final String shape;
+  /// `'front'`, `'left'`, `'right'`, `'back'`
+  final String wall;
+  /// `1` or `2`
+  final int story;
+  final double xStart;
+  final double xEnd;
+  final double eaveHeight;
+  final double peakHeight;
+  final double peakOffset;
+  final double depthOffset;
+  final bool hasGarage;
+  final bool hasDoor;
+  final String windowStyle;
+
+  const ArchSection({
+    required this.id,
+    required this.label,
+    this.shape = 'triangle_gable',
+    this.wall = 'front',
+    this.story = 1,
+    this.xStart = 0.05,
+    this.xEnd = 0.95,
+    this.eaveHeight = 0.50,
+    this.peakHeight = 0.88,
+    this.peakOffset = 0.50,
+    this.depthOffset = 0.0,
+    this.hasGarage = false,
+    this.hasDoor = false,
+    this.windowStyle = 'standard',
+  });
+
+  bool get isPitchedGable =>
+      shape == 'triangle_gable' ||
+      shape == 'steep_gable' ||
+      shape == 'dormer_peak';
+
+  ArchSection copyWith({
+    String? id,
+    String? label,
+    String? shape,
+    String? wall,
+    int? story,
+    double? xStart,
+    double? xEnd,
+    double? eaveHeight,
+    double? peakHeight,
+    double? peakOffset,
+    double? depthOffset,
+    bool? hasGarage,
+    bool? hasDoor,
+    String? windowStyle,
+  }) {
+    return ArchSection(
+      id: id ?? this.id,
+      label: label ?? this.label,
+      shape: shape ?? this.shape,
+      wall: wall ?? this.wall,
+      story: story ?? this.story,
+      xStart: xStart ?? this.xStart,
+      xEnd: xEnd ?? this.xEnd,
+      eaveHeight: eaveHeight ?? this.eaveHeight,
+      peakHeight: peakHeight ?? this.peakHeight,
+      peakOffset: peakOffset ?? this.peakOffset,
+      depthOffset: depthOffset ?? this.depthOffset,
+      hasGarage: hasGarage ?? this.hasGarage,
+      hasDoor: hasDoor ?? this.hasDoor,
+      windowStyle: windowStyle ?? this.windowStyle,
+    );
+  }
+
+  factory ArchSection.fromJson(Map<String, dynamic> json) {
+    final shape = (json['shape'] ?? 'triangle_gable').toString().trim();
+    final eaveH = (json['eave_height'] is num)
+        ? (json['eave_height'] as num).toDouble().clamp(0.20, 0.95)
+        : 0.50;
+    final peakH = (json['peak_height'] is num)
+        ? (json['peak_height'] as num).toDouble().clamp(0.20, 1.00)
+        : (shape == 'flat_eave' ? eaveH : 0.88);
+    return ArchSection(
+      id: (json['id'] ?? 'sec-front').toString(),
+      label: (json['label'] ?? 'Roof Section').toString(),
+      shape: shape,
+      wall: (json['wall'] ?? 'front').toString().trim().toLowerCase(),
+      story: (json['story'] is num)
+          ? (json['story'] as num).toInt().clamp(1, 2)
+          : 1,
+      xStart: (json['x_start'] is num)
+          ? (json['x_start'] as num).toDouble().clamp(0.0, 0.98)
+          : 0.05,
+      xEnd: (json['x_end'] is num)
+          ? (json['x_end'] as num).toDouble().clamp(0.02, 1.0)
+          : 0.95,
+      eaveHeight: eaveH,
+      peakHeight: peakH,
+      peakOffset: (json['peak_offset'] is num)
+          ? (json['peak_offset'] as num).toDouble().clamp(0.15, 0.85)
+          : 0.50,
+      depthOffset: (json['depth_offset'] is num)
+          ? (json['depth_offset'] as num).toDouble().clamp(-0.40, 0.40)
+          : 0.0,
+      hasGarage: json['has_garage'] == true,
+      hasDoor: json['has_door'] == true,
+      windowStyle: (json['window_style'] ?? 'standard').toString(),
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'label': label,
+        'shape': shape,
+        'wall': wall,
+        'story': story,
+        'x_start': double.parse(xStart.toStringAsFixed(3)),
+        'x_end': double.parse(xEnd.toStringAsFixed(3)),
+        'eave_height': double.parse(eaveHeight.toStringAsFixed(3)),
+        'peak_height': double.parse(peakHeight.toStringAsFixed(3)),
+        'peak_offset': double.parse(peakOffset.toStringAsFixed(3)),
+        'depth_offset': double.parse(depthOffset.toStringAsFixed(3)),
+        'has_garage': hasGarage,
+        'has_door': hasDoor,
+        'window_style': windowStyle,
+      };
+}
+
+/// Complete 3D & 2D multi-section architectural blueprint for a house.
+class HouseArchitecture {
+  final String presetStyle;
+  final String defaultViewMode;
+  final double cameraYaw;
+  final double cameraPitch;
+  final double cameraZoom;
+  final String sidingColor;
+  final String trimColor;
+  final String roofColor;
+  final List<ArchSection> sections;
+
+  const HouseArchitecture({
+    this.presetStyle = 'a_frame_gable',
+    this.defaultViewMode = '3d',
+    this.cameraYaw = -26.0,
+    this.cameraPitch = 20.0,
+    this.cameraZoom = 1.0,
+    this.sidingColor = '#162238',
+    this.trimColor = '#475569',
+    this.roofColor = '#0f172a',
+    this.sections = const [],
+  });
+
+  List<ArchSection> get frontSections =>
+      sections.where((s) => s.wall == 'front').toList();
+
+  HouseArchitecture copyWith({
+    String? presetStyle,
+    String? defaultViewMode,
+    double? cameraYaw,
+    double? cameraPitch,
+    double? cameraZoom,
+    String? sidingColor,
+    String? trimColor,
+    String? roofColor,
+    List<ArchSection>? sections,
+  }) {
+    return HouseArchitecture(
+      presetStyle: presetStyle ?? this.presetStyle,
+      defaultViewMode: defaultViewMode ?? this.defaultViewMode,
+      cameraYaw: cameraYaw ?? this.cameraYaw,
+      cameraPitch: cameraPitch ?? this.cameraPitch,
+      cameraZoom: cameraZoom ?? this.cameraZoom,
+      sidingColor: sidingColor ?? this.sidingColor,
+      trimColor: trimColor ?? this.trimColor,
+      roofColor: roofColor ?? this.roofColor,
+      sections: sections ?? this.sections,
+    );
+  }
+
+  factory HouseArchitecture.fromJson(Map<String, dynamic> json) {
+    final parsedSections = <ArchSection>[];
+    if (json['sections'] is List) {
+      for (final item in json['sections']) {
+        if (item is Map) {
+          parsedSections.add(
+            ArchSection.fromJson(Map<String, dynamic>.from(item)),
+          );
+        }
+      }
+    }
+    final style = (json['preset_style'] ?? 'a_frame_gable').toString();
+    final fallback =
+        kArchitecturePresets[style] ?? kArchitecturePresets['a_frame_gable']!;
+    return HouseArchitecture(
+      presetStyle: style,
+      defaultViewMode: (json['default_view_mode'] ?? '3d').toString(),
+      cameraYaw: (json['camera_yaw'] is num)
+          ? (json['camera_yaw'] as num).toDouble().clamp(-180.0, 180.0)
+          : fallback.cameraYaw,
+      cameraPitch: (json['camera_pitch'] is num)
+          ? (json['camera_pitch'] as num).toDouble().clamp(5.0, 65.0)
+          : fallback.cameraPitch,
+      cameraZoom: (json['camera_zoom'] is num)
+          ? (json['camera_zoom'] as num).toDouble().clamp(0.60, 2.00)
+          : fallback.cameraZoom,
+      sidingColor: (json['siding_color'] ?? fallback.sidingColor).toString(),
+      trimColor: (json['trim_color'] ?? fallback.trimColor).toString(),
+      roofColor: (json['roof_color'] ?? fallback.roofColor).toString(),
+      sections: parsedSections.isNotEmpty ? parsedSections : fallback.sections,
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+        'preset_style': presetStyle,
+        'default_view_mode': defaultViewMode,
+        'camera_yaw': double.parse(cameraYaw.toStringAsFixed(1)),
+        'camera_pitch': double.parse(cameraPitch.toStringAsFixed(1)),
+        'camera_zoom': double.parse(cameraZoom.toStringAsFixed(2)),
+        'siding_color': sidingColor,
+        'trim_color': trimColor,
+        'roof_color': roofColor,
+        'sections': sections.map((s) => s.toJson()).toList(),
+      };
+
+  /// Returns the default `HouseArchitecture` for a given `houseId` and `order`:
+  /// - `house-1` / order 1: `a_frame_gable` (Prominent Front A-Frame Triangle Gable Peak)
+  /// - `house-2` / order 2: `craftsman_multi_section` (Square Garage + Triangle Entry Gable + Upper Dormer)
+  /// - `house-3` / order >= 3: `two_story_estate` (Left Steep Gable + Center Flat Fascia + Right Garage Gable)
+  static HouseArchitecture defaultForHouse(String houseId, int order) {
+    final cleanId = houseId.trim().toLowerCase();
+    if (cleanId == 'house-1' || order == 1) {
+      return kArchitecturePresets['a_frame_gable']!;
+    }
+    if (cleanId == 'house-2' || order == 2) {
+      return kArchitecturePresets['craftsman_multi_section']!;
+    }
+    return kArchitecturePresets['two_story_estate']!;
+  }
+}
+
+/// 5 built-in architectural house templates for 1-tap selection & full customization.
+const Map<String, HouseArchitecture> kArchitecturePresets = {
+  // 1. Prominent Front A-Frame Triangle Gable Peak (My House)
+  'a_frame_gable': HouseArchitecture(
+    presetStyle: 'a_frame_gable',
+    defaultViewMode: '3d',
+    cameraYaw: -26.0,
+    cameraPitch: 20.0,
+    cameraZoom: 1.0,
+    sidingColor: '#162544',
+    trimColor: '#38bdf8',
+    roofColor: '#0f172a',
+    sections: [
+      ArchSection(
+        id: 'sec-front-gable',
+        label: 'Front A-Frame Triangle Peak',
+        shape: 'triangle_gable',
+        wall: 'front',
+        story: 1,
+        xStart: 0.06,
+        xEnd: 0.94,
+        eaveHeight: 0.50,
+        peakHeight: 0.90,
+        peakOffset: 0.50,
+        depthOffset: 0.08,
+        hasGarage: false,
+        hasDoor: true,
+        windowStyle: 'picture',
+      ),
+      ArchSection(
+        id: 'sec-left-eave',
+        label: 'Left Side Eave',
+        shape: 'flat_eave',
+        wall: 'left',
+        story: 1,
+        xStart: 0.08,
+        xEnd: 0.92,
+        eaveHeight: 0.50,
+        peakHeight: 0.50,
+        depthOffset: 0.0,
+        windowStyle: 'standard',
+      ),
+      ArchSection(
+        id: 'sec-right-eave',
+        label: 'Right Side Eave',
+        shape: 'flat_eave',
+        wall: 'right',
+        story: 1,
+        xStart: 0.08,
+        xEnd: 0.92,
+        eaveHeight: 0.50,
+        peakHeight: 0.50,
+        depthOffset: 0.0,
+        windowStyle: 'standard',
+      ),
+    ],
+  ),
+
+  // 2. Craftsman Multi-Section: Square Flat Garage + Triangle Entry Gable + 2nd-Story Dormer Peak
+  'craftsman_multi_section': HouseArchitecture(
+    presetStyle: 'craftsman_multi_section',
+    defaultViewMode: '3d',
+    cameraYaw: -26.0,
+    cameraPitch: 20.0,
+    cameraZoom: 1.0,
+    sidingColor: '#17233a',
+    trimColor: '#64748b',
+    roofColor: '#0c1324',
+    sections: [
+      ArchSection(
+        id: 'sec-garage-square',
+        label: 'Left Square Garage Eave',
+        shape: 'flat_eave',
+        wall: 'front',
+        story: 1,
+        xStart: 0.04,
+        xEnd: 0.44,
+        eaveHeight: 0.48,
+        peakHeight: 0.48,
+        peakOffset: 0.50,
+        depthOffset: 0.16,
+        hasGarage: true,
+        hasDoor: false,
+        windowStyle: 'none',
+      ),
+      ArchSection(
+        id: 'sec-entry-gable',
+        label: 'Right Entry Triangle Gable',
+        shape: 'triangle_gable',
+        wall: 'front',
+        story: 1,
+        xStart: 0.44,
+        xEnd: 0.96,
+        eaveHeight: 0.52,
+        peakHeight: 0.84,
+        peakOffset: 0.52,
+        depthOffset: 0.06,
+        hasGarage: false,
+        hasDoor: true,
+        windowStyle: 'picture',
+      ),
+      ArchSection(
+        id: 'sec-upper-dormer',
+        label: '2nd-Story Upper Dormer Peak',
+        shape: 'dormer_peak',
+        wall: 'front',
+        story: 2,
+        xStart: 0.14,
+        xEnd: 0.68,
+        eaveHeight: 0.68,
+        peakHeight: 0.95,
+        peakOffset: 0.50,
+        depthOffset: -0.06,
+        hasGarage: false,
+        hasDoor: false,
+        windowStyle: 'double',
+      ),
+      ArchSection(
+        id: 'sec-left-eave',
+        label: 'Left Side Eave',
+        shape: 'flat_eave',
+        wall: 'left',
+        story: 1,
+        xStart: 0.06,
+        xEnd: 0.94,
+        eaveHeight: 0.50,
+        peakHeight: 0.50,
+        windowStyle: 'standard',
+      ),
+      ArchSection(
+        id: 'sec-right-eave',
+        label: 'Right Side Eave',
+        shape: 'flat_eave',
+        wall: 'right',
+        story: 1,
+        xStart: 0.06,
+        xEnd: 0.94,
+        eaveHeight: 0.52,
+        peakHeight: 0.52,
+        windowStyle: 'standard',
+      ),
+      ArchSection(
+        id: 'sec-back-eave',
+        label: 'Back Hipped Roofline',
+        shape: 'hip_roof',
+        wall: 'back',
+        story: 1,
+        xStart: 0.06,
+        xEnd: 0.94,
+        eaveHeight: 0.50,
+        peakHeight: 0.76,
+        windowStyle: 'double',
+      ),
+    ],
+  ),
+
+  // 3. Two-Story Estate: Left Steep Tower Gable + Center Flat Fascia + Right Garage Triangle Gable
+  'two_story_estate': HouseArchitecture(
+    presetStyle: 'two_story_estate',
+    defaultViewMode: '3d',
+    cameraYaw: -26.0,
+    cameraPitch: 20.0,
+    cameraZoom: 1.0,
+    sidingColor: '#192236',
+    trimColor: '#94a3b8',
+    roofColor: '#0b1120',
+    sections: [
+      ArchSection(
+        id: 'sec-left-tower-gable',
+        label: 'Left 2-Story Steep Tower Peak',
+        shape: 'steep_gable',
+        wall: 'front',
+        story: 2,
+        xStart: 0.03,
+        xEnd: 0.38,
+        eaveHeight: 0.60,
+        peakHeight: 0.96,
+        peakOffset: 0.50,
+        depthOffset: 0.14,
+        hasGarage: false,
+        hasDoor: false,
+        windowStyle: 'arched',
+      ),
+      ArchSection(
+        id: 'sec-center-flat-fascia',
+        label: 'Center 2-Story Flat Gallery',
+        shape: 'flat_eave',
+        wall: 'front',
+        story: 2,
+        xStart: 0.38,
+        xEnd: 0.68,
+        eaveHeight: 0.66,
+        peakHeight: 0.66,
+        peakOffset: 0.50,
+        depthOffset: 0.04,
+        hasGarage: false,
+        hasDoor: true,
+        windowStyle: 'double',
+      ),
+      ArchSection(
+        id: 'sec-right-garage-gable',
+        label: 'Right Garage Triangle Gable',
+        shape: 'triangle_gable',
+        wall: 'front',
+        story: 1,
+        xStart: 0.68,
+        xEnd: 0.97,
+        eaveHeight: 0.48,
+        peakHeight: 0.80,
+        peakOffset: 0.50,
+        depthOffset: 0.18,
+        hasGarage: true,
+        hasDoor: false,
+        windowStyle: 'none',
+      ),
+      ArchSection(
+        id: 'sec-left-wing',
+        label: 'Left Estate Wing',
+        shape: 'flat_eave',
+        wall: 'left',
+        story: 2,
+        xStart: 0.05,
+        xEnd: 0.95,
+        eaveHeight: 0.60,
+        peakHeight: 0.60,
+        windowStyle: 'standard',
+      ),
+      ArchSection(
+        id: 'sec-right-wing',
+        label: 'Right Side Gable Wing',
+        shape: 'triangle_gable',
+        wall: 'right',
+        story: 1,
+        xStart: 0.05,
+        xEnd: 0.95,
+        eaveHeight: 0.50,
+        peakHeight: 0.80,
+        windowStyle: 'standard',
+      ),
+      ArchSection(
+        id: 'sec-back-wing',
+        label: 'Back Patio Eave',
+        shape: 'flat_eave',
+        wall: 'back',
+        story: 1,
+        xStart: 0.05,
+        xEnd: 0.95,
+        eaveHeight: 0.54,
+        peakHeight: 0.54,
+        windowStyle: 'picture',
+      ),
+    ],
+  ),
+
+  // 4. Modern Stepped Cubes + Mono-Slope
+  'modern_stepped': HouseArchitecture(
+    presetStyle: 'modern_stepped',
+    defaultViewMode: '3d',
+    cameraYaw: -24.0,
+    cameraPitch: 19.0,
+    cameraZoom: 1.0,
+    sidingColor: '#131d31',
+    trimColor: '#38bdf8',
+    roofColor: '#090e1a',
+    sections: [
+      ArchSection(
+        id: 'sec-mod-garage',
+        label: 'Stepped Cube Garage (Flat)',
+        shape: 'flat_eave',
+        wall: 'front',
+        story: 1,
+        xStart: 0.04,
+        xEnd: 0.46,
+        eaveHeight: 0.46,
+        peakHeight: 0.46,
+        depthOffset: 0.18,
+        hasGarage: true,
+        windowStyle: 'none',
+      ),
+      ArchSection(
+        id: 'sec-mod-cantilever',
+        label: '2nd-Story Angled Mono-Slope',
+        shape: 'shed_slope',
+        wall: 'front',
+        story: 2,
+        xStart: 0.36,
+        xEnd: 0.95,
+        eaveHeight: 0.62,
+        peakHeight: 0.92,
+        peakOffset: 0.82,
+        depthOffset: 0.10,
+        hasDoor: true,
+        windowStyle: 'picture',
+      ),
+      ArchSection(
+        id: 'sec-mod-left',
+        label: 'Left Cube Fascia',
+        shape: 'flat_eave',
+        wall: 'left',
+        story: 1,
+        xStart: 0.08,
+        xEnd: 0.92,
+        eaveHeight: 0.46,
+        peakHeight: 0.46,
+      ),
+      ArchSection(
+        id: 'sec-mod-right',
+        label: 'Right Upper Fascia',
+        shape: 'flat_eave',
+        wall: 'right',
+        story: 2,
+        xStart: 0.08,
+        xEnd: 0.92,
+        eaveHeight: 0.72,
+        peakHeight: 0.72,
+      ),
+    ],
+  ),
+
+  // 5. Colonial Twin Dormers + Porch
+  'colonial_dormer': HouseArchitecture(
+    presetStyle: 'colonial_dormer',
+    defaultViewMode: '3d',
+    cameraYaw: -26.0,
+    cameraPitch: 21.0,
+    cameraZoom: 1.0,
+    sidingColor: '#1a263e',
+    trimColor: '#e2e8f0',
+    roofColor: '#0f172a',
+    sections: [
+      ArchSection(
+        id: 'sec-col-porch',
+        label: 'Full-Width Front Porch Eave',
+        shape: 'flat_eave',
+        wall: 'front',
+        story: 1,
+        xStart: 0.05,
+        xEnd: 0.95,
+        eaveHeight: 0.50,
+        peakHeight: 0.50,
+        depthOffset: 0.14,
+        hasDoor: true,
+        windowStyle: 'double',
+      ),
+      ArchSection(
+        id: 'sec-col-dormer-l',
+        label: 'Left Upper Dormer Triangle',
+        shape: 'dormer_peak',
+        wall: 'front',
+        story: 2,
+        xStart: 0.12,
+        xEnd: 0.46,
+        eaveHeight: 0.68,
+        peakHeight: 0.93,
+        peakOffset: 0.50,
+        depthOffset: -0.04,
+        windowStyle: 'standard',
+      ),
+      ArchSection(
+        id: 'sec-col-dormer-r',
+        label: 'Right Upper Dormer Triangle',
+        shape: 'dormer_peak',
+        wall: 'front',
+        story: 2,
+        xStart: 0.54,
+        xEnd: 0.88,
+        eaveHeight: 0.68,
+        peakHeight: 0.93,
+        peakOffset: 0.50,
+        depthOffset: -0.04,
+        windowStyle: 'standard',
+      ),
+      ArchSection(
+        id: 'sec-col-left',
+        label: 'Left Gable End',
+        shape: 'triangle_gable',
+        wall: 'left',
+        story: 1,
+        xStart: 0.08,
+        xEnd: 0.92,
+        eaveHeight: 0.52,
+        peakHeight: 0.88,
+      ),
+      ArchSection(
+        id: 'sec-col-right',
+        label: 'Right Gable End',
+        shape: 'triangle_gable',
+        wall: 'right',
+        story: 1,
+        xStart: 0.08,
+        xEnd: 0.92,
+        eaveHeight: 0.52,
+        peakHeight: 0.88,
+      ),
+    ],
+  ),
+};
+
+const List<({String id, String title, String subtitle, String icon})>
+    kArchitecturePresetMeta = [
+  (
+    id: 'a_frame_gable',
+    title: '🔺 My Triangle Gable',
+    subtitle: 'Full-width prominent A-frame triangle peak',
+    icon: '🔺',
+  ),
+  (
+    id: 'craftsman_multi_section',
+    title: '🏘️ Square Garage + Gable + Dormer',
+    subtitle: 'Flat garage eave + entry triangle peak + 2nd-story dormer',
+    icon: '🏘️',
+  ),
+  (
+    id: 'two_story_estate',
+    title: '🏰 2-Story Peaks + Flat Sections',
+    subtitle: 'Steep tower peak + flat gallery + garage triangle',
+    icon: '🏰',
+  ),
+  (
+    id: 'modern_stepped',
+    title: '📐 Modern Stepped',
+    subtitle: 'Stepped flat cube garage + cantilevered mono-slope',
+    icon: '📐',
+  ),
+  (
+    id: 'colonial_dormer',
+    title: '🏛️ Colonial Dormers',
+    subtitle: 'Front porch eave + twin 2nd-story triangle dormers',
+    icon: '🏛️',
+  ),
+];
+
+/// Maps a contiguous slice of a controller's segments onto a specific `ArchSection`.
+class SectionSpan {
+  final String sectionId;
+  final String wall;
+  final int segments;
+  final String direction;
+
+  const SectionSpan({
+    required this.sectionId,
+    this.wall = 'front',
+    required this.segments,
+    this.direction = 'forward',
+  });
+
+  SectionSpan copyWith({
+    String? sectionId,
+    String? wall,
+    int? segments,
+    String? direction,
+  }) {
+    return SectionSpan(
+      sectionId: sectionId ?? this.sectionId,
+      wall: wall ?? this.wall,
+      segments: segments ?? this.segments,
+      direction: direction ?? this.direction,
+    );
+  }
+
+  factory SectionSpan.fromJson(Map<String, dynamic> json) {
+    return SectionSpan(
+      sectionId: (json['section_id'] ?? '').toString(),
+      wall: (json['wall'] ?? 'front').toString().trim().toLowerCase(),
+      segments: (json['segments'] is num)
+          ? (json['segments'] as num).toInt().clamp(0, 200)
+          : 6,
+      direction: (json['direction'] ?? 'forward').toString(),
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+        'section_id': sectionId,
+        'wall': wall,
+        'segments': segments,
+        'direction': direction,
+      };
+}
+
+/// Optional custom 2D/3D LED node position for freehand light placement.
+class CustomLightNode {
+  final double x;
+  final double y;
+  final double z;
+  final String wall;
+  final String label;
+
+  const CustomLightNode({
+    required this.x,
+    required this.y,
+    this.z = 0.0,
+    this.wall = 'front',
+    this.label = '',
+  });
+
+  CustomLightNode copyWith({
+    double? x,
+    double? y,
+    double? z,
+    String? wall,
+    String? label,
+  }) {
+    return CustomLightNode(
+      x: x ?? this.x,
+      y: y ?? this.y,
+      z: z ?? this.z,
+      wall: wall ?? this.wall,
+      label: label ?? this.label,
+    );
+  }
+
+  factory CustomLightNode.fromJson(Map<String, dynamic> json) {
+    return CustomLightNode(
+      x: (json['x'] is num) ? (json['x'] as num).toDouble().clamp(0.0, 1.0) : 0.5,
+      y: (json['y'] is num) ? (json['y'] as num).toDouble().clamp(0.0, 1.0) : 0.5,
+      z: (json['z'] is num) ? (json['z'] as num).toDouble().clamp(-0.5, 0.5) : 0.0,
+      wall: (json['wall'] ?? 'front').toString(),
+      label: (json['label'] ?? '').toString(),
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+        'x': double.parse(x.toStringAsFixed(3)),
+        'y': double.parse(y.toStringAsFixed(3)),
+        'z': double.parse(z.toStringAsFixed(3)),
+        'wall': wall,
+        'label': label,
+      };
+}
+
 class ControllerConfig {
   final String id;
   final String name;
@@ -28,6 +800,8 @@ class ControllerConfig {
   final String protocolMode;
   final int? brightnessOverride;
   final List<Map<String, dynamic>> wallZones;
+  final List<SectionSpan> sectionSpans;
+  final List<CustomLightNode> customNodes;
 
   const ControllerConfig({
     required this.id,
@@ -41,17 +815,29 @@ class ControllerConfig {
     this.protocolMode = 'auto',
     this.brightnessOverride,
     this.wallZones = const [],
+    this.sectionSpans = const [],
+    this.customNodes = const [],
   });
 
   List<String> getSegmentWalls({String defaultSecondWall = 'front'}) {
     final walls = <String>[];
     const valid = {'front', 'left', 'right', 'back'};
-    for (final z in wallZones) {
-      String w = (z['wall'] ?? 'front').toString().trim().toLowerCase();
-      if (!valid.contains(w)) w = 'front';
-      final cnt = (z['segments'] is num) ? (z['segments'] as num).toInt() : 0;
-      for (int i = 0; i < cnt; i++) {
-        walls.add(w);
+    if (sectionSpans.isNotEmpty) {
+      for (final span in sectionSpans) {
+        final w = valid.contains(span.wall) ? span.wall : 'front';
+        for (int i = 0; i < span.segments; i++) {
+          walls.add(w);
+        }
+      }
+    }
+    if (walls.isEmpty) {
+      for (final z in wallZones) {
+        String w = (z['wall'] ?? 'front').toString().trim().toLowerCase();
+        if (!valid.contains(w)) w = 'front';
+        final cnt = (z['segments'] is num) ? (z['segments'] as num).toInt() : 0;
+        for (int i = 0; i < cnt; i++) {
+          walls.add(w);
+        }
       }
     }
     if (walls.isEmpty && defaultSecondWall != 'front' && segmentCount >= 4) {
@@ -81,6 +867,8 @@ class ControllerConfig {
     String? protocolMode,
     int? brightnessOverride,
     List<Map<String, dynamic>>? wallZones,
+    List<SectionSpan>? sectionSpans,
+    List<CustomLightNode>? customNodes,
   }) {
     return ControllerConfig(
       id: id ?? this.id,
@@ -94,6 +882,8 @@ class ControllerConfig {
       protocolMode: protocolMode ?? this.protocolMode,
       brightnessOverride: brightnessOverride ?? this.brightnessOverride,
       wallZones: wallZones ?? this.wallZones,
+      sectionSpans: sectionSpans ?? this.sectionSpans,
+      customNodes: customNodes ?? this.customNodes,
     );
   }
 
@@ -103,6 +893,24 @@ class ControllerConfig {
       for (final z in json['wall_zones']) {
         if (z is Map) {
           parsedZones.add(Map<String, dynamic>.from(z));
+        }
+      }
+    }
+    final parsedSpans = <SectionSpan>[];
+    if (json['section_spans'] is List) {
+      for (final s in json['section_spans']) {
+        if (s is Map) {
+          parsedSpans.add(SectionSpan.fromJson(Map<String, dynamic>.from(s)));
+        }
+      }
+    }
+    final parsedNodes = <CustomLightNode>[];
+    if (json['custom_nodes'] is List) {
+      for (final n in json['custom_nodes']) {
+        if (n is Map) {
+          parsedNodes.add(
+            CustomLightNode.fromJson(Map<String, dynamic>.from(n)),
+          );
         }
       }
     }
@@ -122,6 +930,8 @@ class ControllerConfig {
           ? (json['brightness_override'] as num).toInt()
           : null,
       wallZones: parsedZones,
+      sectionSpans: parsedSpans,
+      customNodes: parsedNodes,
     );
   }
 
@@ -137,6 +947,8 @@ class ControllerConfig {
         'protocol_mode': protocolMode,
         'brightness_override': brightnessOverride,
         'wall_zones': wallZones,
+        'section_spans': sectionSpans.map((s) => s.toJson()).toList(),
+        'custom_nodes': customNodes.map((n) => n.toJson()).toList(),
       };
 }
 
@@ -151,6 +963,7 @@ class HouseConfig {
   final String bridgeToken;
   final String notes;
   final List<ControllerConfig> controllers;
+  final HouseArchitecture? _architecture;
 
   const HouseConfig({
     required this.id,
@@ -163,7 +976,140 @@ class HouseConfig {
     this.bridgeToken = '',
     this.notes = '',
     this.controllers = const [],
-  });
+    HouseArchitecture? architecture,
+  }) : _architecture = architecture;
+
+  /// Resolved 3D/2D architecture for this house.
+  /// Uses explicit `_architecture` when set; otherwise selects the matching
+  /// architectural blueprint (Triangle Gable for My House / `house-1`,
+  /// Craftsman Multi-Section for Neighbor 1 / `house-2`, and Two-Story Estate for Neighbor 2 / `house-3`).
+  HouseArchitecture get architecture {
+    if (_architecture != null && _architecture.sections.isNotEmpty) {
+      return _architecture;
+    }
+    final lowerName = name.toLowerCase();
+    if (lowerName.contains('my house')) {
+      return HouseArchitecture.defaultForHouse('house-1', 1);
+    }
+    if (lowerName.contains('neighbor 1')) {
+      return HouseArchitecture.defaultForHouse('house-2', 2);
+    }
+    if (lowerName.contains('neighbor 2')) {
+      return HouseArchitecture.defaultForHouse('house-3', 3);
+    }
+    return HouseArchitecture.defaultForHouse(id, order);
+  }
+
+  /// Resolves the ordered `SectionSpan` list for a controller on this house,
+  /// mapping its segments onto `architecture.sections` even when `ctrl.sectionSpans`
+  /// hasn't been manually customized yet.
+  List<SectionSpan> effectiveControllerSpans(ControllerConfig ctrl) {
+    final arch = architecture;
+    final validSectionIds = {for (final s in arch.sections) s.id: s};
+    if (ctrl.sectionSpans.isNotEmpty) {
+      final valid = ctrl.sectionSpans
+          .where((sp) => sp.segments > 0 && validSectionIds.containsKey(sp.sectionId))
+          .toList();
+      if (valid.isNotEmpty) return valid;
+    }
+
+    final frontSecs = arch.sections.where((s) => s.wall == 'front').toList();
+    final allSecs = arch.sections.isNotEmpty
+        ? arch.sections
+        : HouseArchitecture.defaultForHouse(id, order).sections;
+    final n = ctrl.segmentCount;
+    final ctrlIdx = controllers.indexWhere((c) => c.id == ctrl.id);
+
+    // Single controller or My House -> map onto front architectural sections
+    if (isMyHouse || controllers.length <= 1) {
+      final targets = frontSecs.isNotEmpty ? frontSecs : [allSecs.first];
+      if (targets.length == 1) {
+        return [
+          SectionSpan(
+            sectionId: targets.first.id,
+            wall: targets.first.wall,
+            segments: n,
+            direction: ctrl.reversed ? 'reverse' : 'forward',
+          ),
+        ];
+      }
+      final spans = <SectionSpan>[];
+      int remaining = n;
+      for (int i = 0; i < targets.length; i++) {
+        final sec = targets[i];
+        final cnt = (i == targets.length - 1)
+            ? remaining
+            : (n / targets.length).round().clamp(1, remaining);
+        remaining -= cnt;
+        if (cnt > 0) {
+          spans.add(
+            SectionSpan(
+              sectionId: sec.id,
+              wall: sec.wall,
+              segments: cnt,
+              direction: ctrl.reversed ? 'reverse' : 'forward',
+            ),
+          );
+        }
+      }
+      return spans;
+    }
+
+    // Multi-controller house: Controller 0 covers primary front sections, Controller 1+ covers upper/right/side sections
+    if (ctrlIdx <= 0) {
+      final primaryFront = frontSecs.where((s) => s.story == 1).toList();
+      final targets = primaryFront.isNotEmpty
+          ? primaryFront
+          : (frontSecs.isNotEmpty ? frontSecs : [allSecs.first]);
+      final spans = <SectionSpan>[];
+      int remaining = n;
+      for (int i = 0; i < targets.length; i++) {
+        final sec = targets[i];
+        final cnt = (i == targets.length - 1)
+            ? remaining
+            : (n / targets.length).round().clamp(1, remaining);
+        remaining -= cnt;
+        if (cnt > 0) {
+          spans.add(
+            SectionSpan(
+              sectionId: sec.id,
+              wall: sec.wall,
+              segments: cnt,
+              direction: ctrl.reversed ? 'reverse' : 'forward',
+            ),
+          );
+        }
+      }
+      return spans;
+    } else {
+      final upperAndSides = arch.sections
+          .where((s) => s.story == 2 || s.wall != 'front')
+          .toList();
+      final targets = upperAndSides.isNotEmpty
+          ? upperAndSides
+          : (frontSecs.isNotEmpty ? frontSecs : [allSecs.last]);
+      final spans = <SectionSpan>[];
+      int remaining = n;
+      for (int i = 0; i < targets.length; i++) {
+        final sec = targets[i];
+        final cnt = (i == targets.length - 1)
+            ? remaining
+            : (n / targets.length).round().clamp(1, remaining);
+        remaining -= cnt;
+        if (cnt > 0) {
+          spans.add(
+            SectionSpan(
+              sectionId: sec.id,
+              wall: sec.wall,
+              segments: cnt,
+              direction: ctrl.reversed ? 'reverse' : 'forward',
+            ),
+          );
+        }
+      }
+      return spans;
+    }
+  }
 
   int get totalSegments {
     int sum = 0;
@@ -199,15 +1145,15 @@ class HouseConfig {
       controllers.any((c) => c.ip == '192.168.1.83' || c.ip == '192.168.1.83');
 
   /// Returns the ordered wall assignment ('front', 'left', 'right', 'back') for every segment on this house.
-  /// By default: My House (1 controller) has all segments on 'front', while neighbor houses with 2+ controllers
-  /// wrap around 'front', 'left', 'right', and 'back' (unless custom `wallZones` are configured).
   List<String> get allSegmentWalls {
     final activeCtrls = controllers.where((c) => c.enabled).toList();
     if (activeCtrls.isEmpty) {
       return List<String>.filled(9, 'front');
     }
-    final hasExplicitZones = activeCtrls.any((c) => c.wallZones.isNotEmpty);
-    if (hasExplicitZones) {
+    final hasExplicitSpansOrZones = activeCtrls.any(
+      (c) => c.sectionSpans.isNotEmpty || c.wallZones.isNotEmpty,
+    );
+    if (hasExplicitSpansOrZones) {
       final out = <String>[];
       for (int ci = 0; ci < activeCtrls.length; ci++) {
         final defWall = (!isMyHouse && activeCtrls.length > 1)
@@ -217,21 +1163,22 @@ class HouseConfig {
       }
       return out;
     }
-    if (isMyHouse || activeCtrls.length == 1) {
-      return List<String>.filled(totalSegments, 'front');
-    }
-    // Neighbor house with 2 controllers and no explicit split yet -> wrap Front + Left + Right + Back
+    // Derive from effectiveControllerSpans so architectural sections drive wall counts
     final out = <String>[];
-    for (int ci = 0; ci < activeCtrls.length; ci++) {
-      final n = activeCtrls[ci].segmentCount;
-      if (ci == 0) {
-        final f = (n * 0.55).round();
-        out.addAll(List<String>.filled(f, 'front'));
-        out.addAll(List<String>.filled(n - f, 'left'));
-      } else {
-        final r = (n * 0.45).round();
-        out.addAll(List<String>.filled(r, 'right'));
-        out.addAll(List<String>.filled(n - r, 'back'));
+    const valid = {'front', 'left', 'right', 'back'};
+    for (final ctrl in activeCtrls) {
+      final spans = effectiveControllerSpans(ctrl);
+      int countForCtrl = 0;
+      for (final sp in spans) {
+        final w = valid.contains(sp.wall) ? sp.wall : 'front';
+        for (int i = 0; i < sp.segments && countForCtrl < ctrl.segmentCount; i++) {
+          out.add(w);
+          countForCtrl++;
+        }
+      }
+      while (countForCtrl < ctrl.segmentCount) {
+        out.add('front');
+        countForCtrl++;
       }
     }
     return out;
@@ -256,6 +1203,7 @@ class HouseConfig {
     String? bridgeToken,
     String? notes,
     List<ControllerConfig>? controllers,
+    HouseArchitecture? architecture,
   }) {
     return HouseConfig(
       id: id ?? this.id,
@@ -268,6 +1216,7 @@ class HouseConfig {
       bridgeToken: bridgeToken ?? this.bridgeToken,
       notes: notes ?? this.notes,
       controllers: controllers ?? this.controllers,
+      architecture: architecture ?? _architecture,
     );
   }
 
@@ -283,6 +1232,12 @@ class HouseConfig {
         }
       }
     }
+    HouseArchitecture? parsedArch;
+    if (json['architecture'] is Map) {
+      parsedArch = HouseArchitecture.fromJson(
+        Map<String, dynamic>.from(json['architecture'] as Map),
+      );
+    }
     return HouseConfig(
       id: (json['id'] ?? '').toString(),
       name: (json['name'] ?? 'House').toString(),
@@ -296,6 +1251,7 @@ class HouseConfig {
       bridgeToken: (json['bridge_token'] ?? '').toString(),
       notes: (json['notes'] ?? '').toString(),
       controllers: ctrls,
+      architecture: parsedArch,
     );
   }
 
@@ -310,6 +1266,7 @@ class HouseConfig {
         'bridge_token': bridgeToken,
         'notes': notes,
         'controllers': controllers.map((c) => c.toJson()).toList(),
+        'architecture': architecture.toJson(),
       };
 }
 

@@ -3,8 +3,8 @@ from __future__ import annotations
 import os
 from enum import Enum
 from pathlib import Path
-from typing import Any, Dict, List, Literal, Optional
-from pydantic import BaseModel, Field, field_validator
+from typing import Any, Dict, List, Literal, Optional, Tuple
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 
 def _load_env_if_needed() -> None:
@@ -73,6 +73,573 @@ class EffectType(str, Enum):
     GOVEE_RAINBOW2 = "govee_rainbow2"
 
 
+class ArchSection(BaseModel):
+    id: str = Field(..., description="Unique section ID within the house (e.g. sec-main-gable)")
+    label: str = Field(default="Roof Section", description="Human-readable section name")
+    shape: Literal["triangle_gable", "steep_gable", "flat_eave", "hip_roof", "shed_slope", "dormer_peak"] = Field(
+        default="triangle_gable",
+        description="Roofline geometry shape for this section",
+    )
+    wall: Literal["front", "left", "right", "back"] = Field(default="front")
+    story: int = Field(default=1, ge=1, le=3)
+    x_start: float = Field(default=0.0, ge=0.0, le=1.0)
+    x_end: float = Field(default=1.0, ge=0.0, le=1.0)
+    eave_height: float = Field(default=0.52, ge=0.15, le=0.98)
+    peak_height: float = Field(default=0.88, ge=0.15, le=1.0)
+    peak_offset: float = Field(default=0.50, ge=0.10, le=0.90)
+    depth_offset: float = Field(default=0.0, ge=-0.45, le=0.45)
+    has_garage: bool = Field(default=False)
+    has_door: bool = Field(default=False)
+    window_style: Literal["modern_grid", "arched", "picture", "double_hung", "none"] = Field(default="modern_grid")
+
+
+class HouseArchitecture(BaseModel):
+    preset_style: str = Field(default="a_frame_gable")
+    default_view_mode: Literal["3d", "2d"] = Field(default="3d")
+    camera_yaw: float = Field(default=-26.0, ge=-180.0, le=180.0)
+    camera_pitch: float = Field(default=20.0, ge=5.0, le=75.0)
+    camera_zoom: float = Field(default=1.0, ge=0.5, le=2.5)
+    siding_color: str = Field(default="#1a2438")
+    trim_color: str = Field(default="#334768")
+    roof_color: str = Field(default="#111827")
+    sections: List[ArchSection] = Field(default_factory=list)
+
+
+ARCHITECTURE_PRESETS: List[Dict[str, Any]] = [
+    {
+        "id": "a_frame_gable",
+        "preset_style": "a_frame_gable",
+        "name": "My House: Front A-Frame Triangle Peak",
+        "label": "My House: Front A-Frame Triangle Peak",
+        "description": "Prominent triangular gable roofline across the front elevation with picture window and entry door.",
+        "default_view_mode": "3d",
+        "camera_yaw": -24.0,
+        "camera_pitch": 18.0,
+        "camera_zoom": 1.0,
+        "siding_color": "#1a2438",
+        "trim_color": "#334768",
+        "roof_color": "#111827",
+        "sections": [
+            {
+                "id": "sec-main-gable",
+                "label": "Front A-Frame Triangle Peak",
+                "shape": "triangle_gable",
+                "wall": "front",
+                "story": 1,
+                "x_start": 0.06,
+                "x_end": 0.94,
+                "eave_height": 0.50,
+                "peak_height": 0.90,
+                "peak_offset": 0.50,
+                "depth_offset": 0.08,
+                "has_garage": False,
+                "has_door": True,
+                "window_style": "picture",
+            }
+        ],
+    },
+    {
+        "id": "craftsman_multi_section",
+        "preset_style": "craftsman_multi_section",
+        "name": "Neighbor 1: Craftsman Garage Square + Double Gable + Sides",
+        "label": "Neighbor 1: Craftsman Garage Square + Double Gable + Sides",
+        "description": "Craftsman multi-section home with flat-eave garage box, front entry triangle gable, upper dormer peak, and side/rear eaves.",
+        "default_view_mode": "3d",
+        "camera_yaw": -28.0,
+        "camera_pitch": 21.0,
+        "camera_zoom": 1.0,
+        "siding_color": "#1e293b",
+        "trim_color": "#3b5278",
+        "roof_color": "#0f172a",
+        "sections": [
+            {
+                "id": "sec-garage-square",
+                "label": "Garage Square Flat Eave",
+                "shape": "flat_eave",
+                "wall": "front",
+                "story": 1,
+                "x_start": 0.04,
+                "x_end": 0.44,
+                "eave_height": 0.48,
+                "peak_height": 0.48,
+                "peak_offset": 0.50,
+                "depth_offset": 0.16,
+                "has_garage": True,
+                "has_door": False,
+                "window_style": "modern_grid",
+            },
+            {
+                "id": "sec-entry-gable",
+                "label": "Front Entry Gable",
+                "shape": "triangle_gable",
+                "wall": "front",
+                "story": 1,
+                "x_start": 0.44,
+                "x_end": 0.96,
+                "eave_height": 0.52,
+                "peak_height": 0.84,
+                "peak_offset": 0.52,
+                "depth_offset": 0.06,
+                "has_garage": False,
+                "has_door": True,
+                "window_style": "double_hung",
+            },
+            {
+                "id": "sec-upper-dormer",
+                "label": "Upper Story Dormer Peak",
+                "shape": "dormer_peak",
+                "wall": "front",
+                "story": 2,
+                "x_start": 0.14,
+                "x_end": 0.68,
+                "eave_height": 0.68,
+                "peak_height": 0.95,
+                "peak_offset": 0.50,
+                "depth_offset": -0.06,
+                "has_garage": False,
+                "has_door": False,
+                "window_style": "arched",
+            },
+            {
+                "id": "sec-left-eave",
+                "label": "Left Side Eave",
+                "shape": "flat_eave",
+                "wall": "left",
+                "story": 1,
+                "x_start": 0.0,
+                "x_end": 1.0,
+                "eave_height": 0.50,
+                "peak_height": 0.50,
+                "peak_offset": 0.50,
+                "depth_offset": 0.0,
+                "has_garage": False,
+                "has_door": False,
+                "window_style": "modern_grid",
+            },
+            {
+                "id": "sec-right-eave",
+                "label": "Right Side Eave",
+                "shape": "flat_eave",
+                "wall": "right",
+                "story": 1,
+                "x_start": 0.0,
+                "x_end": 1.0,
+                "eave_height": 0.52,
+                "peak_height": 0.52,
+                "peak_offset": 0.50,
+                "depth_offset": 0.0,
+                "has_garage": False,
+                "has_door": False,
+                "window_style": "modern_grid",
+            },
+            {
+                "id": "sec-back-eave",
+                "label": "Rear Hip Roof Eave",
+                "shape": "hip_roof",
+                "wall": "back",
+                "story": 1,
+                "x_start": 0.0,
+                "x_end": 1.0,
+                "eave_height": 0.50,
+                "peak_height": 0.72,
+                "peak_offset": 0.50,
+                "depth_offset": 0.0,
+                "has_garage": False,
+                "has_door": False,
+                "window_style": "modern_grid",
+            },
+        ],
+    },
+    {
+        "id": "two_story_estate",
+        "preset_style": "two_story_estate",
+        "name": "Neighbor 2: 2-Story Compound Peaks + Flat Fascia + All Sides",
+        "label": "Neighbor 2: 2-Story Compound Peaks + Flat Fascia + All Sides",
+        "description": "Two-story estate with steep left tower gable, center flat fascia, right garage gable, and full perimeter wings.",
+        "default_view_mode": "3d",
+        "camera_yaw": -30.0,
+        "camera_pitch": 22.0,
+        "camera_zoom": 1.0,
+        "siding_color": "#172033",
+        "trim_color": "#385076",
+        "roof_color": "#0d1322",
+        "sections": [
+            {
+                "id": "sec-left-tower-gable",
+                "label": "Left 2-Story Tower Steep Gable",
+                "shape": "steep_gable",
+                "wall": "front",
+                "story": 2,
+                "x_start": 0.03,
+                "x_end": 0.38,
+                "eave_height": 0.60,
+                "peak_height": 0.96,
+                "peak_offset": 0.50,
+                "depth_offset": 0.14,
+                "has_garage": False,
+                "has_door": False,
+                "window_style": "arched",
+            },
+            {
+                "id": "sec-center-flat-fascia",
+                "label": "Center 2-Story Flat Fascia",
+                "shape": "flat_eave",
+                "wall": "front",
+                "story": 2,
+                "x_start": 0.38,
+                "x_end": 0.68,
+                "eave_height": 0.66,
+                "peak_height": 0.66,
+                "peak_offset": 0.50,
+                "depth_offset": 0.0,
+                "has_garage": False,
+                "has_door": True,
+                "window_style": "modern_grid",
+            },
+            {
+                "id": "sec-right-garage-gable",
+                "label": "Right Garage Gable",
+                "shape": "triangle_gable",
+                "wall": "front",
+                "story": 1,
+                "x_start": 0.68,
+                "x_end": 0.97,
+                "eave_height": 0.48,
+                "peak_height": 0.80,
+                "peak_offset": 0.50,
+                "depth_offset": 0.18,
+                "has_garage": True,
+                "has_door": False,
+                "window_style": "modern_grid",
+            },
+            {
+                "id": "sec-left-wing",
+                "label": "Left Side Wing Eave",
+                "shape": "flat_eave",
+                "wall": "left",
+                "story": 1,
+                "x_start": 0.0,
+                "x_end": 1.0,
+                "eave_height": 0.56,
+                "peak_height": 0.56,
+                "peak_offset": 0.50,
+                "depth_offset": 0.0,
+                "has_garage": False,
+                "has_door": False,
+                "window_style": "modern_grid",
+            },
+            {
+                "id": "sec-right-wing",
+                "label": "Right Side Wing Gable",
+                "shape": "triangle_gable",
+                "wall": "right",
+                "story": 1,
+                "x_start": 0.0,
+                "x_end": 1.0,
+                "eave_height": 0.48,
+                "peak_height": 0.76,
+                "peak_offset": 0.50,
+                "depth_offset": 0.0,
+                "has_garage": False,
+                "has_door": False,
+                "window_style": "modern_grid",
+            },
+            {
+                "id": "sec-back-wing",
+                "label": "Back Wing Flat Eave",
+                "shape": "flat_eave",
+                "wall": "back",
+                "story": 1,
+                "x_start": 0.0,
+                "x_end": 1.0,
+                "eave_height": 0.54,
+                "peak_height": 0.54,
+                "peak_offset": 0.50,
+                "depth_offset": 0.0,
+                "has_garage": False,
+                "has_door": False,
+                "window_style": "modern_grid",
+            },
+        ],
+    },
+    {
+        "id": "modern_stepped",
+        "preset_style": "modern_stepped",
+        "name": "Modern Stepped Boxes + Mono-Slope",
+        "label": "Modern Stepped Boxes + Mono-Slope",
+        "description": "Contemporary architectural layout with stepped flat-roof garage box and 2-story shed-slope clerestory wing.",
+        "default_view_mode": "3d",
+        "camera_yaw": -22.0,
+        "camera_pitch": 19.0,
+        "camera_zoom": 1.0,
+        "siding_color": "#182232",
+        "trim_color": "#38bdf8",
+        "roof_color": "#0b1120",
+        "sections": [
+            {
+                "id": "sec-modern-box",
+                "label": "Stepped Garage Flat Box",
+                "shape": "flat_eave",
+                "wall": "front",
+                "story": 1,
+                "x_start": 0.04,
+                "x_end": 0.46,
+                "eave_height": 0.48,
+                "peak_height": 0.48,
+                "peak_offset": 0.50,
+                "depth_offset": 0.15,
+                "has_garage": True,
+                "has_door": False,
+                "window_style": "modern_grid",
+            },
+            {
+                "id": "sec-modern-slope",
+                "label": "Upper Mono-Slope Shed Roof",
+                "shape": "shed_slope",
+                "wall": "front",
+                "story": 2,
+                "x_start": 0.44,
+                "x_end": 0.96,
+                "eave_height": 0.58,
+                "peak_height": 0.92,
+                "peak_offset": 0.85,
+                "depth_offset": 0.04,
+                "has_garage": False,
+                "has_door": True,
+                "window_style": "picture",
+            },
+            {
+                "id": "sec-modern-left",
+                "label": "Left Flat Fascia",
+                "shape": "flat_eave",
+                "wall": "left",
+                "story": 1,
+                "x_start": 0.0,
+                "x_end": 1.0,
+                "eave_height": 0.48,
+                "peak_height": 0.48,
+                "peak_offset": 0.50,
+                "depth_offset": 0.0,
+                "has_garage": False,
+                "has_door": False,
+                "window_style": "modern_grid",
+            },
+            {
+                "id": "sec-modern-right",
+                "label": "Right Shed Fascia",
+                "shape": "shed_slope",
+                "wall": "right",
+                "story": 2,
+                "x_start": 0.0,
+                "x_end": 1.0,
+                "eave_height": 0.58,
+                "peak_height": 0.88,
+                "peak_offset": 0.80,
+                "depth_offset": 0.0,
+                "has_garage": False,
+                "has_door": False,
+                "window_style": "picture",
+            },
+        ],
+    },
+    {
+        "id": "colonial_dormer",
+        "preset_style": "colonial_dormer",
+        "name": "Colonial Twin Dormers + Porch",
+        "label": "Colonial Twin Dormers + Porch",
+        "description": "Classic symmetric colonial home with full-width porch hip roof and twin upper-story peaked dormers.",
+        "default_view_mode": "3d",
+        "camera_yaw": -25.0,
+        "camera_pitch": 20.0,
+        "camera_zoom": 1.0,
+        "siding_color": "#1c263b",
+        "trim_color": "#475f88",
+        "roof_color": "#111827",
+        "sections": [
+            {
+                "id": "sec-colonial-porch",
+                "label": "Full-Width Porch Hip Eave",
+                "shape": "hip_roof",
+                "wall": "front",
+                "story": 1,
+                "x_start": 0.05,
+                "x_end": 0.95,
+                "eave_height": 0.48,
+                "peak_height": 0.64,
+                "peak_offset": 0.50,
+                "depth_offset": 0.12,
+                "has_garage": False,
+                "has_door": True,
+                "window_style": "double_hung",
+            },
+            {
+                "id": "sec-colonial-dormer-left",
+                "label": "Left Upper Dormer Peak",
+                "shape": "dormer_peak",
+                "wall": "front",
+                "story": 2,
+                "x_start": 0.16,
+                "x_end": 0.44,
+                "eave_height": 0.68,
+                "peak_height": 0.92,
+                "peak_offset": 0.50,
+                "depth_offset": -0.04,
+                "has_garage": False,
+                "has_door": False,
+                "window_style": "arched",
+            },
+            {
+                "id": "sec-colonial-dormer-right",
+                "label": "Right Upper Dormer Peak",
+                "shape": "dormer_peak",
+                "wall": "front",
+                "story": 2,
+                "x_start": 0.56,
+                "x_end": 0.84,
+                "eave_height": 0.68,
+                "peak_height": 0.92,
+                "peak_offset": 0.50,
+                "depth_offset": -0.04,
+                "has_garage": False,
+                "has_door": False,
+                "window_style": "arched",
+            },
+            {
+                "id": "sec-colonial-left-gable",
+                "label": "Left Side Colonial Gable",
+                "shape": "triangle_gable",
+                "wall": "left",
+                "story": 2,
+                "x_start": 0.0,
+                "x_end": 1.0,
+                "eave_height": 0.56,
+                "peak_height": 0.88,
+                "peak_offset": 0.50,
+                "depth_offset": 0.0,
+                "has_garage": False,
+                "has_door": False,
+                "window_style": "double_hung",
+            },
+            {
+                "id": "sec-colonial-right-gable",
+                "label": "Right Side Colonial Gable",
+                "shape": "triangle_gable",
+                "wall": "right",
+                "story": 2,
+                "x_start": 0.0,
+                "x_end": 1.0,
+                "eave_height": 0.56,
+                "peak_height": 0.88,
+                "peak_offset": 0.50,
+                "depth_offset": 0.0,
+                "has_garage": False,
+                "has_door": False,
+                "window_style": "double_hung",
+            },
+        ],
+    },
+]
+
+
+def default_house_architecture(house_id: str, order: int = 1) -> HouseArchitecture:
+    """Return the default 2D/3D HouseArchitecture preset for a house ID or order."""
+    hid = (house_id or "").strip().lower()
+    preset_by_id = {p["preset_style"]: p for p in ARCHITECTURE_PRESETS}
+    if hid in preset_by_id:
+        chosen = preset_by_id[hid]
+    elif hid == "house-1":
+        chosen = preset_by_id["a_frame_gable"]
+    elif hid == "house-2":
+        chosen = preset_by_id["craftsman_multi_section"]
+    elif hid == "house-3":
+        chosen = preset_by_id["two_story_estate"]
+    elif order == 1:
+        chosen = preset_by_id["a_frame_gable"]
+    elif order == 2:
+        chosen = preset_by_id["craftsman_multi_section"]
+    else:
+        chosen = preset_by_id["two_story_estate"]
+
+    return HouseArchitecture(
+        preset_style=chosen["preset_style"],
+        default_view_mode=chosen.get("default_view_mode", "3d"),
+        camera_yaw=float(chosen.get("camera_yaw", -26.0)),
+        camera_pitch=float(chosen.get("camera_pitch", 20.0)),
+        camera_zoom=float(chosen.get("camera_zoom", 1.0)),
+        siding_color=str(chosen.get("siding_color", "#1a2438")),
+        trim_color=str(chosen.get("trim_color", "#334768")),
+        roof_color=str(chosen.get("roof_color", "#111827")),
+        sections=[ArchSection.model_validate(s) for s in chosen["sections"]],
+    )
+
+
+def evaluate_arch_section_point(
+    section: Optional[ArchSection],
+    t: float,
+    wall: str = "front",
+) -> Tuple[float, float, float]:
+    """
+    Evaluate 2D/3D normalized coordinates `(arch_x, arch_y, arch_z)` along an `ArchSection`
+    at parameter `t` in `[0.0, 1.0]`.
+    `arch_y` represents vertical elevation (`eave_height` at eaves up to `peak_height` at roof apex).
+    """
+    t_clamped = max(0.0, min(1.0, float(t)))
+    w = (section.wall if section is not None else wall or "front").strip().lower()
+    if section is None:
+        arch_x = 0.06 + 0.88 * t_clamped
+        arch_y = 0.52
+        arch_z = {"front": 0.0, "left": -0.20, "right": 0.20, "back": -0.40}.get(w, 0.0)
+        return round(arch_x, 4), round(arch_y, 4), round(arch_z, 4)
+
+    eave = float(section.eave_height)
+    peak = max(eave, float(section.peak_height))
+    p_off = max(0.10, min(0.90, float(section.peak_offset)))
+    shape = section.shape
+
+    if shape in ("triangle_gable", "steep_gable", "dormer_peak"):
+        if t_clamped <= p_off:
+            u = t_clamped / max(1e-6, p_off)
+            arch_y = eave + (peak - eave) * u
+        else:
+            u = (1.0 - t_clamped) / max(1e-6, 1.0 - p_off)
+            arch_y = eave + (peak - eave) * u
+    elif shape == "flat_eave":
+        arch_y = eave
+    elif shape == "hip_roof":
+        if t_clamped < 0.25:
+            arch_y = eave + (peak - eave) * (t_clamped / 0.25)
+        elif t_clamped <= 0.75:
+            arch_y = peak
+        else:
+            arch_y = eave + (peak - eave) * ((1.0 - t_clamped) / 0.25)
+    elif shape == "shed_slope":
+        if t_clamped <= p_off:
+            arch_y = eave + (peak - eave) * (t_clamped / max(1e-6, p_off))
+        else:
+            arch_y = peak - 0.15 * (peak - eave) * ((t_clamped - p_off) / max(1e-6, 1.0 - p_off))
+    else:
+        arch_y = eave
+
+    span_x = section.x_start + (section.x_end - section.x_start) * t_clamped
+    if w == "front":
+        arch_x = span_x
+        arch_z = float(section.depth_offset)
+    elif w == "back":
+        arch_x = span_x
+        arch_z = -0.40 + float(section.depth_offset)
+    elif w == "left":
+        arch_x = 0.04
+        arch_z = float(section.depth_offset) - 0.40 * t_clamped
+    elif w == "right":
+        arch_x = 0.96
+        arch_z = float(section.depth_offset) - 0.40 * t_clamped
+    else:
+        arch_x = span_x
+        arch_z = float(section.depth_offset)
+
+    return round(arch_x, 4), round(arch_y, 4), round(arch_z, 4)
+
+
 class ControllerConfig(BaseModel):
     id: str = Field(..., description="Unique controller identifier")
     name: str = Field(..., description="Human-friendly controller name")
@@ -88,12 +655,21 @@ class ControllerConfig(BaseModel):
         default_factory=list,
         description="Ordered 3D house wall spans on this controller, e.g. [{'wall': 'front', 'segments': 8}, {'wall': 'right', 'segments': 7}]",
     )
+    section_spans: List[Dict[str, Any]] = Field(
+        default_factory=list,
+        description="Ordered roofline section assignments for this controller, e.g. [{'section_id': 'sec-main-gable', 'wall': 'front', 'segments': 9, 'direction': 'ltr'}]",
+    )
+    custom_nodes: List[Dict[str, Any]] = Field(
+        default_factory=list,
+        description="Optional user-placed 2D/3D polyline vertices [{'x': 0.08, 'y': 0.52, 'z': 0.08, 'wall': 'front', 'label': 'Start'}]",
+    )
 
     def get_segment_walls(self) -> List[str]:
         """Return the wall label ('front', 'left', 'right', 'back') for each segment 0..segment_count-1."""
         walls: List[str] = []
         valid_walls = {"front", "left", "right", "back"}
-        for item in self.wall_zones or []:
+        source_zones = self.wall_zones if self.wall_zones else self.section_spans
+        for item in source_zones or []:
             if not isinstance(item, dict):
                 continue
             w = str(item.get("wall", "front")).strip().lower()
@@ -105,6 +681,147 @@ class ControllerConfig(BaseModel):
             pad_wall = walls[-1] if walls else "front"
             walls.extend([pad_wall] * (self.segment_count - len(walls)))
         return walls[: self.segment_count]
+
+    def get_segment_sections(self, house_sections: Optional[List[ArchSection]] = None) -> List[Dict[str, Any]]:
+        """
+        Return for each segment `0..segment_count-1` its assigned `section_id`, `wall`, and
+        local `t` (`0.0..1.0` along that section), falling back gracefully to `wall_zones`
+        and the house's sections if `section_spans` is empty.
+        """
+        valid_walls = {"front", "left", "right", "back"}
+        sections_list: List[ArchSection] = []
+        for s in house_sections or []:
+            if isinstance(s, ArchSection):
+                sections_list.append(s)
+            elif isinstance(s, dict):
+                try:
+                    sections_list.append(ArchSection.model_validate(s))
+                except Exception:
+                    pass
+        sec_by_id: Dict[str, ArchSection] = {s.id: s for s in sections_list}
+
+        cleaned_spans: List[Dict[str, Any]] = []
+        for item in self.section_spans or []:
+            if not isinstance(item, dict):
+                continue
+            cnt = max(0, int(item.get("segments", 0) or 0))
+            if cnt <= 0:
+                continue
+            sec_id = str(item.get("section_id") or "").strip()
+            sec_obj = sec_by_id.get(sec_id)
+            raw_wall = str(item.get("wall") or (sec_obj.wall if sec_obj else "front")).strip().lower()
+            w = raw_wall if raw_wall in valid_walls else (sec_obj.wall if sec_obj else "front")
+            if not sec_id:
+                wall_matches = [s for s in sections_list if s.wall == w]
+                if wall_matches:
+                    sec_id = wall_matches[0].id
+                elif sections_list:
+                    sec_id = sections_list[0].id
+                else:
+                    sec_id = f"sec-{w}"
+            direction = str(item.get("direction") or "ltr").strip().lower()
+            cleaned_spans.append(
+                {
+                    "section_id": sec_id,
+                    "wall": w,
+                    "segments": cnt,
+                    "direction": direction,
+                }
+            )
+
+        if cleaned_spans:
+            total_span_segs = sum(sp["segments"] for sp in cleaned_spans)
+            if total_span_segs < self.segment_count:
+                cleaned_spans[-1]["segments"] += self.segment_count - total_span_segs
+
+            result: List[Dict[str, Any]] = []
+            for sp in cleaned_spans:
+                cnt = sp["segments"]
+                sec_id = sp["section_id"]
+                w = sp["wall"]
+                direction = sp["direction"]
+                for k in range(cnt):
+                    if len(result) >= self.segment_count:
+                        break
+                    t = 0.5 if cnt == 1 else (k / (cnt - 1))
+                    if direction in ("rtl", "reverse", "right_to_left"):
+                        t = 1.0 - t
+                    result.append(
+                        {
+                            "segment_index": len(result),
+                            "section_id": sec_id,
+                            "wall": w,
+                            "t": round(t, 5),
+                            "direction": direction,
+                        }
+                    )
+                if len(result) >= self.segment_count:
+                    break
+            return result[: self.segment_count]
+
+        # Fallback to wall_zones + house_sections
+        seg_walls = self.get_segment_walls()
+        runs: List[Tuple[str, int]] = []
+        for w in seg_walls:
+            if runs and runs[-1][0] == w:
+                runs[-1] = (w, runs[-1][1] + 1)
+            else:
+                runs.append((w, 1))
+
+        fallback_result: List[Dict[str, Any]] = []
+        for w, run_len in runs:
+            matching_secs = [s for s in sections_list if s.wall == w]
+            if not matching_secs and sections_list:
+                matching_secs = [sections_list[0]]
+            if not matching_secs:
+                for k in range(run_len):
+                    t = 0.5 if run_len == 1 else (k / (run_len - 1))
+                    fallback_result.append(
+                        {
+                            "segment_index": len(fallback_result),
+                            "section_id": f"sec-{w}",
+                            "wall": w,
+                            "t": round(t, 5),
+                            "direction": "ltr",
+                        }
+                    )
+                continue
+
+            if len(matching_secs) == 1:
+                sec = matching_secs[0]
+                for k in range(run_len):
+                    t = 0.5 if run_len == 1 else (k / (run_len - 1))
+                    fallback_result.append(
+                        {
+                            "segment_index": len(fallback_result),
+                            "section_id": sec.id,
+                            "wall": w,
+                            "t": round(t, 5),
+                            "direction": "ltr",
+                        }
+                    )
+            else:
+                # Partition run_len segments across matching_secs
+                m = len(matching_secs)
+                for k in range(run_len):
+                    sec_idx = min(m - 1, int((k * m) / max(1, run_len)))
+                    # Range of k that maps to sec_idx
+                    k_In_sec = [ idx for idx in range(run_len) if min(m - 1, int((idx * m) / max(1, run_len))) == sec_idx ]
+                    local_idx = k_In_sec.index(k)
+                    local_cnt = len(k_In_sec)
+                    local_t = 0.5 if local_cnt == 1 else (local_idx / (local_cnt - 1))
+                    sec = matching_secs[sec_idx]
+                    fallback_result.append(
+                        {
+                            "segment_index": len(fallback_result),
+                            "section_id": sec.id,
+                            "wall": w,
+                            "t": round(local_t, 5),
+                            "direction": "ltr",
+                        }
+                    )
+
+        return fallback_result[: self.segment_count]
 
     @field_validator("ip")
     @classmethod
@@ -141,7 +858,28 @@ class HouseConfig(BaseModel):
         description="Optional shared secret token for Neighbor Bridge WebSocket relay",
     )
     notes: str = Field(default="", description="Optional notes about the house setup")
+    architecture: Optional[HouseArchitecture] = Field(
+        default=None,
+        description="2D/3D architectural roofline & wall sections for this house",
+    )
     controllers: List[ControllerConfig] = Field(default_factory=list, description="Controllers installed on this house")
+
+    @model_validator(mode="after")
+    def _ensure_default_architecture(self) -> "HouseConfig":
+        if self.architecture is None or not self.architecture.sections:
+            default_arch = default_house_architecture(self.id, self.order)
+            if self.architecture is not None:
+                preset_match = next(
+                    (p for p in ARCHITECTURE_PRESETS if p["preset_style"] == self.architecture.preset_style),
+                    None,
+                )
+                if preset_match:
+                    self.architecture.sections = [ArchSection.model_validate(s) for s in preset_match["sections"]]
+                else:
+                    self.architecture.sections = default_arch.sections
+            else:
+                self.architecture = default_arch
+        return self
 
     @property
     def total_segments(self) -> int:
@@ -310,6 +1048,10 @@ class SegmentRenderPoint(BaseModel):
     controller_index: int
     segment_index: int
     wall: str = "front"
+    section_id: str = ""
+    arch_x: float = 0.5
+    arch_y: float = 0.5
+    arch_z: float = 0.0
     normalized_pos: float
     normalized_width: float
     r: int

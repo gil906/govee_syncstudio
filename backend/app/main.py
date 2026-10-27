@@ -23,15 +23,19 @@ from .auth import AuthManager, access_denied_message, is_external_request
 from .config_store import ConfigStore
 from .govee_protocol import GoveeProtocolDriver
 from .models import (
+    ARCHITECTURE_PRESETS,
     OWNER_EMAIL,
     AnimationConfig,
+    ArchSection,
     ControllerConfig,
     DiscoveredDevice,
+    HouseArchitecture,
     HouseConfig,
     PlaylistConfig,
     ProtocolMode,
     ScheduleConfig,
     SystemConfig,
+    default_house_architecture,
     normalize_authorized_emails,
 )
 
@@ -241,6 +245,180 @@ async def reset_config() -> SystemConfig:
         engine.pause_clock(blackout=saved.animation.blackout_on_stop)
     await engine.broadcast_snapshot(saved)
     return saved
+
+
+@app.get("/api/architecture/presets")
+async def get_architecture_presets() -> Dict[str, Any]:
+    """Return all built-in 2D/3D house architecture roofline templates."""
+    return {"presets": ARCHITECTURE_PRESETS}
+
+
+def _clean_wall_zones(raw_zones: Any) -> List[Dict[str, Any]]:
+    cleaned: List[Dict[str, Any]] = []
+    valid_walls = {"front", "left", "right", "back"}
+    for item in raw_zones if isinstance(raw_zones, list) else []:
+        if not isinstance(item, dict):
+            continue
+        w = str(item.get("wall", "front")).strip().lower()
+        if w not in valid_walls:
+            w = "front"
+        cnt = max(0, int(item.get("segments", 0) or 0))
+        if cnt > 0:
+            cleaned.append({"wall": w, "segments": cnt})
+    return cleaned
+
+
+def _clean_section_spans(
+    raw_spans: Any,
+    house_sections: Optional[List[ArchSection]] = None,
+) -> List[Dict[str, Any]]:
+    cleaned: List[Dict[str, Any]] = []
+    valid_walls = {"front", "left", "right", "back"}
+    sec_by_id = {s.id: s for s in (house_sections or [])}
+    for item in raw_spans if isinstance(raw_spans, list) else []:
+        if not isinstance(item, dict):
+            continue
+        cnt = max(0, int(item.get("segments", 0) or 0))
+        if cnt <= 0:
+            continue
+        sec_id = str(item.get("section_id") or "").strip()
+        sec_obj = sec_by_id.get(sec_id)
+        w = str(item.get("wall") or (sec_obj.wall if sec_obj else "front")).strip().lower()
+        if w not in valid_walls:
+            w = sec_obj.wall if sec_obj else "front"
+        if not sec_id and house_sections:
+            wall_secs = [s for s in house_sections if s.wall == w]
+            sec_id = wall_secs[0].id if wall_secs else house_sections[0].id
+        direction = str(item.get("direction") or "ltr").strip().lower()
+        if direction not in ("ltr", "rtl", "reverse", "right_to_left"):
+            direction = "ltr"
+        cleaned.append(
+            {
+                "section_id": sec_id,
+                "wall": w,
+                "segments": cnt,
+                "direction": direction,
+            }
+        )
+    return cleaned
+
+
+def _clean_custom_nodes(raw_nodes: Any) -> List[Dict[str, Any]]:
+    cleaned: List[Dict[str, Any]] = []
+    valid_walls = {"front", "left", "right", "back"}
+    for idx, item in enumerate(raw_nodes if isinstance(raw_nodes, list) else []):
+        if not isinstance(item, dict):
+            continue
+        w = str(item.get("wall", "front")).strip().lower()
+        if w not in valid_walls:
+            w = "front"
+        cleaned.append(
+            {
+                "x": round(max(0.0, min(1.0, float(item.get("x", 0.5)))), 4),
+                "y": round(max(0.05, min(1.0, float(item.get("y", 0.52)))), 4),
+                "z": round(max(-0.5, min(0.5, float(item.get("z", 0.0)))), 4),
+                "wall": w,
+                "label": str(item.get("label") or f"Node {idx + 1}").strip(),
+            }
+        )
+    return cleaned
+
+
+def _sync_wall_zones_from_section_spans(spans: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    zones: List[Dict[str, Any]] = []
+    for sp in spans:
+        w = str(sp.get("wall", "front")).strip().lower()
+        cnt = max(0, int(sp.get("segments", 0) or 0))
+        if cnt <= 0:
+            continue
+        if zones and zones[-1]["wall"] == w:
+            zones[-1]["segments"] += cnt
+        else:
+            zones.append({"wall": w, "segments": cnt})
+    return zones
+
+
+@app.patch("/api/houses/{house_id}/architecture")
+async def update_house_architecture(
+    house_id: str,
+    payload: Dict[str, Any] = Body(...),
+) -> Dict[str, Any]:
+    """
+    Update a house's 2D/3D architecture (preset_style, sections, camera angles, view mode, colors)
+    and optional per-controller section_spans / wall_zones / custom_nodes mappings.
+    """
+    cfg = store.get()
+    target = next((h for h in cfg.houses if h.id == house_id), None)
+    if target is None:
+        raise HTTPException(status_code=404, detail=f"House '{house_id}' not found")
+
+    current_arch = (
+        target.architecture.model_dump()
+        if target.architecture is not None
+        else default_house_architecture(target.id, target.order).model_dump()
+    )
+
+    arch_patch: Dict[str, Any] = {}
+    if isinstance(payload.get("architecture"), dict):
+        arch_patch.update(payload["architecture"])
+    for key in (
+        "preset_style",
+        "default_view_mode",
+        "camera_yaw",
+        "camera_pitch",
+        "camera_zoom",
+        "siding_color",
+        "trim_color",
+        "roof_color",
+        "sections",
+    ):
+        if key in payload and payload[key] is not None and key not in arch_patch:
+            arch_patch[key] = payload[key]
+
+    if "preset_style" in arch_patch and "sections" not in arch_patch:
+        preset_match = next(
+            (p for p in ARCHITECTURE_PRESETS if p["preset_style"] == arch_patch["preset_style"]),
+            None,
+        )
+        if preset_match:
+            arch_patch["sections"] = preset_match["sections"]
+
+    current_arch.update(arch_patch)
+    target.architecture = HouseArchitecture.model_validate(current_arch)
+
+    raw_mappings = payload.get("controller_mappings")
+    if not isinstance(raw_mappings, list):
+        raw_mappings = payload.get("controllers") if isinstance(payload.get("controllers"), list) else []
+
+    for m in raw_mappings:
+        if not isinstance(m, dict):
+            continue
+        cid = str(m.get("controller_id") or m.get("id") or "").strip()
+        if not cid:
+            continue
+        ctrl = next((c for c in target.controllers if c.id == cid), None)
+        if ctrl is None:
+            continue
+        if "section_spans" in m and m["section_spans"] is not None:
+            ctrl.section_spans = _clean_section_spans(m["section_spans"], target.architecture.sections)
+            if "wall_zones" not in m or m["wall_zones"] is None:
+                ctrl.wall_zones = _sync_wall_zones_from_section_spans(ctrl.section_spans)
+        if "wall_zones" in m and m["wall_zones"] is not None:
+            ctrl.wall_zones = _clean_wall_zones(m["wall_zones"])
+        if "custom_nodes" in m and m["custom_nodes"] is not None:
+            ctrl.custom_nodes = _clean_custom_nodes(m["custom_nodes"])
+        if "reversed" in m and isinstance(m["reversed"], bool):
+            ctrl.reversed = m["reversed"]
+
+    saved = store.save(cfg)
+    snapshot = await engine.broadcast_snapshot(saved)
+    updated_house = next((h for h in saved.houses if h.id == house_id), target)
+    return {
+        "ok": True,
+        "house": updated_house.model_dump(mode="json"),
+        "config": saved.model_dump(mode="json"),
+        "live_state": snapshot,
+    }
 
 
 @app.put("/api/houses", response_model=SystemConfig)
@@ -1028,20 +1206,29 @@ async def test_controller(
     return result
 
 
+class ControllerZonesUpdate(BaseModel):
+    wall_zones: Optional[List[Dict[str, Any]]] = None
+    section_spans: Optional[List[Dict[str, Any]]] = None
+    custom_nodes: Optional[List[Dict[str, Any]]] = None
+    reversed: Optional[bool] = None
+
+
 @app.patch("/api/controllers/{controller_id}/zones")
 async def update_controller_wall_zones(
     controller_id: str,
-    patch: Dict[str, Any] = Body(...),
+    patch: ControllerZonesUpdate = Body(...),
 ) -> Dict[str, Any]:
     """
-    Update a controller's 3D house wall segment distribution (`wall_zones`, e.g.
-    `[{"wall": "front", "segments": 8}, {"wall": "right", "segments": 7}]`).
+    Update a controller's 3D house wall segment distribution (`wall_zones`),
+    roofline section assignments (`section_spans`), and optional 2D/3D `custom_nodes`.
     """
     cfg = store.get()
+    target_house: Optional[HouseConfig] = None
     target_ctrl: Optional[ControllerConfig] = None
     for h in cfg.houses:
         for c in h.controllers:
             if c.id == controller_id:
+                target_house = h
                 target_ctrl = c
                 break
         if target_ctrl is not None:
@@ -1050,29 +1237,37 @@ async def update_controller_wall_zones(
     if target_ctrl is None:
         raise HTTPException(status_code=404, detail=f"Controller '{controller_id}' not found")
 
-    raw_zones = patch.get("wall_zones", [])
-    cleaned_zones: List[Dict[str, Any]] = []
-    valid_walls = {"front", "left", "right", "back"}
-    for item in raw_zones if isinstance(raw_zones, list) else []:
-        if not isinstance(item, dict):
-            continue
-        w = str(item.get("wall", "front")).strip().lower()
-        if w not in valid_walls:
-            w = "front"
-        cnt = max(0, int(item.get("segments", 0) or 0))
-        if cnt > 0:
-            cleaned_zones.append({"wall": w, "segments": cnt})
+    house_sections = (
+        target_house.architecture.sections
+        if (target_house and target_house.architecture and target_house.architecture.sections)
+        else []
+    )
 
-    target_ctrl.wall_zones = cleaned_zones
-    if "reversed" in patch and isinstance(patch["reversed"], bool):
-        target_ctrl.reversed = patch["reversed"]
+    if patch.section_spans is not None:
+        target_ctrl.section_spans = _clean_section_spans(patch.section_spans, house_sections)
+        if patch.wall_zones is None:
+            target_ctrl.wall_zones = _sync_wall_zones_from_section_spans(target_ctrl.section_spans)
+
+    if patch.wall_zones is not None:
+        target_ctrl.wall_zones = _clean_wall_zones(patch.wall_zones)
+
+    if patch.custom_nodes is not None:
+        target_ctrl.custom_nodes = _clean_custom_nodes(patch.custom_nodes)
+
+    if patch.reversed is not None:
+        target_ctrl.reversed = bool(patch.reversed)
 
     saved = store.save(cfg)
     await engine.broadcast_snapshot(saved)
     return {
+        "ok": True,
+        "controller": target_ctrl.model_dump(mode="json"),
         "controller_id": controller_id,
         "wall_zones": target_ctrl.wall_zones,
+        "section_spans": target_ctrl.section_spans,
+        "custom_nodes": target_ctrl.custom_nodes,
         "segment_walls": target_ctrl.get_segment_walls(),
+        "segment_sections": target_ctrl.get_segment_sections(house_sections),
         "config": saved.model_dump(mode="json"),
     }
 

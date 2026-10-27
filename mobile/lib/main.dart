@@ -91,7 +91,7 @@ class _GoveeStudioHomeScreenState extends State<GoveeStudioHomeScreen>
   int _selectedNavIndex = 0; // 0: Studio/All, 1: Scenes, 2: Houses, 3: Pro & Access
   String _selectedCategory = 'All';
   String _selectedSubcategory = 'all'; // 'all', 'official', 'ai_custom', 'diy'
-  String _visualizerViewMode = '2d'; // '2d', '3d_all', or '3d:<houseId>'
+  String _stageViewMode = '3d_all'; // Default 3D view ('3d_all', '3d:<houseId>', or '2d')
 
   final TextEditingController _tokenController = TextEditingController();
   final TextEditingController _newEmailController = TextEditingController();
@@ -800,69 +800,122 @@ class _GoveeStudioHomeScreenState extends State<GoveeStudioHomeScreen>
     final enabledHouses = houses.where((h) => h.enabled).toList();
     final targetHouses = enabledHouses.isNotEmpty ? enabledHouses : houses;
     final modes = <(String, String, IconData)>[
-      ('2d', '2D Front', Icons.view_array_outlined),
-      ('3d_all', '3D All (${targetHouses.length})', Icons.view_in_ar),
+      ('3d_all', '🧊 3D All (Default)', Icons.view_in_ar),
       for (int i = 0; i < targetHouses.length; i++)
         (
           '3d:${targetHouses[i].id}',
-          '3D: ${targetHouses[i].isMyHouse ? "My House" : targetHouses[i].name.split("(").first.trim()}',
+          '🧊 3D: ${targetHouses[i].isMyHouse ? "My House" : targetHouses[i].name.split("(").first.trim()}',
           Icons.threed_rotation,
         ),
+      ('2d', '📐 2D Blueprint', Icons.architecture),
     ];
+
+    final currentFocusHouseId = _stageViewMode.startsWith('3d:')
+        ? _stageViewMode.substring(3)
+        : null;
 
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,
       child: Row(
-        children: modes.map((m) {
-          final isSel = _visualizerViewMode == m.$1;
-          return Padding(
-            padding: const EdgeInsets.only(right: 6),
+        children: [
+          ...modes.map((m) {
+            final isSel = _stageViewMode == m.$1;
+            return Padding(
+              padding: const EdgeInsets.only(right: 6),
+              child: InkWell(
+                borderRadius: BorderRadius.circular(99),
+                onTap: () => setState(() => _stageViewMode = m.$1),
+                child: Container(
+                  padding: EdgeInsets.symmetric(
+                    horizontal: compact ? 8 : 10,
+                    vertical: compact ? 3 : 4,
+                  ),
+                  decoration: BoxDecoration(
+                    color: isSel
+                        ? const Color(0xFF00F5D4).withValues(alpha: 0.20)
+                        : const Color(0xFF060B18),
+                    borderRadius: BorderRadius.circular(99),
+                    border: Border.all(
+                      color: isSel
+                          ? const Color(0xFF00F5D4)
+                          : const Color(0xFF1E293B),
+                    ),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        m.$3,
+                        size: compact ? 12 : 13.5,
+                        color: isSel
+                            ? const Color(0xFF00F5D4)
+                            : const Color(0xFF94A3B8),
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        m.$2,
+                        style: TextStyle(
+                          fontSize: compact ? 10 : 11,
+                          fontWeight: FontWeight.w800,
+                          color: isSel
+                              ? const Color(0xFF00F5D4)
+                              : const Color(0xFFCBD5E1),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            );
+          }),
+          Padding(
+            padding: const EdgeInsets.only(right: 4),
             child: InkWell(
               borderRadius: BorderRadius.circular(99),
-              onTap: () => setState(() => _visualizerViewMode = m.$1),
+              onTap: () => _openHouseLightDesigner(
+                context,
+                initialHouseId: currentFocusHouseId,
+              ),
               child: Container(
                 padding: EdgeInsets.symmetric(
-                  horizontal: compact ? 8 : 10,
-                  vertical: compact ? 3 : 4,
+                  horizontal: compact ? 9 : 11,
+                  vertical: compact ? 3.5 : 4.5,
                 ),
                 decoration: BoxDecoration(
-                  color: isSel
-                      ? const Color(0xFF00F5D4).withValues(alpha: 0.20)
-                      : const Color(0xFF060B18),
+                  gradient: const LinearGradient(
+                    colors: [
+                      Color(0xFF7B2CBF),
+                      Color(0xFFFF007F),
+                    ],
+                  ),
                   borderRadius: BorderRadius.circular(99),
                   border: Border.all(
-                    color: isSel
-                        ? const Color(0xFF00F5D4)
-                        : const Color(0xFF1E293B),
+                    color: const Color(0xFFFBBF24).withValues(alpha: 0.75),
                   ),
                 ),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Icon(
-                      m.$3,
+                      Icons.architecture_rounded,
                       size: compact ? 12 : 13.5,
-                      color: isSel
-                          ? const Color(0xFF00F5D4)
-                          : const Color(0xFF94A3B8),
+                      color: Colors.white,
                     ),
                     const SizedBox(width: 4),
                     Text(
-                      m.$2,
+                      '🏗️ Design House & Lights',
                       style: TextStyle(
                         fontSize: compact ? 10 : 11,
                         fontWeight: FontWeight.w800,
-                        color: isSel
-                            ? const Color(0xFF00F5D4)
-                            : const Color(0xFFCBD5E1),
+                        color: Colors.white,
                       ),
                     ),
                   ],
                 ),
               ),
             ),
-          );
-        }).toList(),
+          ),
+        ],
       ),
     );
   }
@@ -873,7 +926,7 @@ class _GoveeStudioHomeScreenState extends State<GoveeStudioHomeScreen>
     required double height,
     required bool compact,
   }) {
-    if (_visualizerViewMode == '2d') {
+    if (_stageViewMode == '2d') {
       return ThreeHouseScenePreview(
         clock: _masterClock,
         animation: anim,
@@ -883,8 +936,8 @@ class _GoveeStudioHomeScreenState extends State<GoveeStudioHomeScreen>
         compact: compact,
       );
     }
-    final focusId = _visualizerViewMode.startsWith('3d:')
-        ? _visualizerViewMode.substring(3)
+    final focusId = _stageViewMode.startsWith('3d:')
+        ? _stageViewMode.substring(3)
         : null;
     return Isometric3DScenePreview(
       clock: _masterClock,
@@ -909,7 +962,7 @@ class _GoveeStudioHomeScreenState extends State<GoveeStudioHomeScreen>
             _buildActiveVisualizerCanvas(
               anim,
               houses,
-              height: _visualizerViewMode == '2d' ? 82 : 112,
+              height: _stageViewMode == '2d' ? 82 : 112,
               compact: true,
             ),
             const SizedBox(height: 8),
@@ -2270,40 +2323,69 @@ class _GoveeStudioHomeScreenState extends State<GoveeStudioHomeScreen>
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
+            Wrap(
+              alignment: WrapAlignment.spaceBetween,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              spacing: 8,
+              runSpacing: 8,
               children: [
-                const Icon(Icons.vpn_key_rounded,
-                    color: Color(0xFF00F5D4), size: 19),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    'Houses, Govee API Keys & Physical Light Test ($enabledCount/${houses.length} Enabled)',
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w800,
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.vpn_key_rounded,
+                        color: Color(0xFF00F5D4), size: 19),
+                    const SizedBox(width: 8),
+                    Flexible(
+                      child: Text(
+                        'Houses, Govee API Keys & Physical Light Test ($enabledCount/${houses.length} Enabled)',
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
                     ),
-                  ),
+                  ],
                 ),
-                const SizedBox(width: 8),
-                ElevatedButton.icon(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF00F5D4),
-                    foregroundColor: const Color(0xFF040711),
-                    visualDensity: VisualDensity.compact,
-                  ),
-                  onPressed: () => _showAddHouseDialog(context),
-                  icon: const Icon(Icons.add_home_work_rounded, size: 16),
-                  label: const Text(
-                    '+ Add House',
-                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800),
-                  ),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 6,
+                  children: [
+                    ElevatedButton.icon(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF7B2CBF),
+                        foregroundColor: Colors.white,
+                        visualDensity: VisualDensity.compact,
+                      ),
+                      onPressed: () => _openHouseLightDesigner(context),
+                      icon: const Icon(Icons.architecture_rounded, size: 16),
+                      label: const Text(
+                        '🏗️ Design House & Lights',
+                        style: TextStyle(
+                            fontSize: 12, fontWeight: FontWeight.w800),
+                      ),
+                    ),
+                    ElevatedButton.icon(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF00F5D4),
+                        foregroundColor: const Color(0xFF040711),
+                        visualDensity: VisualDensity.compact,
+                      ),
+                      onPressed: () => _showAddHouseDialog(context),
+                      icon: const Icon(Icons.add_home_work_rounded, size: 16),
+                      label: const Text(
+                        '+ Add House',
+                        style: TextStyle(
+                            fontSize: 12, fontWeight: FontWeight.w800),
+                      ),
+                    ),
+                  ],
                 ),
               ],
             ),
             const SizedBox(height: 4),
             const Text(
-              'Enable or disable any house to run animations on 1, 2, 3, or 4+ houses, configure Govee Cloud OpenAPI keys, auto-discover Cloud controllers, or send a 1-tap physical test pulse.',
+              'Sculpt each house in 3D or 2D (triangle gables, flat garages, 2nd-story dormers), map where each controller\'s segments sit on the roofline, configure Govee Cloud OpenAPI keys, or send a 1-tap physical test pulse.',
               style: TextStyle(fontSize: 11.5, color: Color(0xFF94A3B8)),
             ),
             const SizedBox(height: 12),
@@ -2314,11 +2396,52 @@ class _GoveeStudioHomeScreenState extends State<GoveeStudioHomeScreen>
                   house: house,
                   api: widget.api,
                   canDelete: houses.length > 1,
+                  onOpenDesigner: () => _openHouseLightDesigner(
+                    context,
+                    initialHouseId: house.id,
+                  ),
                 ),
               ),
           ],
         ),
       ),
+    );
+  }
+
+  void _openHouseLightDesigner(BuildContext context, {String? initialHouseId}) {
+    final houses = widget.api.config.sortedHouses;
+    if (houses.isEmpty) return;
+    final defaultHouse = houses.firstWhere(
+      (h) => h.id == initialHouseId,
+      orElse: () => houses.firstWhere(
+        (h) => h.isMyHouse,
+        orElse: () => houses.first,
+      ),
+    );
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      backgroundColor: const Color(0xFF060B18),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (ctx) {
+        return FractionallySizedBox(
+          heightFactor: 0.94,
+          child: _HouseLightDesignerSheet(
+            api: widget.api,
+            clock: _masterClock,
+            initialHouseId: defaultHouse.id,
+            onApplyStageMode: (mode) {
+              setState(() {
+                _stageViewMode = mode;
+              });
+            },
+          ),
+        );
+      },
     );
   }
 
@@ -3383,11 +3506,13 @@ class _HouseEditorCard extends StatefulWidget {
   final HouseConfig house;
   final GoveeApiService api;
   final bool canDelete;
+  final VoidCallback? onOpenDesigner;
 
   const _HouseEditorCard({
     required this.house,
     required this.api,
     this.canDelete = false,
+    this.onOpenDesigner,
   });
 
   @override
@@ -3423,6 +3548,11 @@ class _HouseEditorCardState extends State<_HouseEditorCard> {
   Widget build(BuildContext context) {
     final house = widget.house;
     final isMe = house.isMyHouse;
+    final arch = house.architecture;
+    final presetMeta = kArchitecturePresetMeta.firstWhere(
+      (m) => m.id == arch.presetStyle,
+      orElse: () => kArchitecturePresetMeta.first,
+    );
 
     return Container(
       padding: const EdgeInsets.all(12),
@@ -3506,6 +3636,50 @@ class _HouseEditorCardState extends State<_HouseEditorCard> {
                 ],
               ),
             ],
+          ),
+          const SizedBox(height: 8),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+            decoration: BoxDecoration(
+              color: const Color(0xFF0B1325),
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(
+                color: const Color(0xFF7B2CBF).withValues(alpha: 0.55),
+              ),
+            ),
+            child: Wrap(
+              alignment: WrapAlignment.spaceBetween,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              spacing: 8,
+              runSpacing: 6,
+              children: [
+                Text(
+                  '${presetMeta.title} • ${arch.sections.length} Roof/Wall Sections (${arch.defaultViewMode.toUpperCase()} Default)',
+                  style: const TextStyle(
+                    fontSize: 11.5,
+                    fontWeight: FontWeight.w700,
+                    color: Color(0xFFE2E8F0),
+                  ),
+                ),
+                if (widget.onOpenDesigner != null)
+                  ElevatedButton.icon(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF7B2CBF),
+                      foregroundColor: Colors.white,
+                      visualDensity: VisualDensity.compact,
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 10, vertical: 4),
+                    ),
+                    onPressed: widget.onOpenDesigner,
+                    icon: const Icon(Icons.architecture_rounded, size: 15),
+                    label: const Text(
+                      '🏗️ Design 3D/2D House & Lights',
+                      style:
+                          TextStyle(fontSize: 11, fontWeight: FontWeight.w800),
+                    ),
+                  ),
+              ],
+            ),
           ),
           const SizedBox(height: 8),
           Container(
@@ -3795,4 +3969,1410 @@ class _HouseEditorCardState extends State<_HouseEditorCard> {
     );
   }
 }
+
+// =============================================================================
+// INTERACTIVE 3D & 2D HOUSE & LIGHT DESIGNER STUDIO
+// =============================================================================
+
+class _HouseLightDesignerSheet extends StatefulWidget {
+  final GoveeApiService api;
+  final Animation<double> clock;
+  final String initialHouseId;
+  final ValueChanged<String>? onApplyStageMode;
+
+  const _HouseLightDesignerSheet({
+    required this.api,
+    required this.clock,
+    required this.initialHouseId,
+    this.onApplyStageMode,
+  });
+
+  @override
+  State<_HouseLightDesignerSheet> createState() =>
+      _HouseLightDesignerSheetState();
+}
+
+class _HouseLightDesignerSheetState extends State<_HouseLightDesignerSheet> {
+  late String _selectedHouseId;
+  late HouseArchitecture _workingArch;
+  late List<ControllerConfig> _workingControllers;
+  String _designerMode = '3d'; // '3d' (Default) or '2d'
+  int _activeTab = 0; // 0: Roof & Wall Sections, 1: Controller Light Placement
+  String? _selectedSectionId;
+  String? _selectedControllerId;
+  int _spotlightSegIdx = 0;
+  final TextEditingController _sectionLabelCtrl = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+    _selectedHouseId = widget.initialHouseId;
+    _loadHouseIntoEditor(_selectedHouseId);
+  }
+
+  @override
+  void dispose() {
+    _sectionLabelCtrl.dispose();
+    super.dispose();
+  }
+
+  HouseConfig get _currentHouse {
+    final houses = widget.api.config.sortedHouses;
+    return houses.firstWhere(
+      (h) => h.id == _selectedHouseId,
+      orElse: () => houses.first,
+    );
+  }
+
+  void _loadHouseIntoEditor(String houseId) {
+    final houses = widget.api.config.sortedHouses;
+    final house = houses.firstWhere(
+      (h) => h.id == houseId,
+      orElse: () => houses.first,
+    );
+    _selectedHouseId = house.id;
+    _workingArch = house.architecture;
+    _workingControllers = house.controllers.map((c) {
+      final resolvedSpans = house.effectiveControllerSpans(c);
+      return c.copyWith(
+        sectionSpans: resolvedSpans,
+      );
+    }).toList();
+    _selectedSectionId =
+        _workingArch.sections.isNotEmpty ? _workingArch.sections.first.id : null;
+    if (_selectedSectionId != null) {
+      final sec = _workingArch.sections
+          .firstWhere((s) => s.id == _selectedSectionId);
+      _sectionLabelCtrl.text = sec.label;
+    }
+    _selectedControllerId = _workingControllers.isNotEmpty
+        ? _workingControllers.first.id
+        : null;
+    _spotlightSegIdx = 0;
+  }
+
+  ArchSection? get _selectedSection {
+    if (_workingArch.sections.isEmpty) return null;
+    return _workingArch.sections.firstWhere(
+      (s) => s.id == _selectedSectionId,
+      orElse: () => _workingArch.sections.first,
+    );
+  }
+
+  ControllerConfig? get _selectedController {
+    if (_workingControllers.isEmpty) return null;
+    return _workingControllers.firstWhere(
+      (c) => c.id == _selectedControllerId,
+      orElse: () => _workingControllers.first,
+    );
+  }
+
+  void _updateSelectedSection(ArchSection updated) {
+    setState(() {
+      _workingArch = _workingArch.copyWith(
+        sections: _workingArch.sections
+            .map((s) => s.id == updated.id ? updated : s)
+            .toList(),
+      );
+      if (_sectionLabelCtrl.text != updated.label) {
+        _sectionLabelCtrl.text = updated.label;
+      }
+      // Keep controller spans wall synced with section wall
+      _workingControllers = _workingControllers.map((c) {
+        return c.copyWith(
+          sectionSpans: c.sectionSpans
+              .map((sp) => sp.sectionId == updated.id
+                  ? sp.copyWith(wall: updated.wall)
+                  : sp)
+              .toList(),
+        );
+      }).toList();
+    });
+  }
+
+  void _applyArchitectureTemplate(String presetId) {
+    final tpl = kArchitecturePresets[presetId];
+    if (tpl == null) return;
+    setState(() {
+      _workingArch = tpl.copyWith(
+        defaultViewMode: _workingArch.defaultViewMode,
+      );
+      _selectedSectionId =
+          _workingArch.sections.isNotEmpty ? _workingArch.sections.first.id : null;
+      if (_selectedSectionId != null) {
+        _sectionLabelCtrl.text = _workingArch.sections.first.label;
+      }
+      // Re-balance controller spans onto the new template's sections
+      final tempHouse = _currentHouse.copyWith(
+        architecture: _workingArch,
+        controllers: _workingControllers
+            .map((c) => c.copyWith(sectionSpans: const []))
+            .toList(),
+      );
+      _workingControllers = tempHouse.controllers.map((c) {
+        return c.copyWith(
+          sectionSpans: tempHouse.effectiveControllerSpans(c),
+        );
+      }).toList();
+    });
+  }
+
+  void _addSection(String shape, String label, {int story = 1, String wall = 'front'}) {
+    final newId = 'sec-${DateTime.now().millisecondsSinceEpoch % 100000}';
+    final newSec = ArchSection(
+      id: newId,
+      label: label,
+      shape: shape,
+      wall: wall,
+      story: story,
+      xStart: story == 2 ? 0.20 : 0.12,
+      xEnd: story == 2 ? 0.80 : 0.88,
+      eaveHeight: story == 2 ? 0.66 : 0.50,
+      peakHeight: shape == 'flat_eave'
+          ? (story == 2 ? 0.66 : 0.50)
+          : (story == 2 ? 0.94 : 0.86),
+      peakOffset: 0.50,
+      depthOffset: story == 2 ? -0.05 : 0.08,
+      hasDoor: false,
+      hasGarage: false,
+      windowStyle: 'standard',
+    );
+    setState(() {
+      _workingArch = _workingArch.copyWith(
+        sections: [..._workingArch.sections, newSec],
+      );
+      _selectedSectionId = newId;
+      _sectionLabelCtrl.text = label;
+    });
+  }
+
+  void _deleteSelectedSection() {
+    if (_workingArch.sections.length <= 1) return;
+    final rem = _workingArch.sections
+        .where((s) => s.id != _selectedSectionId)
+        .toList();
+    setState(() {
+      _workingArch = _workingArch.copyWith(sections: rem);
+      _selectedSectionId = rem.first.id;
+      _sectionLabelCtrl.text = rem.first.label;
+    });
+  }
+
+  int _getControllerSegmentsForSection(ControllerConfig ctrl, String sectionId) {
+    int sum = 0;
+    for (final sp in ctrl.sectionSpans) {
+      if (sp.sectionId == sectionId) sum += sp.segments;
+    }
+    return sum;
+  }
+
+  String _getControllerDirectionForSection(
+      ControllerConfig ctrl, String sectionId) {
+    for (final sp in ctrl.sectionSpans) {
+      if (sp.sectionId == sectionId) return sp.direction;
+    }
+    return 'forward';
+  }
+
+  void _setControllerSegmentsForSection(
+    ControllerConfig ctrl,
+    ArchSection sec,
+    int newCount, {
+    String? direction,
+  }) {
+    final clamped = newCount.clamp(0, ctrl.segmentCount);
+    final existingDir =
+        direction ?? _getControllerDirectionForSection(ctrl, sec.id);
+    final nextSpans = <SectionSpan>[];
+    bool found = false;
+    for (final sp in ctrl.sectionSpans) {
+      if (sp.sectionId == sec.id) {
+        found = true;
+        if (clamped > 0) {
+          nextSpans.add(
+            sp.copyWith(
+              segments: clamped,
+              wall: sec.wall,
+              direction: existingDir,
+            ),
+          );
+        }
+      } else if (sp.segments > 0) {
+        nextSpans.add(sp);
+      }
+    }
+    if (!found && clamped > 0) {
+      nextSpans.add(
+        SectionSpan(
+          sectionId: sec.id,
+          wall: sec.wall,
+          segments: clamped,
+          direction: existingDir,
+        ),
+      );
+    }
+
+    // Build synced wall_zones from sectionSpans
+    final wallTotals = <String, int>{};
+    for (final sp in nextSpans) {
+      wallTotals[sp.wall] = (wallTotals[sp.wall] ?? 0) + sp.segments;
+    }
+    final nextZones = wallTotals.entries
+        .where((e) => e.value > 0)
+        .map((e) => <String, dynamic>{'wall': e.key, 'segments': e.value})
+        .toList();
+
+    setState(() {
+      _workingControllers = _workingControllers
+          .map((c) => c.id == ctrl.id
+              ? c.copyWith(sectionSpans: nextSpans, wallZones: nextZones)
+              : c)
+          .toList();
+    });
+  }
+
+  void _autoBalanceControllerAcrossFrontSections(ControllerConfig ctrl) {
+    final frontSecs = _workingArch.frontSections.isNotEmpty
+        ? _workingArch.frontSections
+        : _workingArch.sections;
+    if (frontSecs.isEmpty) return;
+    final spans = <SectionSpan>[];
+    int rem = ctrl.segmentCount;
+    for (int i = 0; i < frontSecs.length; i++) {
+      final sec = frontSecs[i];
+      final cnt = i == frontSecs.length - 1
+          ? rem
+          : (ctrl.segmentCount / frontSecs.length).round().clamp(1, rem);
+      rem -= cnt;
+      if (cnt > 0) {
+        spans.add(
+          SectionSpan(
+            sectionId: sec.id,
+            wall: sec.wall,
+            segments: cnt,
+            direction: 'forward',
+          ),
+        );
+      }
+    }
+    setState(() {
+      _workingControllers = _workingControllers
+          .map((c) => c.id == ctrl.id ? c.copyWith(sectionSpans: spans) : c)
+          .toList();
+    });
+  }
+
+  Future<void> _saveDesignToHouse() async {
+    await widget.api.updateHouseArchitecture(
+      _selectedHouseId,
+      _workingArch,
+      updatedControllers: _workingControllers,
+    );
+    if (widget.onApplyStageMode != null) {
+      widget.onApplyStageMode!(
+        _workingArch.defaultViewMode == '2d' ? '2d' : '3d_all',
+      );
+    }
+    if (mounted) {
+      Navigator.pop(context);
+    }
+  }
+
+  void _handle2DBlueprintDrag(Offset localPos, Size canvasSize) {
+    final sec = _selectedSection;
+    if (sec == null) return;
+    final padX = math.max(20.0, canvasSize.width * 0.08);
+    final houseW = math.max(60.0, canvasSize.width - padX * 2);
+    final groundY = canvasSize.height * 0.82;
+    final topY = canvasSize.height * 0.10;
+    final usableH = math.max(40.0, groundY - topY);
+
+    final normX = ((localPos.dx - padX) / houseW).clamp(0.02, 0.98);
+    final normH = ((groundY - localPos.dy) / usableH).clamp(0.22, 0.98);
+
+    final leftDist = (normX - sec.xStart).abs();
+    final rightDist = (normX - sec.xEnd).abs();
+    final apexX = sec.xStart + (sec.xEnd - sec.xStart) * sec.peakOffset;
+    final apexDist = (normX - apexX).abs();
+
+    if (sec.isPitchedGable &&
+        apexDist <= leftDist &&
+        apexDist <= rightDist) {
+      final spanW = math.max(0.10, sec.xEnd - sec.xStart);
+      final newPeakOffset = ((normX - sec.xStart) / spanW).clamp(0.18, 0.82);
+      final newPeakH = math.max(sec.eaveHeight + 0.04, normH).clamp(0.26, 0.98);
+      _updateSelectedSection(
+        sec.copyWith(
+          peakHeight: newPeakH,
+          peakOffset: newPeakOffset,
+        ),
+      );
+    } else if (leftDist < rightDist) {
+      final newStart = math.min(sec.xEnd - 0.12, normX).clamp(0.0, 0.88);
+      _updateSelectedSection(
+        sec.copyWith(
+          xStart: newStart,
+          eaveHeight: normH.clamp(0.22, 0.92),
+          peakHeight: sec.shape == 'flat_eave'
+              ? normH.clamp(0.22, 0.92)
+              : math.max(sec.peakHeight, normH + 0.06),
+        ),
+      );
+    } else {
+      final newEnd = math.max(sec.xStart + 0.12, normX).clamp(0.12, 1.0);
+      _updateSelectedSection(
+        sec.copyWith(
+          xEnd: newEnd,
+          eaveHeight: normH.clamp(0.22, 0.92),
+          peakHeight: sec.shape == 'flat_eave'
+              ? normH.clamp(0.22, 0.92)
+              : math.max(sec.peakHeight, normH + 0.06),
+        ),
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final houses = widget.api.config.sortedHouses;
+    final previewHouse = _currentHouse.copyWith(
+      architecture: _workingArch,
+      controllers: _workingControllers,
+    );
+
+    return Column(
+      children: [
+        // Studio Header Bar
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 12, 12, 8),
+          child: Row(
+            children: [
+              const GoveeSyncLogoBadge(size: 32),
+              const SizedBox(width: 10),
+              const Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '🏗️ 3D & 2D House & Light Designer',
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    Text(
+                      'Sculpt triangle peaks, square garages & dormers + map controller segments',
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: Color(0xFF94A3B8),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 6),
+              ElevatedButton.icon(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF00F5D4),
+                  foregroundColor: const Color(0xFF040711),
+                  visualDensity: VisualDensity.compact,
+                ),
+                onPressed: _saveDesignToHouse,
+                icon: const Icon(Icons.save_rounded, size: 16),
+                label: const Text(
+                  '💾 Save House & Light Map',
+                  style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w800),
+                ),
+              ),
+              IconButton(
+                onPressed: () => Navigator.pop(context),
+                icon: const Icon(Icons.close),
+              ),
+            ],
+          ),
+        ),
+
+        // House Selector + 3D/2D Mode Switcher Bar
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 14),
+          child: SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children: [
+                for (final h in houses)
+                  Padding(
+                    padding: const EdgeInsets.only(right: 6),
+                    child: ChoiceChip(
+                      selected: h.id == _selectedHouseId,
+                      selectedColor:
+                          const Color(0xFF00F5D4).withValues(alpha: 0.25),
+                      label: Text(
+                        '${h.isMyHouse ? "⭐ My House" : h.name.split("(").first.trim()} (${h.totalSegments} segs)',
+                        style: const TextStyle(
+                            fontSize: 11, fontWeight: FontWeight.w700),
+                      ),
+                      onSelected: (_) {
+                        setState(() {
+                          _loadHouseIntoEditor(h.id);
+                        });
+                      },
+                    ),
+                  ),
+                const SizedBox(width: 8),
+                SegmentedButton<String>(
+                  style: SegmentedButton.styleFrom(
+                    visualDensity: VisualDensity.compact,
+                  ),
+                  segments: const [
+                    ButtonSegment(
+                      value: '3d',
+                      label: Text('🧊 3D Orbit (Default)',
+                          style: TextStyle(fontSize: 10.5)),
+                    ),
+                    ButtonSegment(
+                      value: '2d',
+                      label: Text('📐 2D Blueprint Touch',
+                          style: TextStyle(fontSize: 10.5)),
+                    ),
+                  ],
+                  selected: {_designerMode},
+                  onSelectionChanged: (sel) {
+                    setState(() {
+                      _designerMode = sel.first;
+                      _workingArch = _workingArch.copyWith(
+                        defaultViewMode: sel.first,
+                      );
+                    });
+                  },
+                ),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(height: 6),
+
+        // Interactive Live 3D / 2D Preview Canvas
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 14),
+          child: Container(
+            decoration: BoxDecoration(
+              color: const Color(0xFF040711),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(
+                color: const Color(0xFF00F5D4).withValues(alpha: 0.45),
+              ),
+            ),
+            child: Column(
+              children: [
+                if (_designerMode == '3d')
+                  Isometric3DScenePreview(
+                    clock: widget.clock,
+                    animation: widget.api.config.animation,
+                    houses: [previewHouse],
+                    focusHouseId: previewHouse.id,
+                    height: 196,
+                    cameraYawOverride: _workingArch.cameraYaw,
+                    cameraPitchOverride: _workingArch.cameraPitch,
+                    cameraZoomOverride: _workingArch.cameraZoom,
+                    selectedSectionId: _selectedSectionId,
+                    highlightedControllerId:
+                        _activeTab == 1 ? _selectedControllerId : null,
+                    highlightedSegmentIndex:
+                        _activeTab == 1 ? _spotlightSegIdx : null,
+                    designMode: true,
+                    onSectionTapped: (secId) {
+                      setState(() {
+                        _selectedSectionId = secId;
+                        final sec = _selectedSection;
+                        if (sec != null) {
+                          _sectionLabelCtrl.text = sec.label;
+                        }
+                      });
+                    },
+                    onOrbitChanged: (newYaw, newPitch) {
+                      setState(() {
+                        _workingArch = _workingArch.copyWith(
+                          cameraYaw: newYaw,
+                          cameraPitch: newPitch,
+                        );
+                      });
+                    },
+                  )
+                else
+                  LayoutBuilder(
+                    builder: (ctx, box) {
+                      final canvasSize = Size(box.maxWidth, 196);
+                      return GestureDetector(
+                        behavior: HitTestBehavior.opaque,
+                        onPanUpdate: (details) =>
+                            _handle2DBlueprintDrag(details.localPosition, canvasSize),
+                        onTapDown: (details) =>
+                            _handle2DBlueprintDrag(details.localPosition, canvasSize),
+                        child: ThreeHouseScenePreview(
+                          clock: widget.clock,
+                          animation: widget.api.config.animation,
+                          houses: [previewHouse],
+                          focusHouseId: previewHouse.id,
+                          selectedSectionId: _selectedSectionId,
+                          highlightedControllerId:
+                              _activeTab == 1 ? _selectedControllerId : null,
+                          highlightedSegmentIndex:
+                              _activeTab == 1 ? _spotlightSegIdx : null,
+                          designMode: true,
+                          compact: false,
+                          height: 196,
+                        ),
+                      );
+                    },
+                  ),
+                // Camera Orbit Quick Angles (in 3D) or Touch Hint (in 2D)
+                Padding(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  child: _designerMode == '3d'
+                      ? SingleChildScrollView(
+                          scrollDirection: Axis.horizontal,
+                          child: Row(
+                            children: [
+                              const Text(
+                                '3D Camera:',
+                                style: TextStyle(
+                                    fontSize: 10.5, color: Color(0xFF94A3B8)),
+                              ),
+                              const SizedBox(width: 6),
+                              for (final cam in [
+                                ('Street 3D', -26.0, 20.0, 1.0),
+                                ('Front Straight', 0.0, 14.0, 1.05),
+                                ('Left Side', -58.0, 22.0, 1.0),
+                                ('Right Side', 58.0, 22.0, 1.0),
+                                ('Top Roof', -22.0, 48.0, 0.95),
+                              ])
+                                Padding(
+                                  padding: const EdgeInsets.only(right: 6),
+                                  child: InkWell(
+                                    borderRadius: BorderRadius.circular(8),
+                                    onTap: () => setState(() {
+                                      _workingArch = _workingArch.copyWith(
+                                        cameraYaw: cam.$2,
+                                        cameraPitch: cam.$3,
+                                        cameraZoom: cam.$4,
+                                      );
+                                    }),
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(
+                                          horizontal: 8, vertical: 3),
+                                      decoration: BoxDecoration(
+                                        color: const Color(0xFF0B1325),
+                                        borderRadius: BorderRadius.circular(8),
+                                        border: Border.all(
+                                            color: const Color(0xFF1E293B)),
+                                      ),
+                                      child: Text(
+                                        cam.$1,
+                                        style: const TextStyle(
+                                          fontSize: 10,
+                                          fontWeight: FontWeight.w700,
+                                          color: Color(0xFF00F5D4),
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                            ],
+                          ),
+                        )
+                      : const Text(
+                          '👆 Drag gold handles on the 2D blueprint above to sculpt triangle peak height, apex offset, or eave span!',
+                          style: TextStyle(
+                            fontSize: 10.5,
+                            color: Color(0xFFFBBF24),
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                ),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(height: 8),
+
+        // Studio Sub-Tabs: [🏠 Roof & Wall Sections] vs [💡 Controller Light Placement]
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 14),
+          child: Row(
+            children: [
+              Expanded(
+                child: SegmentedButton<int>(
+                  segments: [
+                    ButtonSegment(
+                      value: 0,
+                      icon: const Icon(Icons.roofing_rounded, size: 16),
+                      label: Text(
+                        '🏠 Roof & Wall Sections (${_workingArch.sections.length})',
+                        style: const TextStyle(
+                            fontSize: 11.5, fontWeight: FontWeight.w800),
+                      ),
+                    ),
+                    ButtonSegment(
+                      value: 1,
+                      icon: const Icon(Icons.lightbulb_rounded, size: 16),
+                      label: Text(
+                        '💡 Controller Light Placement (${_workingControllers.length})',
+                        style: const TextStyle(
+                            fontSize: 11.5, fontWeight: FontWeight.w800),
+                      ),
+                    ),
+                  ],
+                  selected: {_activeTab},
+                  onSelectionChanged: (sel) =>
+                      setState(() => _activeTab = sel.first),
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 8),
+
+        // Scrollable Studio Inspector Body
+        Expanded(
+          child: ListView(
+            padding: const EdgeInsets.fromLTRB(14, 4, 14, 28),
+            children: [
+              if (_activeTab == 0)
+                _buildRoofSectionsEditorTab()
+              else
+                _buildControllerLightPlacementTab(),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildRoofSectionsEditorTab() {
+    final sec = _selectedSection;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // 1-Tap Architectural Templates
+        const Text(
+          '1-Tap House Architecture Templates (Customize Any Section Below):',
+          style: TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w800,
+            color: Color(0xFF00F5D4),
+          ),
+        ),
+        const SizedBox(height: 6),
+        SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: Row(
+            children: kArchitecturePresetMeta.map((tpl) {
+              final isSelected = _workingArch.presetStyle == tpl.id;
+              return Padding(
+                padding: const EdgeInsets.only(right: 8),
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(12),
+                  onTap: () => _applyArchitectureTemplate(tpl.id),
+                  child: Container(
+                    width: 185,
+                    padding: const EdgeInsets.all(9),
+                    decoration: BoxDecoration(
+                      color: isSelected
+                          ? const Color(0xFF00F5D4).withValues(alpha: 0.16)
+                          : const Color(0xFF0B1325),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: isSelected
+                            ? const Color(0xFF00F5D4)
+                            : const Color(0xFF1E293B),
+                      ),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          tpl.title,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            fontSize: 11.5,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          tpl.subtitle,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            fontSize: 10,
+                            color: Color(0xFF94A3B8),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              );
+            }).toList(),
+          ),
+        ),
+        const SizedBox(height: 12),
+
+        // Section Pills + Quick Add Section Buttons
+        Wrap(
+          spacing: 6,
+          runSpacing: 6,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          children: [
+            for (int i = 0; i < _workingArch.sections.length; i++)
+              ChoiceChip(
+                selected: _workingArch.sections[i].id == _selectedSectionId,
+                selectedColor: const Color(0xFFFBBF24).withValues(alpha: 0.25),
+                label: Text(
+                  '#${i + 1} ${_workingArch.sections[i].label} (${_workingArch.sections[i].wall.toUpperCase()})',
+                  style: const TextStyle(
+                      fontSize: 11, fontWeight: FontWeight.w700),
+                ),
+                onSelected: (_) {
+                  setState(() {
+                    _selectedSectionId = _workingArch.sections[i].id;
+                    _sectionLabelCtrl.text = _workingArch.sections[i].label;
+                  });
+                },
+              ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        Wrap(
+          spacing: 6,
+          runSpacing: 6,
+          children: [
+            OutlinedButton.icon(
+              style: OutlinedButton.styleFrom(
+                  visualDensity: VisualDensity.compact),
+              onPressed: () =>
+                  _addSection('triangle_gable', 'Triangle Gable Peak'),
+              icon: const Icon(Icons.change_history, size: 14),
+              label: const Text('+ Triangle Peak',
+                  style: TextStyle(fontSize: 11)),
+            ),
+            OutlinedButton.icon(
+              style: OutlinedButton.styleFrom(
+                  visualDensity: VisualDensity.compact),
+              onPressed: () => _addSection('flat_eave', 'Square Flat Eave'),
+              icon: const Icon(Icons.crop_16_9, size: 14),
+              label: const Text('+ Square Flat Eave',
+                  style: TextStyle(fontSize: 11)),
+            ),
+            OutlinedButton.icon(
+              style: OutlinedButton.styleFrom(
+                  visualDensity: VisualDensity.compact),
+              onPressed: () => _addSection(
+                'dormer_peak',
+                '2nd-Story Dormer Peak',
+                story: 2,
+              ),
+              icon: const Icon(Icons.home_work_outlined, size: 14),
+              label: const Text('+ 2nd-Story Dormer',
+                  style: TextStyle(fontSize: 11)),
+            ),
+            OutlinedButton.icon(
+              style: OutlinedButton.styleFrom(
+                  visualDensity: VisualDensity.compact),
+              onPressed: () => _addSection(
+                'flat_eave',
+                'Side/Back Wing Eave',
+                wall: 'right',
+              ),
+              icon: const Icon(Icons.subdirectory_arrow_right, size: 14),
+              label: const Text('+ Side/Back Wing',
+                  style: TextStyle(fontSize: 11)),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+
+        if (sec != null)
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: const Color(0xFF0B1325),
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(
+                color: const Color(0xFFFBBF24).withValues(alpha: 0.45),
+              ),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: TextField(
+                        controller: _sectionLabelCtrl,
+                        decoration: const InputDecoration(
+                          labelText: 'Selected Section Name',
+                          isDense: true,
+                          border: OutlineInputBorder(),
+                        ),
+                        onChanged: (v) =>
+                            _updateSelectedSection(sec.copyWith(label: v)),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    if (_workingArch.sections.length > 1)
+                      IconButton(
+                        tooltip: 'Delete Section',
+                        onPressed: _deleteSelectedSection,
+                        icon: const Icon(Icons.delete_outline,
+                            color: Color(0xFFF87171)),
+                      ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                const Text(
+                  'Section Roof Shape:',
+                  style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700),
+                ),
+                const SizedBox(height: 6),
+                Wrap(
+                  spacing: 6,
+                  runSpacing: 6,
+                  children: [
+                    for (final sh in [
+                      ('triangle_gable', '🔺 Triangle Gable'),
+                      ('steep_gable', '⛰️ Steep A-Frame'),
+                      ('flat_eave', '⬛ Square Flat Eave'),
+                      ('dormer_peak', '🏠 2nd-Story Dormer'),
+                      ('hip_roof', '⛺ Hip Roof'),
+                      ('shed_slope', '📐 Angled Slope'),
+                    ])
+                      ChoiceChip(
+                        selected: sec.shape == sh.$1,
+                        label: Text(sh.$2,
+                            style: const TextStyle(fontSize: 11)),
+                        onSelected: (_) {
+                          final nextPeak = sh.$1 == 'flat_eave'
+                              ? sec.eaveHeight
+                              : math.max(sec.peakHeight, sec.eaveHeight + 0.24);
+                          _updateSelectedSection(
+                            sec.copyWith(
+                              shape: sh.$1,
+                              peakHeight: nextPeak.clamp(0.25, 1.0),
+                            ),
+                          );
+                        },
+                      ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                Row(
+                  children: [
+                    Expanded(
+                      child: DropdownButtonFormField<String>(
+                        initialValue: sec.wall,
+                        decoration: const InputDecoration(
+                          labelText: 'Wall / Orientation',
+                          isDense: true,
+                          border: OutlineInputBorder(),
+                        ),
+                        items: const [
+                          DropdownMenuItem(
+                              value: 'front', child: Text('Front (Street)')),
+                          DropdownMenuItem(
+                              value: 'left', child: Text('Left Side Wall')),
+                          DropdownMenuItem(
+                              value: 'right', child: Text('Right Side Wall')),
+                          DropdownMenuItem(
+                              value: 'back', child: Text('Back Yard Wall')),
+                        ],
+                        onChanged: (w) {
+                          if (w != null) {
+                            _updateSelectedSection(sec.copyWith(wall: w));
+                          }
+                        },
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: DropdownButtonFormField<int>(
+                        initialValue: sec.story,
+                        decoration: const InputDecoration(
+                          labelText: 'Story Level',
+                          isDense: true,
+                          border: OutlineInputBorder(),
+                        ),
+                        items: const [
+                          DropdownMenuItem(
+                              value: 1, child: Text('1st Floor / Main')),
+                          DropdownMenuItem(
+                              value: 2, child: Text('2nd Story / Upper')),
+                        ],
+                        onChanged: (st) {
+                          if (st != null) {
+                            _updateSelectedSection(sec.copyWith(story: st));
+                          }
+                        },
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                Text(
+                  'Horizontal Width Span: ${(sec.xStart * 100).round()}% → ${(sec.xEnd * 100).round()}%',
+                  style: const TextStyle(
+                      fontSize: 11.5, fontWeight: FontWeight.w700),
+                ),
+                RangeSlider(
+                  values: RangeValues(
+                    sec.xStart.clamp(0.0, 0.96),
+                    math.max(sec.xStart + 0.04, sec.xEnd).clamp(0.04, 1.0),
+                  ),
+                  min: 0.0,
+                  max: 1.0,
+                  divisions: 50,
+                  activeColor: const Color(0xFF00F5D4),
+                  onChanged: (rv) {
+                    if (rv.end - rv.start >= 0.08) {
+                      _updateSelectedSection(
+                        sec.copyWith(xStart: rv.start, xEnd: rv.end),
+                      );
+                    }
+                  },
+                ),
+                Row(
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Eave Height: ${(sec.eaveHeight * 100).round()}%',
+                            style: const TextStyle(
+                                fontSize: 11, fontWeight: FontWeight.w700),
+                          ),
+                          Slider(
+                            value: sec.eaveHeight.clamp(0.20, 0.95),
+                            min: 0.20,
+                            max: 0.95,
+                            activeColor: const Color(0xFF00F5D4),
+                            onChanged: (v) {
+                              _updateSelectedSection(
+                                sec.copyWith(
+                                  eaveHeight: v,
+                                  peakHeight: sec.shape == 'flat_eave'
+                                      ? v
+                                      : math.max(sec.peakHeight, v + 0.05),
+                                ),
+                              );
+                            },
+                          ),
+                        ],
+                      ),
+                    ),
+                    if (sec.shape != 'flat_eave')
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Triangle Peak Height: ${(sec.peakHeight * 100).round()}%',
+                              style: const TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w700,
+                                  color: Color(0xFFFBBF24)),
+                            ),
+                            Slider(
+                              value: math
+                                  .max(sec.eaveHeight, sec.peakHeight)
+                                  .clamp(0.20, 1.0),
+                              min: 0.20,
+                              max: 1.0,
+                              activeColor: const Color(0xFFFBBF24),
+                              onChanged: (v) {
+                                _updateSelectedSection(
+                                  sec.copyWith(
+                                    peakHeight: math.max(sec.eaveHeight, v),
+                                  ),
+                                );
+                              },
+                            ),
+                          ],
+                        ),
+                      ),
+                  ],
+                ),
+                Row(
+                  children: [
+                    if (sec.shape != 'flat_eave')
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Peak Center Position: ${(sec.peakOffset * 100).round()}%',
+                              style: const TextStyle(
+                                  fontSize: 11, fontWeight: FontWeight.w700),
+                            ),
+                            Slider(
+                              value: sec.peakOffset.clamp(0.15, 0.85),
+                              min: 0.15,
+                              max: 0.85,
+                              activeColor: const Color(0xFFA855F7),
+                              onChanged: (v) => _updateSelectedSection(
+                                sec.copyWith(peakOffset: v),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            '3D Depth Step-Out: ${sec.depthOffset >= 0 ? "+" : ""}${(sec.depthOffset * 100).round()}%',
+                            style: const TextStyle(
+                                fontSize: 11, fontWeight: FontWeight.w700),
+                          ),
+                          Slider(
+                            value: sec.depthOffset.clamp(-0.35, 0.35),
+                            min: -0.35,
+                            max: 0.35,
+                            activeColor: const Color(0xFF38BDF8),
+                            onChanged: (v) => _updateSelectedSection(
+                              sec.copyWith(depthOffset: v),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 6,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  children: [
+                    FilterChip(
+                      selected: sec.hasGarage,
+                      label: const Text('🚗 Garage Door',
+                          style: TextStyle(fontSize: 11)),
+                      onSelected: (v) =>
+                          _updateSelectedSection(sec.copyWith(hasGarage: v)),
+                    ),
+                    FilterChip(
+                      selected: sec.hasDoor,
+                      label: const Text('🚪 Front Entry Door',
+                          style: TextStyle(fontSize: 11)),
+                      onSelected: (v) =>
+                          _updateSelectedSection(sec.copyWith(hasDoor: v)),
+                    ),
+                    for (final wStyle in [
+                      ('picture', '🪟 Picture Window'),
+                      ('double', '🪟 Double Window'),
+                      ('arched', '🏛️ Arched Window'),
+                      ('none', 'No Window'),
+                    ])
+                      ChoiceChip(
+                        selected: sec.windowStyle == wStyle.$1,
+                        label: Text(wStyle.$2,
+                            style: const TextStyle(fontSize: 10.5)),
+                        onSelected: (_) => _updateSelectedSection(
+                          sec.copyWith(windowStyle: wStyle.$1),
+                        ),
+                      ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+      ],
+    );
+  }
+
+  Widget _buildControllerLightPlacementTab() {
+    final ctrl = _selectedController;
+    if (ctrl == null) {
+      return const Text('No controllers configured for this house.');
+    }
+    final allocatedTotal = ctrl.sectionSpans.fold<int>(
+      0,
+      (acc, sp) => acc + sp.segments,
+    );
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'Select Controller Strip & Assign Segments to Each Roof/Wall Section:',
+          style: TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w800,
+            color: Color(0xFF00F5D4),
+          ),
+        ),
+        const SizedBox(height: 8),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: _workingControllers.map((c) {
+            final isSel = c.id == ctrl.id;
+            return ChoiceChip(
+              selected: isSel,
+              selectedColor: const Color(0xFF00F5D4).withValues(alpha: 0.25),
+              label: Text(
+                '💡 ${c.name} • ${c.sku} (${c.segmentCount} segs)',
+                style:
+                    const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w800),
+              ),
+              onSelected: (_) {
+                setState(() {
+                  _selectedControllerId = c.id;
+                  _spotlightSegIdx = 0;
+                });
+              },
+            );
+          }).toList(),
+        ),
+        const SizedBox(height: 10),
+        Container(
+          padding: const EdgeInsets.all(10),
+          decoration: BoxDecoration(
+            color: const Color(0xFF0B1325),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: allocatedTotal == ctrl.segmentCount
+                  ? const Color(0xFF00F5D4).withValues(alpha: 0.5)
+                  : const Color(0xFFFBBF24).withValues(alpha: 0.65),
+            ),
+          ),
+          child: Wrap(
+            alignment: WrapAlignment.spaceBetween,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            spacing: 8,
+            runSpacing: 6,
+            children: [
+              Text(
+                'Allocated: $allocatedTotal / ${ctrl.segmentCount} segments across sections',
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w800,
+                  color: allocatedTotal == ctrl.segmentCount
+                      ? const Color(0xFF00F5D4)
+                      : const Color(0xFFFBBF24),
+                ),
+              ),
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  OutlinedButton.icon(
+                    style: OutlinedButton.styleFrom(
+                      visualDensity: VisualDensity.compact,
+                    ),
+                    onPressed: () =>
+                        _autoBalanceControllerAcrossFrontSections(ctrl),
+                    icon: const Icon(Icons.auto_fix_high, size: 14),
+                    label: const Text(
+                      'Auto-Fit Front Sections',
+                      style:
+                          TextStyle(fontSize: 11, fontWeight: FontWeight.w700),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  FilterChip(
+                    selected: ctrl.reversed,
+                    label: const Text('Reverse Strip Order',
+                        style: TextStyle(fontSize: 11)),
+                    onSelected: (rev) {
+                      setState(() {
+                        _workingControllers = _workingControllers
+                            .map((c) => c.id == ctrl.id
+                                ? c.copyWith(reversed: rev)
+                                : c)
+                            .toList();
+                      });
+                    },
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 10),
+
+        // Per-Section Segment Allocation Rows
+        for (final sec in _workingArch.sections)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: Builder(
+              builder: (context) {
+                final segsOnSec =
+                    _getControllerSegmentsForSection(ctrl, sec.id);
+                final dirOnSec =
+                    _getControllerDirectionForSection(ctrl, sec.id);
+                return Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: segsOnSec > 0
+                        ? const Color(0xFF0F1A34)
+                        : const Color(0xFF080E1E),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: segsOnSec > 0
+                          ? const Color(0xFF00F5D4).withValues(alpha: 0.45)
+                          : const Color(0xFF1E293B),
+                    ),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              '${sec.isPitchedGable ? "🔺" : "⬛"} ${sec.label} (${sec.wall.toUpperCase()})',
+                              style: const TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                          ),
+                          InkWell(
+                            onTap: () => _setControllerSegmentsForSection(
+                              ctrl,
+                              sec,
+                              segsOnSec,
+                              direction: dirOnSec == 'forward'
+                                  ? 'reverse'
+                                  : 'forward',
+                            ),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 7, vertical: 3),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF060B18),
+                                borderRadius: BorderRadius.circular(6),
+                                border: Border.all(
+                                    color: const Color(0xFF334155)),
+                              ),
+                              child: Text(
+                                dirOnSec == 'reverse'
+                                    ? '⇄ Reversed'
+                                    : '→ Normal (L→Peak→R)',
+                                style: const TextStyle(
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w700,
+                                  color: Color(0xFFCBD5E1),
+                                ),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Text(
+                            '$segsOnSec segs',
+                            style: const TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w800,
+                              color: Color(0xFF00F5D4),
+                            ),
+                          ),
+                        ],
+                      ),
+                      Slider(
+                        value: segsOnSec
+                            .toDouble()
+                            .clamp(0.0, ctrl.segmentCount.toDouble()),
+                        min: 0,
+                        max: ctrl.segmentCount.toDouble(),
+                        divisions: math.max(1, ctrl.segmentCount),
+                        activeColor: const Color(0xFF00F5D4),
+                        onChanged: (v) {
+                          _setControllerSegmentsForSection(
+                            ctrl,
+                            sec,
+                            v.round(),
+                          );
+                        },
+                      ),
+                    ],
+                  ),
+                );
+              },
+            ),
+          ),
+
+        const SizedBox(height: 8),
+        // Physical Outdoor Segment Spotlight Finder
+        Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: const Color(0xFF0B1325),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: const Color(0xFFFBBF24).withValues(alpha: 0.45),
+            ),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    '🔦 Spotlight Physical Segment (#${_spotlightSegIdx + 1} of ${ctrl.segmentCount})',
+                    style: const TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w800,
+                      color: Color(0xFFFBBF24),
+                    ),
+                  ),
+                  ElevatedButton.icon(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFFFBBF24),
+                      foregroundColor: const Color(0xFF040711),
+                      visualDensity: VisualDensity.compact,
+                    ),
+                    onPressed: () {
+                      widget.api.locateControllerSegment(
+                        ctrl.id,
+                        _spotlightSegIdx.clamp(0, ctrl.segmentCount - 1),
+                      );
+                    },
+                    icon: const Icon(Icons.my_location, size: 15),
+                    label: Text(
+                      'Flash Seg #${_spotlightSegIdx + 1} on House',
+                      style: const TextStyle(
+                          fontSize: 11, fontWeight: FontWeight.w800),
+                    ),
+                  ),
+                ],
+              ),
+              Slider(
+                value: _spotlightSegIdx
+                    .toDouble()
+                    .clamp(0.0, math.max(0, ctrl.segmentCount - 1).toDouble()),
+                min: 0,
+                max: math.max(1, ctrl.segmentCount - 1).toDouble(),
+                divisions: math.max(1, ctrl.segmentCount - 1),
+                activeColor: const Color(0xFFFBBF24),
+                onChanged: (v) {
+                  setState(() {
+                    _spotlightSegIdx = v.round();
+                  });
+                },
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
 

@@ -13,6 +13,7 @@ from .config_store import ConfigStore
 from .govee_protocol import GoveeProtocolDriver, RGBTuple, compute_representative_controller_color
 from .models import (
     AnimationConfig,
+    ArchSection,
     ControllerConfig,
     DirectionMode,
     EffectType,
@@ -21,6 +22,8 @@ from .models import (
     SegmentRenderPoint,
     SpatialMappingMode,
     SystemConfig,
+    default_house_architecture,
+    evaluate_arch_section_point,
 )
 
 logger = logging.getLogger("govee_sync.engine")
@@ -173,6 +176,10 @@ class VirtualSegmentSlot:
         "controller_index",
         "segment_index",
         "wall",
+        "section_id",
+        "arch_x",
+        "arch_y",
+        "arch_z",
         "normalized_pos",
         "normalized_width",
         "house_local_pos",
@@ -190,6 +197,10 @@ class VirtualSegmentSlot:
         normalized_width: float,
         house_local_pos: float,
         wall: str = "front",
+        section_id: str = "",
+        arch_x: float = 0.5,
+        arch_y: float = 0.5,
+        arch_z: float = 0.0,
     ) -> None:
         self.global_index = global_index
         self.house = house
@@ -198,16 +209,45 @@ class VirtualSegmentSlot:
         self.controller_index = controller_index
         self.segment_index = segment_index
         self.wall = wall
+        self.section_id = section_id
+        self.arch_x = arch_x
+        self.arch_y = arch_y
+        self.arch_z = arch_z
         self.normalized_pos = normalized_pos
         self.normalized_width = normalized_width
         self.house_local_pos = house_local_pos
+
+
+def _interpolate_custom_nodes(nodes: List[Dict[str, Any]], u: float) -> Tuple[float, float, float]:
+    """Interpolate (arch_x, arch_y, arch_z) along a user-defined 2D/3D polyline at parameter u in [0, 1]."""
+    valid = [n for n in nodes if isinstance(n, dict)]
+    if not valid:
+        return 0.5, 0.52, 0.0
+    if len(valid) == 1:
+        n0 = valid[0]
+        return (
+            round(float(n0.get("x", 0.5)), 4),
+            round(float(n0.get("y", 0.52)), 4),
+            round(float(n0.get("z", 0.0)), 4),
+        )
+    u_clamped = max(0.0, min(1.0, float(u)))
+    scaled = u_clamped * (len(valid) - 1)
+    idx = min(len(valid) - 2, int(scaled))
+    frac = scaled - idx
+    a = valid[idx]
+    b = valid[idx + 1]
+    ax = float(a.get("x", 0.5)) + (float(b.get("x", 0.5)) - float(a.get("x", 0.5))) * frac
+    ay = float(a.get("y", 0.52)) + (float(b.get("y", 0.52)) - float(a.get("y", 0.52))) * frac
+    az = float(a.get("z", 0.0)) + (float(b.get("z", 0.0)) - float(a.get("z", 0.0))) * frac
+    return round(ax, 4), round(ay, 4), round(az, 4)
 
 
 def build_virtual_strip_map(config: SystemConfig) -> List[VirtualSegmentSlot]:
     """
     Construct the continuous coordinate mapping across all enabled houses and controllers.
     Compensates in real time for houses having different numbers of controllers, segments,
-    and 3D house wall zones (`front`, `left`, `right`, `back`).
+    and 3D house wall zones (`front`, `left`, `right`, `back`) as well as 2D/3D roofline
+    `ArchSection` geometry (`section_id`, `arch_x`, `arch_y`, `arch_z`).
     """
     active_houses: List[Tuple[HouseConfig, List[ControllerConfig]]] = []
     sorted_houses = sorted(config.houses, key=lambda h: (h.order, h.id))
@@ -238,25 +278,84 @@ def build_virtual_strip_map(config: SystemConfig) -> List[VirtualSegmentSlot]:
         house_span_norm = h_weight / total_house_weight
         cumulative_house_weight += h_weight
 
-        # Collect all segments for this house along with their 3D wall zone ('front', 'left', 'right', 'back')
-        house_seg_items: List[Tuple[int, ControllerConfig, int, str]] = []
+        house_arch = house.architecture or default_house_architecture(house.id, house.order)
+        house_sections: List[ArchSection] = (
+            house_arch.sections
+            if (house_arch and house_arch.sections)
+            else default_house_architecture(house.id, house.order).sections
+        )
+        sec_by_id: Dict[str, ArchSection] = {s.id: s for s in house_sections}
+
+        # Collect all segments for this house along with their 3D wall zone and roofline section info
+        # Tuple: (c_idx, ctrl, phys_seg_idx, w_label, sec_id, sec_t, has_explicit_span)
+        raw_seg_items: List[Tuple[int, ControllerConfig, int, str, str, float, bool]] = []
         for c_idx, ctrl in enumerate(ctrls):
-            seg_walls = ctrl.get_segment_walls()
+            has_explicit_span = bool(ctrl.section_spans)
+            seg_sec_infos = ctrl.get_segment_sections(house_sections)
             seg_indices = list(range(ctrl.segment_count))
             if ctrl.reversed:
                 seg_indices.reverse()
             for phys_seg_idx in seg_indices:
-                w_label = seg_walls[phys_seg_idx] if phys_seg_idx < len(seg_walls) else "front"
-                house_seg_items.append((c_idx, ctrl, phys_seg_idx, w_label))
+                if phys_seg_idx < len(seg_sec_infos):
+                    info = seg_sec_infos[phys_seg_idx]
+                    w_label = str(info.get("wall") or "front")
+                    sec_id = str(info.get("section_id") or "")
+                    sec_t = float(info.get("t", 0.5))
+                else:
+                    w_label = "front"
+                    sec_id = house_sections[0].id if house_sections else "sec-front"
+                    sec_t = 0.5
+                raw_seg_items.append((c_idx, ctrl, phys_seg_idx, w_label, sec_id, sec_t, has_explicit_span))
 
-        front_total = sum(1 for _, _, _, w in house_seg_items if w == "front")
+        # For controllers without explicit section_spans on this house, distribute their segments
+        # continuously across the house's sections for each wall so multi-controller houses span the full roofline.
+        unmapped_indices_by_wall: Dict[str, List[int]] = {}
+        for idx_in_house, item in enumerate(raw_seg_items):
+            if not item[6]:
+                unmapped_indices_by_wall.setdefault(item[3], []).append(idx_in_house)
+
+        house_seg_items: List[Tuple[int, ControllerConfig, int, str, str, float]] = [
+            (item[0], item[1], item[2], item[3], item[4], item[5]) for item in raw_seg_items
+        ]
+        for w_key, item_indices in unmapped_indices_by_wall.items():
+            matching_secs = [s for s in house_sections if s.wall == w_key]
+            if not matching_secs and house_sections:
+                matching_secs = [house_sections[0]]
+            if not matching_secs:
+                continue
+            run_len = len(item_indices)
+            m_secs = len(matching_secs)
+            for k, house_item_idx in enumerate(item_indices):
+                c_idx, ctrl, phys_seg_idx, w_label, _, _, _ = raw_seg_items[house_item_idx]
+                if m_secs == 1:
+                    chosen_sec = matching_secs[0]
+                    local_t = 0.5 if run_len == 1 else (k / (run_len - 1))
+                else:
+                    sec_idx = min(m_secs - 1, int((k * m_secs) / max(1, run_len)))
+                    k_in_sec = [
+                        i_k for i_k in range(run_len) if min(m_secs - 1, int((i_k * m_secs) / max(1, run_len))) == sec_idx
+                    ]
+                    local_pos_idx = k_in_sec.index(k)
+                    local_cnt = len(k_in_sec)
+                    local_t = 0.5 if local_cnt == 1 else (local_pos_idx / (local_cnt - 1))
+                    chosen_sec = matching_secs[sec_idx]
+                house_seg_items[house_item_idx] = (
+                    c_idx,
+                    ctrl,
+                    phys_seg_idx,
+                    w_label,
+                    chosen_sec.id,
+                    round(local_t, 5),
+                )
+
+        front_total = sum(1 for _, _, _, w, _, _ in house_seg_items if w == "front")
         front_seen = 0
         side_seen = 0
-        side_total = sum(1 for _, _, _, w in house_seg_items if w in ("left", "right"))
+        side_total = sum(1 for _, _, _, w, _, _ in house_seg_items if w in ("left", "right"))
         back_seen = 0
-        back_total = sum(1 for _, _, _, w in house_seg_items if w == "back")
+        back_total = sum(1 for _, _, _, w, _, _ in house_seg_items if w == "back")
 
-        for house_seg_cursor, (c_idx, ctrl, phys_seg_idx, w_label) in enumerate(house_seg_items):
+        for house_seg_cursor, (c_idx, ctrl, phys_seg_idx, w_label, sec_id, sec_t) in enumerate(house_seg_items):
             if zone_mode in ("front_street_sync", "front_only_quiet_sides") and front_total > 0:
                 if w_label == "front":
                     house_local_pos = (front_seen + 0.5) / max(1, front_total)
@@ -318,6 +417,12 @@ def build_virtual_strip_map(config: SystemConfig) -> List[VirtualSegmentSlot]:
                 norm_pos = (global_idx + 0.5) / max(1, total_segments_all)
                 norm_width = 1.0 / max(1, total_segments_all)
 
+            if ctrl.custom_nodes and len(ctrl.custom_nodes) >= 2 and not ctrl.section_spans:
+                ctrl_u = 0.5 if ctrl.segment_count <= 1 else (phys_seg_idx / (ctrl.segment_count - 1))
+                arch_x, arch_y, arch_z = _interpolate_custom_nodes(ctrl.custom_nodes, ctrl_u)
+            else:
+                arch_x, arch_y, arch_z = evaluate_arch_section_point(sec_by_id.get(sec_id), sec_t, w_label)
+
             slots.append(
                 VirtualSegmentSlot(
                     global_index=global_idx,
@@ -330,6 +435,10 @@ def build_virtual_strip_map(config: SystemConfig) -> List[VirtualSegmentSlot]:
                     normalized_width=norm_width,
                     house_local_pos=house_local_pos,
                     wall=w_label,
+                    section_id=sec_id,
+                    arch_x=arch_x,
+                    arch_y=arch_y,
+                    arch_z=arch_z,
                 )
             )
             global_idx += 1
@@ -6916,6 +7025,10 @@ class MasterAnimationEngine:
                         controller_index=slot.controller_index,
                         segment_index=slot.segment_index,
                         wall=slot.wall,
+                        section_id=slot.section_id,
+                        arch_x=slot.arch_x,
+                        arch_y=slot.arch_y,
+                        arch_z=slot.arch_z,
                         normalized_pos=round(slot.normalized_pos, 5),
                         normalized_width=round(slot.normalized_width, 5),
                         r=0,
@@ -7002,6 +7115,10 @@ class MasterAnimationEngine:
                     controller_index=slot.controller_index,
                     segment_index=slot.segment_index,
                     wall=slot.wall,
+                    section_id=slot.section_id,
+                    arch_x=slot.arch_x,
+                    arch_y=slot.arch_y,
+                    arch_z=slot.arch_z,
                     normalized_pos=round(slot.normalized_pos, 5),
                     normalized_width=round(slot.normalized_width, 5),
                     r=final_r,
@@ -7552,6 +7669,7 @@ class MasterAnimationEngine:
                     "controller_count": len(active_ctrls),
                     "total_segments": seg_count,
                     "time_weight": h.time_weight,
+                    "architecture": h.architecture.model_dump() if h.architecture else None,
                     "is_chase_active": bool(cfg.animation.running and h.id == self.active_house_id),
                     "compensation_factor": round(
                         (1.0 / max(1, total_houses)) / max(0.001, seg_count / max(1, len(segments))),

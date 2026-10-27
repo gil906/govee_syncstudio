@@ -33,6 +33,7 @@ import {
 } from 'lucide-react';
 import NeighborhoodPreview, { getPositionLabel } from './components/NeighborhoodPreview.jsx';
 import HouseConfigEditor from './components/HouseConfigEditor.jsx';
+import HouseArchitectureDesigner from './components/HouseArchitectureDesigner.jsx';
 import DiscoveryAndLogs from './components/DiscoveryAndLogs.jsx';
 import LiveSceneCardPreview from './components/LiveSceneCardPreview.jsx';
 
@@ -1501,6 +1502,8 @@ export default function App() {
                     onToggleHouse={handleToggleHouse}
                     onAddHouse={handleAddHouse}
                     onTriggerBurst={handleTriggerBurst}
+                    onSaveConfig={handleSaveFullConfig}
+                    apiFetch={apiFetch}
                     burstBusy={burstBusy}
                   />
                 </div>
@@ -2423,6 +2426,14 @@ export default function App() {
                 })}
               </div>
             </div>
+
+            {/* Interactive 3D & 2D Multi-Section House Architecture & Controller Light Studio */}
+            <HouseArchitectureDesigner
+              config={config}
+              liveState={liveState}
+              onSaveConfig={handleSaveFullConfig}
+              apiFetch={apiFetch}
+            />
 
             {/* Full House & Controller Topology Editor */}
             <HouseConfigEditor

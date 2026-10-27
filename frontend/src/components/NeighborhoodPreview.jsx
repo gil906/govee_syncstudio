@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   Play,
   Pause,
@@ -6,8 +6,12 @@ import {
   Plus,
   Sparkles,
   Check,
+  Box,
+  Flashlight,
 } from 'lucide-react';
-import LiveSceneCardPreview from './LiveSceneCardPreview.jsx';
+import HouseArchitectureDesigner, {
+  ArchitecturalViewportCanvas,
+} from './HouseArchitectureDesigner.jsx';
 
 const QUICK_BURST_CHIPS = [
   {
@@ -56,9 +60,16 @@ export default function NeighborhoodPreview({
   onToggleHouse,
   onAddHouse,
   onTriggerBurst,
+  onSaveConfig,
+  apiFetch,
+  onOpenDesigner,
   burstBusy = '',
 }) {
-  const [viewMode, setViewMode] = React.useState('2d'); // '2d', '3d_all', or '3d:<houseId>'
+  const [previewMode, setPreviewMode] = useState('3d_all');
+  const [showInlineDesigner, setShowInlineDesigner] = useState(false);
+  const [designerHouseId, setDesignerHouseId] = useState(null);
+  const [selectedPuck, setSelectedPuck] = useState(null);
+
   const segments = liveState?.segments || [];
   const houses = [...(config?.houses || [])].sort((a, b) => (a.order || 1) - (b.order || 1));
   const enabledHouses = houses.filter((h) => h.enabled !== false);
@@ -70,17 +81,30 @@ export default function NeighborhoodPreview({
   const driftMs = liveState?.clock_drift_ms ?? 0.08;
 
   const viewModes = [
-    { id: '2d', label: '2D Front' },
-    { id: '3d_all', label: `3D All (${targetHouses.length} Houses)` },
-    ...targetHouses.map((h, i) => ({
-      id: `3d:${h.id}`,
-      label: `3D: #${i + 1} ${(h.name || `House ${i + 1}`).split('(')[0].trim()}`,
+    { id: '3d_all', label: `🧊 3D Street (${enabledHouses.length || targetHouses.length} Houses)` },
+    ...targetHouses.map((h) => ({
+      id: `3d_house:${h.id}`,
+      label: `🧊 3D: ${h.name || h.id}`,
     })),
+    { id: '2d', label: '📐 2D Front Elevation' },
   ];
+
+  const handleOpenDesignerClick = (houseId = null) => {
+    const resolvedId =
+      houseId ||
+      (previewMode.startsWith('3d_house:') ? previewMode.split(':')[1] : null) ||
+      targetHouses[0]?.id ||
+      'house-1';
+    setDesignerHouseId(resolvedId);
+    setShowInlineDesigner((prev) => !prev);
+    if (onOpenDesigner && typeof onOpenDesigner === 'function') {
+      onOpenDesigner(resolvedId);
+    }
+  };
 
   return (
     <div className="bg-[#0c1324] border border-[#1e293b] rounded-2xl p-4 shadow-xl space-y-3">
-      {/* Compact Header Row matching Flutter APK */}
+      {/* Compact Header Row + Glowing Primary Action Button: 🏗️ Design House & Lights */}
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-2 min-w-0">
           <span
@@ -93,14 +117,26 @@ export default function NeighborhoodPreview({
             }`}
           />
           <h2 className="text-sm sm:text-base font-extrabold text-white truncate">
-            Live Multi-House Roofline Studio
+            Live Multi-House 3D &amp; 2D Roofline Studio
           </h2>
           <span className="text-[11px] font-mono px-2 py-0.5 rounded-md bg-[#060b18] text-[#00f5d4] border border-[#1e293b]">
             {enabledHouses.length}/{houses.length} Houses • {segments.length || 63} Segs
           </span>
         </div>
 
-        <div className="flex items-center gap-1.5 text-[11px] font-mono">
+        <div className="flex flex-wrap items-center gap-1.5 text-[11px] font-mono">
+          <button
+            type="button"
+            onClick={() => handleOpenDesignerClick()}
+            className={`px-3 py-1 rounded-xl font-sans font-extrabold text-xs flex items-center gap-1.5 border transition shadow-lg ${
+              showInlineDesigner
+                ? 'bg-[#00f5d4] text-[#040711] border-[#00f5d4] shadow-[#00f5d4]/30'
+                : 'bg-gradient-to-r from-[#00f5d4]/25 via-cyan-500/20 to-purple-500/25 hover:from-[#00f5d4]/35 hover:to-purple-500/35 text-[#00f5d4] border-[#00f5d4]/60 shadow-[#00f5d4]/15'
+            }`}
+          >
+            <span>🏗️ Design House &amp; Lights</span>
+          </button>
+
           <span
             className={`px-2 py-0.5 rounded-md font-bold border ${
               isRunning
@@ -118,18 +154,18 @@ export default function NeighborhoodPreview({
         </div>
       </div>
 
-      {/* 2D Front vs 3D All Enabled Houses vs 3D Single House Mode Selector */}
+      {/* Top Mode Bar: 🧊 3D Street (Default) | 🧊 3D: House | 📐 2D Front Elevation */}
       <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5 no-scrollbar">
         {viewModes.map((vm) => {
-          const active = viewMode === vm.id;
+          const active = previewMode === vm.id;
           return (
             <button
               key={vm.id}
               type="button"
-              onClick={() => setViewMode(vm.id)}
+              onClick={() => setPreviewMode(vm.id)}
               className={`px-2.5 py-1 rounded-full text-[11px] font-extrabold border shrink-0 transition ${
                 active
-                  ? 'bg-[#00f5d4]/20 text-[#00f5d4] border-[#00f5d4]'
+                  ? 'bg-[#00f5d4]/20 text-[#00f5d4] border-[#00f5d4] shadow-sm shadow-[#00f5d4]/20'
                   : 'bg-[#060b18] text-slate-300 border-[#1e293b] hover:text-white'
               }`}
             >
@@ -139,15 +175,74 @@ export default function NeighborhoodPreview({
         })}
       </div>
 
-      {/* Unified Night-Sky 2D or 3D Isometric Architectural Canvas */}
-      <LiveSceneCardPreview
-        animation={{ ...(config?.animation || {}), running: isRunning }}
+      {/* True Multi-Section 3D & 2D Architectural Renderer */}
+      <ArchitecturalViewportCanvas
         houses={houses}
         liveSegments={segments}
-        viewMode={viewMode}
-        height={165}
-        compact={false}
+        animation={{
+          ...(config?.animation || {}),
+          running: isRunning,
+          blackout_on_stop: blackoutOnStop,
+        }}
+        previewMode={previewMode}
+        selectedPuckId={selectedPuck?.id}
+        onSelectPuck={(puck) => setSelectedPuck(puck)}
+        onSelectHouse={(hId) => {
+          if (previewMode !== '2d') {
+            setPreviewMode(`3d_house:${hId}`);
+          }
+        }}
+        onOpenDesigner={() => handleOpenDesignerClick()}
+        height={240}
       />
+
+      {/* Quick Selected Puck Banner (if user clicked an LED puck in the 3D/2D preview) */}
+      {selectedPuck && !showInlineDesigner && (
+        <div className="px-3 py-2 rounded-xl bg-[#060b18] border border-cyan-500/40 flex flex-wrap items-center justify-between gap-2 text-xs">
+          <div className="flex items-center gap-2">
+            <span
+              className="w-3.5 h-3.5 rounded-full border border-white"
+              style={{ backgroundColor: selectedPuck.hex }}
+            />
+            <span className="font-bold text-white">
+              {selectedPuck.houseName} · {selectedPuck.controllerName} · Seg #
+              {selectedPuck.localIndex + 1}
+            </span>
+            <span className="text-cyan-300 font-mono text-[11px]">
+              ({selectedPuck.sectionLabel})
+            </span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <button
+              type="button"
+              onClick={() => handleOpenDesignerClick(selectedPuck.houseId)}
+              className="px-2.5 py-1 rounded-lg bg-[#00f5d4]/20 text-[#00f5d4] border border-[#00f5d4]/50 font-bold text-[11px]"
+            >
+              Edit Section &amp; Light Span
+            </button>
+            <button
+              type="button"
+              onClick={() => setSelectedPuck(null)}
+              className="px-2 py-1 rounded-lg bg-slate-800 text-slate-400 hover:text-white text-[11px]"
+            >
+              Dismiss
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Expandable Inline 2D/3D House & Controller Light Strip Studio */}
+      {showInlineDesigner && (
+        <HouseArchitectureDesigner
+          config={config}
+          liveState={liveState}
+          initialHouseId={designerHouseId}
+          onSaveConfig={onSaveConfig}
+          apiFetch={apiFetch}
+          onClose={() => setShowInlineDesigner(false)}
+          inlineMode
+        />
+      )}
 
       {/* Quick House Active Filter Chips + Add House */}
       <div className="flex flex-wrap items-center justify-between gap-2 pt-0.5">

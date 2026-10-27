@@ -90,6 +90,18 @@ class GoveeApiService extends ChangeNotifier {
       if (savedToken != null && savedToken.trim().isNotEmpty) {
         _authToken = savedToken.trim();
       }
+      final restoredHouses = _config.houses.map((h) {
+        final rawDesign = prefs.getString('govee_house_design_${h.id}');
+        if (rawDesign != null && rawDesign.trim().isNotEmpty) {
+          final decoded = jsonDecode(rawDesign);
+          if (decoded is Map) {
+            return HouseConfig.fromJson(Map<String, dynamic>.from(decoded));
+          }
+        }
+        return h;
+      }).toList();
+      _config = _config.copyWith(houses: restoredHouses);
+      _safeNotify();
     } catch (_) {
       // Fallback for test environments without SharedPreferences plugin
     }
@@ -823,14 +835,124 @@ class GoveeApiService extends ChangeNotifier {
     }
   }
 
-  Future<void> updateControllerWallZones(
-    String controllerId,
-    List<Map<String, dynamic>> wallZones,
-  ) async {
+  Future<void> updateHouseArchitecture(
+    String houseId,
+    HouseArchitecture architecture, {
+    List<ControllerConfig>? updatedControllers,
+    List<Map<String, dynamic>>? controllerMappings,
+  }) async {
+    final updatedHouses = _config.houses.map((h) {
+      if (h.id != houseId) return h;
+      List<ControllerConfig> nextCtrls = updatedControllers ?? h.controllers;
+      if (updatedControllers == null && controllerMappings != null) {
+        final byId = {
+          for (final m in controllerMappings)
+            (m['controller_id'] ?? m['id'] ?? '').toString(): m,
+        };
+        nextCtrls = h.controllers.map((c) {
+          final m = byId[c.id];
+          if (m == null) return c;
+          final spans = <SectionSpan>[];
+          if (m['section_spans'] is List) {
+            for (final s in m['section_spans']) {
+              if (s is Map) {
+                spans.add(SectionSpan.fromJson(Map<String, dynamic>.from(s)));
+              }
+            }
+          }
+          final nodes = <CustomLightNode>[];
+          if (m['custom_nodes'] is List) {
+            for (final n in m['custom_nodes']) {
+              if (n is Map) {
+                nodes.add(
+                  CustomLightNode.fromJson(Map<String, dynamic>.from(n)),
+                );
+              }
+            }
+          }
+          return c.copyWith(
+            sectionSpans: spans.isNotEmpty ? spans : c.sectionSpans,
+            customNodes: nodes.isNotEmpty ? nodes : c.customNodes,
+            reversed: m['reversed'] is bool ? m['reversed'] == true : c.reversed,
+          );
+        }).toList();
+      }
+      return h.copyWith(
+        architecture: architecture,
+        controllers: nextCtrls,
+      );
+    }).toList();
+
+    _config = _config.copyWith(houses: updatedHouses);
+    _safeNotify();
+
+    // Persist locally in SharedPreferences so designs survive offline restarts
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final targetHouse =
+          _config.houses.where((h) => h.id == houseId).firstOrNull;
+      if (targetHouse != null) {
+        await prefs.setString(
+          'govee_house_design_$houseId',
+          jsonEncode(targetHouse.toJson()),
+        );
+      }
+    } catch (_) {}
+
+    final mappingsPayload = controllerMappings ??
+        updatedControllers
+            ?.map((c) => {
+                  'controller_id': c.id,
+                  'section_spans':
+                      c.sectionSpans.map((s) => s.toJson()).toList(),
+                  'custom_nodes':
+                      c.customNodes.map((n) => n.toJson()).toList(),
+                  'wall_zones': c.wallZones,
+                  'reversed': c.reversed,
+                })
+            .toList();
+
+    try {
+      final res = await _httpRequest(
+        'PATCH',
+        '/api/houses/$houseId/architecture',
+        body: {
+          'architecture': architecture.toJson(),
+          'controller_mappings': ?mappingsPayload,
+        },
+      );
+      if (res is Map && res['config'] is Map) {
+        _config = SystemConfig.fromJson(
+          Map<String, dynamic>.from(res['config'] as Map),
+        );
+        _safeNotify();
+      }
+      setBanner(
+        'Saved 3D/2D house design (${architecture.sections.length} sections) & light placement',
+      );
+    } catch (e) {
+      setBanner(
+        'Saved 3D/2D house design (${architecture.sections.length} sections) locally',
+      );
+    }
+  }
+
+  Future<void> updateControllerZones(
+    String controllerId, {
+    List<Map<String, dynamic>>? wallZones,
+    List<SectionSpan>? sectionSpans,
+    List<CustomLightNode>? customNodes,
+    bool? reversed,
+  }) async {
     final updatedHouses = _config.houses.map((h) {
       final updatedCtrls = h.controllers.map((c) {
         if (c.id == controllerId) {
-          return c.copyWith(wallZones: wallZones);
+          return c.copyWith(
+            wallZones: wallZones ?? c.wallZones,
+            sectionSpans: sectionSpans ?? c.sectionSpans,
+            customNodes: customNodes ?? c.customNodes,
+            reversed: reversed ?? c.reversed,
+          );
         }
         return c;
       }).toList();
@@ -843,17 +965,38 @@ class GoveeApiService extends ChangeNotifier {
       final res = await _httpRequest(
         'PATCH',
         '/api/controllers/$controllerId/zones',
-        body: {'wall_zones': wallZones},
+        body: {
+          'wall_zones': ?wallZones,
+          if (sectionSpans != null)
+            'section_spans': sectionSpans.map((s) => s.toJson()).toList(),
+          if (customNodes != null)
+            'custom_nodes': customNodes.map((n) => n.toJson()).toList(),
+          'reversed': ?reversed,
+        },
       );
       if (res is Map && res['config'] is Map) {
         _config = SystemConfig.fromJson(
             Map<String, dynamic>.from(res['config'] as Map));
         _safeNotify();
       }
-      setBanner('Updated 3D house wall segment split');
+      setBanner('Updated 3D house section & wall light placement');
     } catch (e) {
-      setBanner('Updated 3D wall split locally ($e)');
+      setBanner('Updated 3D house light placement locally ($e)');
     }
+  }
+
+  Future<void> updateControllerWallZones(
+    String controllerId,
+    List<Map<String, dynamic>> wallZones, {
+    List<SectionSpan>? sectionSpans,
+    List<CustomLightNode>? customNodes,
+  }) async {
+    await updateControllerZones(
+      controllerId,
+      wallZones: wallZones,
+      sectionSpans: sectionSpans,
+      customNodes: customNodes,
+    );
   }
 
   Future<void> locateControllerSegment(
