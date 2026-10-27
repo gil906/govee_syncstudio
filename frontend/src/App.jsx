@@ -35,7 +35,138 @@ import NeighborhoodPreview, { getPositionLabel } from './components/Neighborhood
 import HouseConfigEditor from './components/HouseConfigEditor.jsx';
 import HouseArchitectureDesigner from './components/HouseArchitectureDesigner.jsx';
 import DiscoveryAndLogs from './components/DiscoveryAndLogs.jsx';
-import LiveSceneCardPreview from './components/LiveSceneCardPreview.jsx';
+import LiveSceneCardPreview, { evaluateEffectAtPoint } from './components/LiveSceneCardPreview.jsx';
+
+// Shared 18 FPS animation clock for High-Density 28-LED Scene Strip Bars on Scene Cards
+const stripSubscribers = new Set();
+let stripRafId = null;
+let stripLastMs = 0;
+const stripStartMs = typeof performance !== 'undefined' ? performance.now() : Date.now();
+
+function tickSceneStrips(nowMs) {
+  if (stripSubscribers.size === 0) {
+    stripRafId = null;
+    return;
+  }
+  if (nowMs - stripLastMs >= 52) {
+    stripLastMs = nowMs;
+    const elapsedSec = (nowMs - stripStartMs) / 1000.0;
+    stripSubscribers.forEach((fn) => {
+      try {
+        fn(elapsedSec);
+      } catch (e) {
+        // ignore
+      }
+    });
+  }
+  stripRafId = window.requestAnimationFrame(tickSceneStrips);
+}
+
+function subscribeSceneStrip(fn) {
+  stripSubscribers.add(fn);
+  if (stripRafId === null && typeof window !== 'undefined' && window.requestAnimationFrame) {
+    stripLastMs = performance.now();
+    stripRafId = window.requestAnimationFrame(tickSceneStrips);
+  }
+  return () => {
+    stripSubscribers.delete(fn);
+    if (stripSubscribers.size === 0 && stripRafId !== null && typeof window !== 'undefined') {
+      window.cancelAnimationFrame(stripRafId);
+      stripRafId = null;
+    }
+  };
+}
+
+/**
+ * High-Density 28-LED Animated Multi-Puck Strip Preview (`<HighDensitySceneStripBar />`).
+ * Renders 28 dense glowing Govee LED pucks with multi-pulse color sampling so every scene card
+ * clearly displays its full color palette, gradients, sparkles, and traveling motion at a glance.
+ */
+function HighDensitySceneStripBar({ animation, ledCount = 28 }) {
+  const canvasRef = useRef(null);
+  const animRef = useRef(animation);
+
+  useEffect(() => {
+    animRef.current = animation;
+  }, [animation]);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return undefined;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return undefined;
+
+    const drawStrip = (elapsedSec) => {
+      const W = canvas.width;
+      const H = canvas.height;
+      const anim = animRef.current || {};
+      const speed = Math.max(0.14, Number(anim.speed || 0.28));
+      const unwrappedPhase = elapsedSec * speed * 1.35;
+      const effectiveAnim = {
+        ...anim,
+        pulse_count: Math.max(2, Number(anim.pulse_count || 2)),
+      };
+
+      ctx.fillStyle = '#040814';
+      ctx.fillRect(0, 0, W, H);
+
+      const padX = 8;
+      const usableW = W - padX * 2;
+      const cy = H * 0.5;
+
+      // Subtle wire track
+      ctx.strokeStyle = 'rgba(51, 65, 85, 0.65)';
+      ctx.lineWidth = 1.2;
+      ctx.beginPath();
+      ctx.moveTo(padX, cy);
+      ctx.lineTo(W - padX, cy);
+      ctx.stroke();
+
+      for (let i = 0; i < ledCount; i += 1) {
+        const u = (i + 0.5) / ledCount;
+        const px = padX + u * usableW;
+        const [r, g, b] = evaluateEffectAtPoint(u, unwrappedPhase, elapsedSec, effectiveAnim);
+
+        // Soft outer LED halo
+        ctx.fillStyle = `rgba(${r}, ${g}, ${b}, 0.36)`;
+        ctx.beginPath();
+        ctx.arc(px, cy, 5.2, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Crisp LED puck core
+        ctx.fillStyle = `rgb(${r}, ${g}, ${b})`;
+        ctx.beginPath();
+        ctx.arc(px, cy, 2.7, 0, Math.PI * 2);
+        ctx.fill();
+
+        if (Math.max(r, g, b) > 140) {
+          ctx.fillStyle = 'rgba(255, 255, 255, 0.75)';
+          ctx.beginPath();
+          ctx.arc(px, cy, 1.0, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+    };
+
+    drawStrip((performance.now() - stripStartMs) / 1000.0);
+    return subscribeSceneStrip(drawStrip);
+  }, [ledCount]);
+
+  return (
+    <div className="rounded-lg overflow-hidden border border-[#1e293b]/90 bg-[#040814] px-1 py-0.5 flex items-center justify-between gap-1.5">
+      <canvas
+        ref={canvasRef}
+        width={300}
+        height={16}
+        className="w-full block"
+        style={{ height: '16px' }}
+      />
+      <span className="text-[9px] font-mono font-bold text-cyan-300/90 shrink-0 pr-1">
+        {ledCount} LEDs · ↺ CCW
+      </span>
+    </div>
+  );
+}
 
 /**
  * Custom 3-House Neon Roofline Brand Logo (`<BrandLogo />`).
@@ -1250,6 +1381,14 @@ export default function App() {
 
   const allHouses = config?.houses || [];
   const enabledHouseCount = allHouses.filter((h) => h.enabled !== false).length;
+  // Boosted high-density house preview list so mini scene cards render 18-30 dense glowing LED pucks per house
+  const highDensityPreviewHouses = allHouses.map((h) => ({
+    ...h,
+    controllers: (h.controllers || []).map((c) => ({
+      ...c,
+      segment_count: Math.max(18, Number(c.segment_count || 9) * 3),
+    })),
+  }));
 
   // External OAuth Login Gate (when accessed externally and not signed in)
   if (!authStatus.loading && authStatus.auth_required && !authStatus.authenticated) {
@@ -1652,16 +1791,22 @@ export default function App() {
                         className="flex-1 bg-[#060b18] border border-[#1e293b] rounded-lg px-2 py-1 text-[11px] font-bold text-[#00f5d4]"
                       >
                         <option value="all_segments">
-                          Linear Strip (All Segments)
+                          ⚡ Smart CCW + Street Sync (1F LTR → 2F RTL)
+                        </option>
+                        <option value="ccw_loop">
+                          ↺ Bottom → Top CCW Loop (1F LTR → 2F RTL)
+                        </option>
+                        <option value="bottom_to_top">
+                          ⬆️ Bottom → Top Vertical Rise
                         </option>
                         <option value="front_street_sync">
-                          Street-Front Sync + Side/Back Echo
-                        </option>
-                        <option value="depth_front_to_back">
-                          3D Depth Wave (Front → Sides → Back)
+                          🔗 Street X-Lock (Top+Bottom Aligned)
                         </option>
                         <option value="perimeter_360">
-                          360° House Perimeter Orbit
+                          🔄 360° Roof Orbit
+                        </option>
+                        <option value="depth_front_to_back">
+                          🌊 Front → Back Depth
                         </option>
                         <option value="front_only_quiet_sides">
                           Front Show Only (Dim Sides &amp; Back)
@@ -1958,12 +2103,16 @@ export default function App() {
                             : 'bg-[#060b18] hover:bg-[#091226] border-[#1e293b]'
                         }`}
                       >
-                        {/* 1. Top: Live 3-House Night-Sky Architectural Preview (exact match to APK) */}
+                        {/* 1. Top: Live 3-House Night-Sky Architectural Preview + 28-LED High-Density Strip */}
                         <LiveSceneCardPreview
                           animation={{ ...pAnim, running: true }}
-                          houses={config?.houses}
+                          houses={highDensityPreviewHouses}
                           height={96}
                           compact={true}
+                        />
+                        <HighDensitySceneStripBar
+                          animation={{ ...pAnim, running: true }}
+                          ledCount={28}
                         />
 
                         {/* 2. Middle: Title + 3 Color Dots */}
@@ -2855,8 +3004,12 @@ export default function App() {
 
                         <LiveSceneCardPreview
                           animation={previewAnim}
-                          houses={config?.houses}
+                          houses={highDensityPreviewHouses}
                           height={88}
+                        />
+                        <HighDensitySceneStripBar
+                          animation={{ ...previewAnim, running: true }}
+                          ledCount={28}
                         />
 
                         <p className="text-[11px] text-slate-400 leading-relaxed">{eff.desc}</p>

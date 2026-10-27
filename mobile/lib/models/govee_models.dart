@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
-const String kAppVersionName = '3.7.0';
-const int kAppVersionCode = 10;
+const String kAppVersionName = '3.8.0';
+const int kAppVersionCode = 11;
 
 const String kDefaultBackendUrl = String.fromEnvironment(
   'DEFAULT_BACKEND_URL',
@@ -270,8 +270,9 @@ class HouseArchitecture {
 }
 
 /// 5 built-in architectural house templates for 1-tap selection & full customization.
+/// Front sections are ordered Bottom-to-Top Counter-Clockwise (1st Story LTR -> 2nd Story RTL).
 const Map<String, HouseArchitecture> kArchitecturePresets = {
-  // 1. House 2 (Middle — MY HOUSE, Front Only): Upper 2nd-Story Full-Width Triangle Peak + Lower Garage Flat Eave + Lower Porch Triangle Peak
+  // 1. House 2 (Middle — MY HOUSE, Front Only): Bottom-to-Top CCW (Lower Garage Eave LTR -> Lower Porch Peak LTR -> Upper 2nd-Story Gable RTL)
   'a_frame_gable': HouseArchitecture(
     presetStyle: 'a_frame_gable',
     defaultViewMode: '3d',
@@ -282,22 +283,6 @@ const Map<String, HouseArchitecture> kArchitecturePresets = {
     trimColor: '#e2e8f0',
     roofColor: '#0f172a',
     sections: [
-      ArchSection(
-        id: 'sec-main-gable',
-        label: 'Upper 2nd-Story Full-Width Triangle Peak (4 Windows)',
-        shape: 'triangle_gable',
-        wall: 'front',
-        story: 2,
-        xStart: 0.05,
-        xEnd: 0.95,
-        eaveHeight: 0.58,
-        peakHeight: 0.93,
-        peakOffset: 0.50,
-        depthOffset: 0.04,
-        hasGarage: false,
-        hasDoor: false,
-        windowStyle: 'picture',
-      ),
       ArchSection(
         id: 'sec-lower-garage-eave',
         label: 'Lower Left 2-Car Garage Flat Eave',
@@ -330,10 +315,26 @@ const Map<String, HouseArchitecture> kArchitecturePresets = {
         hasDoor: true,
         windowStyle: 'double_hung',
       ),
+      ArchSection(
+        id: 'sec-main-gable',
+        label: 'Upper 2nd-Story Full-Width Triangle Peak (4 Windows)',
+        shape: 'triangle_gable',
+        wall: 'front',
+        story: 2,
+        xStart: 0.05,
+        xEnd: 0.95,
+        eaveHeight: 0.58,
+        peakHeight: 0.93,
+        peakOffset: 0.50,
+        depthOffset: 0.04,
+        hasGarage: false,
+        hasDoor: false,
+        windowStyle: 'picture',
+      ),
     ],
   ),
 
-  // 2. House 1 (Left Neighbor): Upper Left Steep Gable (3 Windows) + Upper Right Flat Eave (1 Window) + Lower Left Porch + Lower Right 2-Car Garage + Sides/Back
+  // 2. House 1 (Left Neighbor): Bottom-to-Top CCW (Lower Left Porch LTR -> Lower Right Garage LTR -> Upper Right Flat Eave RTL -> Upper Left Steep Gable RTL + Sides/Back CCW)
   'craftsman_multi_section': HouseArchitecture(
     presetStyle: 'craftsman_multi_section',
     defaultViewMode: '3d',
@@ -344,38 +345,6 @@ const Map<String, HouseArchitecture> kArchitecturePresets = {
     trimColor: '#cbd5e1',
     roofColor: '#0f172a',
     sections: [
-      ArchSection(
-        id: 'sec-upper-dormer',
-        label: 'Upper Left Steep Gable (3 Windows)',
-        shape: 'steep_gable',
-        wall: 'front',
-        story: 2,
-        xStart: 0.04,
-        xEnd: 0.58,
-        eaveHeight: 0.60,
-        peakHeight: 0.95,
-        peakOffset: 0.50,
-        depthOffset: 0.04,
-        hasGarage: false,
-        hasDoor: false,
-        windowStyle: 'modern_grid',
-      ),
-      ArchSection(
-        id: 'sec-upper-right-eave',
-        label: 'Upper Right Flat Eave (1 Window)',
-        shape: 'flat_eave',
-        wall: 'front',
-        story: 2,
-        xStart: 0.58,
-        xEnd: 0.96,
-        eaveHeight: 0.60,
-        peakHeight: 0.60,
-        peakOffset: 0.50,
-        depthOffset: 0.0,
-        hasGarage: false,
-        hasDoor: false,
-        windowStyle: 'double_hung',
-      ),
       ArchSection(
         id: 'sec-entry-gable',
         label: 'Lower Left Entry Porch Eave',
@@ -409,15 +378,36 @@ const Map<String, HouseArchitecture> kArchitecturePresets = {
         windowStyle: 'modern_grid',
       ),
       ArchSection(
-        id: 'sec-left-eave',
-        label: 'Left Side Eave',
+        id: 'sec-upper-right-eave',
+        label: 'Upper Right Flat Eave (1 Window)',
         shape: 'flat_eave',
-        wall: 'left',
+        wall: 'front',
         story: 2,
-        xStart: 0.0,
-        xEnd: 1.0,
-        eaveHeight: 0.58,
-        peakHeight: 0.58,
+        xStart: 0.58,
+        xEnd: 0.96,
+        eaveHeight: 0.60,
+        peakHeight: 0.60,
+        peakOffset: 0.50,
+        depthOffset: 0.0,
+        hasGarage: false,
+        hasDoor: false,
+        windowStyle: 'double_hung',
+      ),
+      ArchSection(
+        id: 'sec-upper-dormer',
+        label: 'Upper Left Steep Gable (3 Windows)',
+        shape: 'steep_gable',
+        wall: 'front',
+        story: 2,
+        xStart: 0.04,
+        xEnd: 0.58,
+        eaveHeight: 0.60,
+        peakHeight: 0.95,
+        peakOffset: 0.50,
+        depthOffset: 0.04,
+        hasGarage: false,
+        hasDoor: false,
+        windowStyle: 'modern_grid',
       ),
       ArchSection(
         id: 'sec-right-eave',
@@ -441,10 +431,21 @@ const Map<String, HouseArchitecture> kArchitecturePresets = {
         eaveHeight: 0.56,
         peakHeight: 0.74,
       ),
+      ArchSection(
+        id: 'sec-left-eave',
+        label: 'Left Side Eave',
+        shape: 'flat_eave',
+        wall: 'left',
+        story: 2,
+        xStart: 0.0,
+        xEnd: 1.0,
+        eaveHeight: 0.58,
+        peakHeight: 0.58,
+      ),
     ],
   ),
 
-  // 3. House 3 (Right Neighbor): Upper Left Recessed Dormer Nook + Upper Right 3-Window Hip Fascia + Lower Full-Width Porch & Garage + Sides/Back
+  // 3. House 3 (Right Neighbor): Bottom-to-Top CCW (Lower Full-Width Porch & Garage LTR -> Upper Right 3-Window Hip Fascia RTL -> Upper Left Recessed Dormer Nook RTL + Sides/Back CCW)
   'two_story_estate': HouseArchitecture(
     presetStyle: 'two_story_estate',
     defaultViewMode: '3d',
@@ -456,20 +457,20 @@ const Map<String, HouseArchitecture> kArchitecturePresets = {
     roofColor: '#0d1322',
     sections: [
       ArchSection(
-        id: 'sec-left-tower-gable',
-        label: 'Upper Left Recessed Dormer Nook',
-        shape: 'dormer_peak',
+        id: 'sec-right-garage-gable',
+        label: 'Lower Full-Width Porch & Garage Flat Eave',
+        shape: 'flat_eave',
         wall: 'front',
-        story: 2,
-        xStart: 0.06,
-        xEnd: 0.26,
-        eaveHeight: 0.56,
-        peakHeight: 0.66,
+        story: 1,
+        xStart: 0.04,
+        xEnd: 0.98,
+        eaveHeight: 0.38,
+        peakHeight: 0.38,
         peakOffset: 0.50,
-        depthOffset: -0.06,
-        hasGarage: false,
-        hasDoor: false,
-        windowStyle: 'arched',
+        depthOffset: 0.18,
+        hasGarage: true,
+        hasDoor: true,
+        windowStyle: 'modern_grid',
       ),
       ArchSection(
         id: 'sec-center-flat-fascia',
@@ -488,31 +489,20 @@ const Map<String, HouseArchitecture> kArchitecturePresets = {
         windowStyle: 'modern_grid',
       ),
       ArchSection(
-        id: 'sec-right-garage-gable',
-        label: 'Lower Full-Width Porch & Garage Flat Eave',
-        shape: 'flat_eave',
+        id: 'sec-left-tower-gable',
+        label: 'Upper Left Recessed Dormer Nook',
+        shape: 'dormer_peak',
         wall: 'front',
-        story: 1,
-        xStart: 0.04,
-        xEnd: 0.98,
-        eaveHeight: 0.38,
-        peakHeight: 0.38,
-        peakOffset: 0.50,
-        depthOffset: 0.18,
-        hasGarage: true,
-        hasDoor: true,
-        windowStyle: 'modern_grid',
-      ),
-      ArchSection(
-        id: 'sec-left-wing',
-        label: 'Left Side Upper & Lower Eaves',
-        shape: 'flat_eave',
-        wall: 'left',
         story: 2,
-        xStart: 0.0,
-        xEnd: 1.0,
-        eaveHeight: 0.58,
-        peakHeight: 0.58,
+        xStart: 0.06,
+        xEnd: 0.26,
+        eaveHeight: 0.56,
+        peakHeight: 0.66,
+        peakOffset: 0.50,
+        depthOffset: -0.06,
+        hasGarage: false,
+        hasDoor: false,
+        windowStyle: 'arched',
       ),
       ArchSection(
         id: 'sec-right-wing',
@@ -535,6 +525,17 @@ const Map<String, HouseArchitecture> kArchitecturePresets = {
         xEnd: 1.0,
         eaveHeight: 0.54,
         peakHeight: 0.54,
+      ),
+      ArchSection(
+        id: 'sec-left-wing',
+        label: 'Left Side Upper & Lower Eaves',
+        shape: 'flat_eave',
+        wall: 'left',
+        story: 2,
+        xStart: 0.0,
+        xEnd: 1.0,
+        eaveHeight: 0.58,
+        peakHeight: 0.58,
       ),
     ],
   ),
@@ -728,8 +729,11 @@ class SectionSpan {
     required this.sectionId,
     this.wall = 'front',
     required this.segments,
-    this.direction = 'forward',
+    this.direction = 'ltr',
   });
+
+  bool get isReverseDirection =>
+      direction == 'rtl' || direction == 'reverse';
 
   SectionSpan copyWith({
     String? sectionId,
@@ -752,7 +756,7 @@ class SectionSpan {
       segments: (json['segments'] is num)
           ? (json['segments'] as num).toInt().clamp(0, 200)
           : 6,
-      direction: (json['direction'] ?? 'forward').toString(),
+      direction: (json['direction'] ?? 'ltr').toString(),
     );
   }
 
@@ -1041,11 +1045,15 @@ class HouseConfig {
     }
 
     final n = ctrl.segmentCount;
-    final dir = ctrl.reversed ? 'reverse' : 'forward';
     final ctrlIdx = controllers.indexWhere((c) => c.id == ctrl.id);
 
+    String resolveDir(String recipeDir) {
+      if (!ctrl.reversed) return recipeDir;
+      return (recipeDir == 'rtl' || recipeDir == 'reverse') ? 'ltr' : 'rtl';
+    }
+
     List<SectionSpan> buildProportionalSpans(
-      List<({String id, String wall, int base})> recipe,
+      List<({String id, String wall, int base, String dir})> recipe,
     ) {
       final filtered = recipe
           .where((r) => validSectionIds.containsKey(r.id))
@@ -1058,7 +1066,7 @@ class HouseConfig {
                   sectionId: r.id,
                   wall: r.wall,
                   segments: r.base,
-                  direction: dir,
+                  direction: resolveDir(r.dir),
                 ))
             .toList();
       }
@@ -1076,7 +1084,7 @@ class HouseConfig {
               sectionId: item.id,
               wall: item.wall,
               segments: cnt,
-              direction: dir,
+              direction: resolveDir(item.dir),
             ),
           );
         }
@@ -1084,32 +1092,34 @@ class HouseConfig {
       return spans;
     }
 
-    // Photo-accurate default spans for the 3 real houses:
+    // Photo-accurate Bottom-to-Top Counter-Clockwise (1F LTR -> 2F RTL) default spans for the 3 real houses:
     if (arch.presetStyle == 'a_frame_gable' ||
         validSectionIds.containsKey('sec-main-gable')) {
       final recipeSpans = buildProportionalSpans(const [
-        (id: 'sec-main-gable', wall: 'front', base: 5),
-        (id: 'sec-lower-garage-eave', wall: 'front', base: 2),
-        (id: 'sec-lower-porch-gable', wall: 'front', base: 2),
+        (id: 'sec-lower-garage-eave', wall: 'front', base: 2, dir: 'ltr'),
+        (id: 'sec-lower-porch-gable', wall: 'front', base: 2, dir: 'ltr'),
+        (id: 'sec-main-gable', wall: 'front', base: 5, dir: 'rtl'),
       ]);
       if (recipeSpans.isNotEmpty) return recipeSpans;
     }
 
     if (arch.presetStyle == 'craftsman_multi_section' &&
         validSectionIds.containsKey('sec-upper-dormer')) {
-      if (ctrl.id == 'h1-ctrl-2' || ctrlIdx >= 1) {
+      if (ctrl.id == 'h1-ctrl-2' ||
+          ctrl.id == 'house-1-ctrl-2' ||
+          ctrlIdx >= 1) {
         final recipeSpans = buildProportionalSpans(const [
-          (id: 'sec-entry-gable', wall: 'front', base: 2),
-          (id: 'sec-garage-square', wall: 'front', base: 4),
-          (id: 'sec-left-eave', wall: 'left', base: 3),
-          (id: 'sec-back-eave', wall: 'back', base: 3),
+          (id: 'sec-right-eave', wall: 'right', base: 4, dir: 'ltr'),
+          (id: 'sec-back-eave', wall: 'back', base: 4, dir: 'rtl'),
+          (id: 'sec-left-eave', wall: 'left', base: 4, dir: 'rtl'),
         ]);
         if (recipeSpans.isNotEmpty) return recipeSpans;
       } else {
         final recipeSpans = buildProportionalSpans(const [
-          (id: 'sec-upper-dormer', wall: 'front', base: 5),
-          (id: 'sec-upper-right-eave', wall: 'front', base: 3),
-          (id: 'sec-right-eave', wall: 'right', base: 4),
+          (id: 'sec-entry-gable', wall: 'front', base: 2, dir: 'ltr'),
+          (id: 'sec-garage-square', wall: 'front', base: 4, dir: 'ltr'),
+          (id: 'sec-upper-right-eave', wall: 'front', base: 2, dir: 'rtl'),
+          (id: 'sec-upper-dormer', wall: 'front', base: 4, dir: 'rtl'),
         ]);
         if (recipeSpans.isNotEmpty) return recipeSpans;
       }
@@ -1117,38 +1127,46 @@ class HouseConfig {
 
     if (arch.presetStyle == 'two_story_estate' &&
         validSectionIds.containsKey('sec-left-tower-gable')) {
-      if (ctrl.id == 'h3-ctrl-2' || ctrlIdx >= 1) {
+      if (ctrl.id == 'h3-ctrl-2' ||
+          ctrl.id == 'house-3-ctrl-2' ||
+          ctrlIdx >= 1) {
         final recipeSpans = buildProportionalSpans(const [
-          (id: 'sec-right-garage-gable', wall: 'front', base: 6),
-          (id: 'sec-left-wing', wall: 'left', base: 5),
-          (id: 'sec-back-wing', wall: 'back', base: 4),
+          (id: 'sec-right-wing', wall: 'right', base: 5, dir: 'ltr'),
+          (id: 'sec-back-wing', wall: 'back', base: 5, dir: 'rtl'),
+          (id: 'sec-left-wing', wall: 'left', base: 5, dir: 'rtl'),
         ]);
         if (recipeSpans.isNotEmpty) return recipeSpans;
       } else {
         final recipeSpans = buildProportionalSpans(const [
-          (id: 'sec-left-tower-gable', wall: 'front', base: 2),
-          (id: 'sec-center-flat-fascia', wall: 'front', base: 6),
-          (id: 'sec-right-wing', wall: 'right', base: 7),
+          (id: 'sec-right-garage-gable', wall: 'front', base: 7, dir: 'ltr'),
+          (id: 'sec-center-flat-fascia', wall: 'front', base: 6, dir: 'rtl'),
+          (id: 'sec-left-tower-gable', wall: 'front', base: 2, dir: 'rtl'),
         ]);
         if (recipeSpans.isNotEmpty) return recipeSpans;
       }
     }
 
-    final frontSecs = arch.sections.where((s) => s.wall == 'front').toList();
+    final rawFrontSecs = arch.sections.where((s) => s.wall == 'front').toList();
+    final lowerFront = rawFrontSecs.where((s) => s.story == 1).toList()
+      ..sort((a, b) => a.xStart.compareTo(b.xStart));
+    final upperFront = rawFrontSecs.where((s) => s.story >= 2).toList()
+      ..sort((a, b) => b.xStart.compareTo(a.xStart));
+    final frontSecs = [...lowerFront, ...upperFront];
     final allSecs = arch.sections.isNotEmpty
         ? arch.sections
         : HouseArchitecture.defaultForHouse(id, order).sections;
 
-    // Single controller or My House -> map onto front architectural sections
+    // Single controller or My House -> map onto front architectural sections Bottom-to-Top CCW
     if (isMyHouse || controllers.length <= 1) {
       final targets = frontSecs.isNotEmpty ? frontSecs : [allSecs.first];
       if (targets.length == 1) {
+        final onlySec = targets.first;
         return [
           SectionSpan(
-            sectionId: targets.first.id,
-            wall: targets.first.wall,
+            sectionId: onlySec.id,
+            wall: onlySec.wall,
             segments: n,
-            direction: dir,
+            direction: resolveDir(onlySec.story >= 2 ? 'rtl' : 'ltr'),
           ),
         ];
       }
@@ -1166,7 +1184,7 @@ class HouseConfig {
               sectionId: sec.id,
               wall: sec.wall,
               segments: cnt,
-              direction: dir,
+              direction: resolveDir(sec.story >= 2 ? 'rtl' : 'ltr'),
             ),
           );
         }
@@ -1174,12 +1192,9 @@ class HouseConfig {
       return spans;
     }
 
-    // Multi-controller house fallback
+    // Multi-controller house fallback: Ctrl 1 = Front Bottom-to-Top CCW, Ctrl 2 = Sides & Back CCW
     if (ctrlIdx <= 0) {
-      final primaryFront = frontSecs.where((s) => s.story == 2).toList();
-      final targets = primaryFront.isNotEmpty
-          ? primaryFront
-          : (frontSecs.isNotEmpty ? frontSecs : [allSecs.first]);
+      final targets = frontSecs.isNotEmpty ? frontSecs : [allSecs.first];
       final spans = <SectionSpan>[];
       int remaining = n;
       for (int i = 0; i < targets.length; i++) {
@@ -1194,18 +1209,18 @@ class HouseConfig {
               sectionId: sec.id,
               wall: sec.wall,
               segments: cnt,
-              direction: dir,
+              direction: resolveDir(sec.story >= 2 ? 'rtl' : 'ltr'),
             ),
           );
         }
       }
       return spans;
     } else {
-      final lowerAndSides = arch.sections
-          .where((s) => s.story == 1 || s.wall != 'front')
+      final sideAndBack = arch.sections
+          .where((s) => s.wall != 'front')
           .toList();
-      final targets = lowerAndSides.isNotEmpty
-          ? lowerAndSides
+      final targets = sideAndBack.isNotEmpty
+          ? sideAndBack
           : (frontSecs.isNotEmpty ? frontSecs : [allSecs.last]);
       final spans = <SectionSpan>[];
       int remaining = n;
@@ -1216,12 +1231,13 @@ class HouseConfig {
             : (n / targets.length).round().clamp(1, remaining);
         remaining -= cnt;
         if (cnt > 0) {
+          final defDir = (sec.wall == 'back' || sec.wall == 'left') ? 'rtl' : 'ltr';
           spans.add(
             SectionSpan(
               sectionId: sec.id,
               wall: sec.wall,
               segments: cnt,
-              direction: dir,
+              direction: resolveDir(defDir),
             ),
           );
         }
@@ -1260,7 +1276,7 @@ class HouseConfig {
         final n = sp.segments;
         for (int k = 0; k < n && countForCtrl < ctrl.segmentCount; k++) {
           double u = n <= 1 ? 0.5 : (k + 0.5) / n;
-          if (sp.direction == 'reverse' || ctrl.reversed) {
+          if (sp.isReverseDirection != ctrl.reversed) {
             u = 1.0 - u;
           }
           double archX;
@@ -1874,37 +1890,13 @@ class SystemConfig {
           timeWeight: 1.0,
           connectionType: 'govee_cloud',
           notes:
-              '2 Govee controllers across upper steep gable + right eave + lower porch & 2-car garage + side/back eaves (24 segments)',
+              '2 Govee controllers wired Bottom-to-Top Counter-Clockwise (1F LTR -> 2F RTL + Sides/Back CCW, 24 segments)',
           architecture: kArchitecturePresets['craftsman_multi_section'],
           controllers: const [
             ControllerConfig(
               id: 'h1-ctrl-1',
-              name: 'Neighbor 1 - Upper Roofline & Right Side',
+              name: 'Neighbor 1 - Front Roofline (Bottom-to-Top CCW)',
               mac: 'AA:BB:CC:DD:EE:02',
-              sku: 'H705A',
-              segmentCount: 12,
-              sectionSpans: [
-                SectionSpan(
-                  sectionId: 'sec-upper-dormer',
-                  wall: 'front',
-                  segments: 5,
-                ),
-                SectionSpan(
-                  sectionId: 'sec-upper-right-eave',
-                  wall: 'front',
-                  segments: 3,
-                ),
-                SectionSpan(
-                  sectionId: 'sec-right-eave',
-                  wall: 'right',
-                  segments: 4,
-                ),
-              ],
-            ),
-            ControllerConfig(
-              id: 'h1-ctrl-2',
-              name: 'Neighbor 1 - Lower Garage, Left & Back',
-              mac: 'AA:BB:CC:DD:EE:03',
               sku: 'H705A',
               segmentCount: 12,
               sectionSpans: [
@@ -1912,21 +1904,52 @@ class SystemConfig {
                   sectionId: 'sec-entry-gable',
                   wall: 'front',
                   segments: 2,
+                  direction: 'ltr',
                 ),
                 SectionSpan(
                   sectionId: 'sec-garage-square',
                   wall: 'front',
                   segments: 4,
+                  direction: 'ltr',
                 ),
                 SectionSpan(
-                  sectionId: 'sec-left-eave',
-                  wall: 'left',
-                  segments: 3,
+                  sectionId: 'sec-upper-right-eave',
+                  wall: 'front',
+                  segments: 2,
+                  direction: 'rtl',
+                ),
+                SectionSpan(
+                  sectionId: 'sec-upper-dormer',
+                  wall: 'front',
+                  segments: 4,
+                  direction: 'rtl',
+                ),
+              ],
+            ),
+            ControllerConfig(
+              id: 'h1-ctrl-2',
+              name: 'Neighbor 1 - Sides & Back (CCW Loop)',
+              mac: 'AA:BB:CC:DD:EE:03',
+              sku: 'H705A',
+              segmentCount: 12,
+              sectionSpans: [
+                SectionSpan(
+                  sectionId: 'sec-right-eave',
+                  wall: 'right',
+                  segments: 4,
+                  direction: 'ltr',
                 ),
                 SectionSpan(
                   sectionId: 'sec-back-eave',
                   wall: 'back',
-                  segments: 3,
+                  segments: 4,
+                  direction: 'rtl',
+                ),
+                SectionSpan(
+                  sectionId: 'sec-left-eave',
+                  wall: 'left',
+                  segments: 4,
+                  direction: 'rtl',
                 ),
               ],
             ),
@@ -1940,7 +1963,7 @@ class SystemConfig {
           timeWeight: 1.0,
           connectionType: 'local_lan',
           notes:
-              'My Govee Outdoor Lights H705E on 192.168.1.83 (9 segments, Front Only: 5 upper gable + 2 garage eave + 2 porch peak)',
+              'My Govee Outdoor Lights H705E on 192.168.1.83 (9 segments, Front Only Bottom-to-Top CCW: 2 garage eave LTR + 2 porch peak LTR + 5 upper gable RTL)',
           architecture: kArchitecturePresets['a_frame_gable'],
           controllers: const [
             ControllerConfig(
@@ -1952,19 +1975,22 @@ class SystemConfig {
               segmentCount: 9,
               sectionSpans: [
                 SectionSpan(
-                  sectionId: 'sec-main-gable',
-                  wall: 'front',
-                  segments: 5,
-                ),
-                SectionSpan(
                   sectionId: 'sec-lower-garage-eave',
                   wall: 'front',
                   segments: 2,
+                  direction: 'ltr',
                 ),
                 SectionSpan(
                   sectionId: 'sec-lower-porch-gable',
                   wall: 'front',
                   segments: 2,
+                  direction: 'ltr',
+                ),
+                SectionSpan(
+                  sectionId: 'sec-main-gable',
+                  wall: 'front',
+                  segments: 5,
+                  direction: 'rtl',
                 ),
               ],
             ),
@@ -1978,54 +2004,60 @@ class SystemConfig {
           timeWeight: 1.0,
           connectionType: 'govee_cloud',
           notes:
-              '2 longer Govee H706A controllers across upper dormer nook + 3-window fascia + lower porch/garage + sides/back (30 segments)',
+              '2 Govee H706A controllers wired Bottom-to-Top Counter-Clockwise (1F Porch/Garage LTR -> 2F Hip Fascia & Dormer RTL + Sides/Back CCW, 30 segments)',
           architecture: kArchitecturePresets['two_story_estate'],
           controllers: const [
             ControllerConfig(
               id: 'h3-ctrl-1',
-              name: 'Neighbor 2 - Upper Fascia & Right Wing',
+              name: 'Neighbor 2 - Front Roofline (Bottom-to-Top CCW)',
               mac: 'AA:BB:CC:DD:EE:04',
-              sku: 'H706A',
-              segmentCount: 15,
-              sectionSpans: [
-                SectionSpan(
-                  sectionId: 'sec-left-tower-gable',
-                  wall: 'front',
-                  segments: 2,
-                ),
-                SectionSpan(
-                  sectionId: 'sec-center-flat-fascia',
-                  wall: 'front',
-                  segments: 6,
-                ),
-                SectionSpan(
-                  sectionId: 'sec-right-wing',
-                  wall: 'right',
-                  segments: 7,
-                ),
-              ],
-            ),
-            ControllerConfig(
-              id: 'h3-ctrl-2',
-              name: 'Neighbor 2 - Lower Porch, Left & Back',
-              mac: 'AA:BB:CC:DD:EE:05',
               sku: 'H706A',
               segmentCount: 15,
               sectionSpans: [
                 SectionSpan(
                   sectionId: 'sec-right-garage-gable',
                   wall: 'front',
+                  segments: 7,
+                  direction: 'ltr',
+                ),
+                SectionSpan(
+                  sectionId: 'sec-center-flat-fascia',
+                  wall: 'front',
                   segments: 6,
+                  direction: 'rtl',
+                ),
+                SectionSpan(
+                  sectionId: 'sec-left-tower-gable',
+                  wall: 'front',
+                  segments: 2,
+                  direction: 'rtl',
+                ),
+              ],
+            ),
+            ControllerConfig(
+              id: 'h3-ctrl-2',
+              name: 'Neighbor 2 - Sides & Back (CCW Loop)',
+              mac: 'AA:BB:CC:DD:EE:05',
+              sku: 'H706A',
+              segmentCount: 15,
+              sectionSpans: [
+                SectionSpan(
+                  sectionId: 'sec-right-wing',
+                  wall: 'right',
+                  segments: 5,
+                  direction: 'ltr',
+                ),
+                SectionSpan(
+                  sectionId: 'sec-back-wing',
+                  wall: 'back',
+                  segments: 5,
+                  direction: 'rtl',
                 ),
                 SectionSpan(
                   sectionId: 'sec-left-wing',
                   wall: 'left',
                   segments: 5,
-                ),
-                SectionSpan(
-                  sectionId: 'sec-back-wing',
-                  wall: 'back',
-                  segments: 4,
+                  direction: 'rtl',
                 ),
               ],
             ),

@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import HouseArchitectureDesigner, {
   ArchitecturalViewportCanvas,
+  SUB_PUCKS_PER_SEGMENT,
 } from './HouseArchitectureDesigner.jsx';
 
 const QUICK_BURST_CHIPS = [
@@ -38,29 +39,34 @@ const QUICK_BURST_CHIPS = [
 
 const THREE_HOUSE_SYNC_MODES = [
   {
+    id: 'all_segments',
+    label: '⚡ Smart CCW + Street Sync',
+    desc: 'Bottom-to-Top Counter-Clockwise (1st Story LTR → 2nd Story RTL) synced across House 1 → House 2 → House 3',
+  },
+  {
+    id: 'ccw_loop',
+    label: '↺ Bottom → Top CCW Loop',
+    desc: 'Continuous Bottom-to-Top Counter-Clockwise loop (1F LTR → 2F RTL) simultaneously on each house',
+  },
+  {
+    id: 'bottom_to_top',
+    label: '⬆️ Bottom → Top Vertical Rise',
+    desc: 'Vertical light wave rising from 1st-story garage/porch eaves up to 2nd-story gable peaks across all 3 houses',
+  },
+  {
     id: 'front_street_sync',
-    label: 'Street X-Lock (Upper+Lower Synced)',
+    label: '🔗 Street X-Lock (Top+Bottom Aligned)',
     desc: 'Locks Upper 2nd-story & Lower 1st-story front rooflines to horizontal street X coordinate across all 3 houses',
   },
   {
-    id: 'all_segments',
-    label: 'Continuous Strip',
-    desc: 'Flows sequentially across every segment of House 1 → House 2 → House 3',
-  },
-  {
     id: 'perimeter_360',
-    label: '360° Roof Orbit',
-    desc: 'Orbits clockwise around Front → Right → Back → Left rooflines',
+    label: '🔄 360° Roof Orbit',
+    desc: 'Orbits around Front → Right → Back → Left rooflines',
   },
   {
     id: 'depth_front_to_back',
-    label: 'Front→Back Depth',
+    label: '🌊 Front → Back Depth',
     desc: 'Sweeps from stepped-forward front porch/garage eaves back to rear rooflines',
-  },
-  {
-    id: 'front_only_quiet_sides',
-    label: 'Front Bright / Quiet Sides',
-    desc: 'Full dynamic motion on street-facing Upper & Lower front rooflines with soft ambient sides/back',
   },
 ];
 
@@ -113,7 +119,9 @@ export default function NeighborhoodPreview({
     optimisticZoneMode ||
     liveState?.zone_mode ||
     config?.animation?.zone_mode ||
-    'front_street_sync';
+    'all_segments';
+  const totalSegCount = segments.length || 63;
+  const totalPuckCount = totalSegCount * SUB_PUCKS_PER_SEGMENT;
 
   const handleSelectZoneMode = async (modeId) => {
     setOptimisticZoneMode(modeId);
@@ -181,7 +189,7 @@ export default function NeighborhoodPreview({
             Live Multi-House 3D &amp; 2D Roofline Studio
           </h2>
           <span className="text-[11px] font-mono px-2 py-0.5 rounded-md bg-[#060b18] text-[#00f5d4] border border-[#1e293b]">
-            {enabledHouses.length}/{houses.length} Houses • {segments.length || 63} Segs
+            {enabledHouses.length}/{houses.length} Houses • {totalSegCount} Segs ({totalPuckCount} LEDs)
           </span>
         </div>
 

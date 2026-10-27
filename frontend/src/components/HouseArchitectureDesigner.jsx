@@ -22,8 +22,10 @@ import {
   X,
   ChevronRight,
 } from 'lucide-react';
+import { evaluateEffectAtPoint } from './LiveSceneCardPreview.jsx';
 
-const ARCH_STORAGE_KEY = 'govee_house_architectures_v2';
+const ARCH_STORAGE_KEY = 'govee_house_architectures_v3';
+export const SUB_PUCKS_PER_SEGMENT = 5;
 
 export function loadSavedArchitectureOverrides() {
   if (typeof window === 'undefined') return {};
@@ -92,9 +94,19 @@ export const WINDOW_STYLES = [
 
 export const WIRING_ROUTE_PRESETS = [
   {
+    id: 'bottom_to_top_ccw',
+    label: '↺ Bottom → Top Counter-Clockwise (1F LTR → 2F RTL)',
+    subtitle: 'Default 1st Story LTR → 2nd Story RTL CCW',
+  },
+  {
+    id: 'sides_back_ccw',
+    label: '↺ Sides & Back Counter-Clockwise (Right LTR → Back RTL → Left RTL)',
+    subtitle: 'Perimeter Sides & Back CCW',
+  },
+  {
     id: 'front_upper_to_lower',
     label: 'Upper Front → Lower Front',
-    subtitle: 'Front 2-Tier Only',
+    subtitle: 'Front 2-Tier Top-Down',
   },
   {
     id: 'upper_front_right_back',
@@ -123,40 +135,8 @@ export const ARCHITECTURAL_PRESETS = {
     preset_style: 'craftsman_multi_section',
     label: '🏘️ House 1 (Left Neighbor): Steep Gable + Flat Eave + Porch & 2-Car Garage',
     description:
-      'Exact House 1 from photos: 2nd-story Left Steep Gable (3 narrow windows) + Upper Right Flat Eave (1 window); stepped-forward 1st-story Left Entry Porch Eave + Right 2-Car Garage Flat Eave + Left/Right/Back perimeter eaves.',
+      'Exact House 1 from photos (Bottom-to-Top CCW): stepped-forward 1st-story Left Entry Porch Eave (LTR) + Right 2-Car Garage Flat Eave (LTR) → 2nd-story Upper Right Flat Eave (RTL) + Upper Left Steep Gable (RTL) + Right/Back/Left perimeter eaves.',
     sections: [
-      {
-        id: 'sec-upper-dormer',
-        label: 'Upper Left Steep Gable (3 Windows)',
-        shape: 'steep_gable',
-        wall: 'front',
-        story: 2,
-        x_start: 0.04,
-        x_end: 0.58,
-        eave_height: 0.60,
-        peak_height: 0.95,
-        peak_offset: 0.50,
-        depth_offset: 0.04,
-        has_garage: false,
-        has_door: false,
-        window_style: 'modern_grid',
-      },
-      {
-        id: 'sec-upper-right-eave',
-        label: 'Upper Right Flat Eave (1 Window)',
-        shape: 'flat_eave',
-        wall: 'front',
-        story: 2,
-        x_start: 0.58,
-        x_end: 0.96,
-        eave_height: 0.60,
-        peak_height: 0.60,
-        peak_offset: 0.50,
-        depth_offset: 0.0,
-        has_garage: false,
-        has_door: false,
-        window_style: 'double_hung',
-      },
       {
         id: 'sec-entry-gable',
         label: 'Lower Left Entry Porch Eave',
@@ -190,17 +170,33 @@ export const ARCHITECTURAL_PRESETS = {
         window_style: 'modern_grid',
       },
       {
-        id: 'sec-left-eave',
-        label: 'Left Side 2nd-Story Eave',
+        id: 'sec-upper-right-eave',
+        label: 'Upper Right Flat Eave (1 Window)',
         shape: 'flat_eave',
-        wall: 'left',
+        wall: 'front',
         story: 2,
-        x_start: 0.04,
+        x_start: 0.58,
         x_end: 0.96,
-        eave_height: 0.58,
-        peak_height: 0.58,
+        eave_height: 0.60,
+        peak_height: 0.60,
         peak_offset: 0.50,
         depth_offset: 0.0,
+        has_garage: false,
+        has_door: false,
+        window_style: 'double_hung',
+      },
+      {
+        id: 'sec-upper-dormer',
+        label: 'Upper Left Steep Gable (3 Windows)',
+        shape: 'steep_gable',
+        wall: 'front',
+        story: 2,
+        x_start: 0.04,
+        x_end: 0.58,
+        eave_height: 0.60,
+        peak_height: 0.95,
+        peak_offset: 0.50,
+        depth_offset: 0.04,
         has_garage: false,
         has_door: false,
         window_style: 'modern_grid',
@@ -237,6 +233,22 @@ export const ARCHITECTURAL_PRESETS = {
         has_door: false,
         window_style: 'modern_grid',
       },
+      {
+        id: 'sec-left-eave',
+        label: 'Left Side 2nd-Story Eave',
+        shape: 'flat_eave',
+        wall: 'left',
+        story: 2,
+        x_start: 0.04,
+        x_end: 0.96,
+        eave_height: 0.58,
+        peak_height: 0.58,
+        peak_offset: 0.50,
+        depth_offset: 0.0,
+        has_garage: false,
+        has_door: false,
+        window_style: 'modern_grid',
+      },
     ],
   },
 
@@ -244,24 +256,8 @@ export const ARCHITECTURAL_PRESETS = {
     preset_style: 'a_frame_gable',
     label: '🔺 House 2 (My House — Middle): Full Triangle Gable + Garage + Porch Peak',
     description:
-      'Exact House 2 (My House, Front Only): 2nd-story Full-Width Symmetric Triangle Gable Peak (4 windows + apex vent); stepped-forward 1st-story Left 2-Car Garage Flat Eave (stone pillars & sconces) + Right Covered Porch Triangle Peak (Craftsman columns on stone pedestals + 4 driveway path lights).',
+      'Exact House 2 (My House, Front Only, Bottom-to-Top CCW): stepped-forward 1st-story Left 2-Car Garage Flat Eave (LTR) → Right Covered Porch Triangle Peak (LTR) → 2nd-story Full-Width Symmetric Triangle Gable Peak (RTL).',
     sections: [
-      {
-        id: 'sec-main-gable',
-        label: 'Upper 2nd-Story Full-Width Triangle Peak (4 Windows)',
-        shape: 'triangle_gable',
-        wall: 'front',
-        story: 2,
-        x_start: 0.05,
-        x_end: 0.95,
-        eave_height: 0.58,
-        peak_height: 0.93,
-        peak_offset: 0.50,
-        depth_offset: 0.04,
-        has_garage: false,
-        has_door: false,
-        window_style: 'picture',
-      },
       {
         id: 'sec-lower-garage-eave',
         label: 'Lower Left 2-Car Garage Flat Eave',
@@ -294,6 +290,22 @@ export const ARCHITECTURAL_PRESETS = {
         has_door: true,
         window_style: 'double_hung',
       },
+      {
+        id: 'sec-main-gable',
+        label: 'Upper 2nd-Story Full-Width Triangle Peak (4 Windows)',
+        shape: 'triangle_gable',
+        wall: 'front',
+        story: 2,
+        x_start: 0.05,
+        x_end: 0.95,
+        eave_height: 0.58,
+        peak_height: 0.93,
+        peak_offset: 0.50,
+        depth_offset: 0.04,
+        has_garage: false,
+        has_door: false,
+        window_style: 'picture',
+      },
     ],
   },
 
@@ -301,23 +313,23 @@ export const ARCHITECTURAL_PRESETS = {
     preset_style: 'two_story_estate',
     label: '🏰 House 3 (Right Neighbor): Recessed Dormer + 3-Window Hip Fascia + Full Porch/Garage',
     description:
-      'Exact House 3 from photos: 2nd-story Recessed Left Dormer Nook + Right 3-Window Hip Fascia; stepped-forward 1st-story Full-Width Porch & 2-Car Garage Flat Eave (tapered column on stone pedestal) + Left/Right/Back wing eaves.',
+      'Exact House 3 from photos (Bottom-to-Top CCW): stepped-forward 1st-story Full-Width Porch & 2-Car Garage Flat Eave (LTR) → 2nd-story Upper Right 3-Window Hip Fascia (RTL) → Recessed Left Dormer Nook (RTL) + Right/Back/Left wing eaves.',
     sections: [
       {
-        id: 'sec-left-tower-gable',
-        label: 'Upper Left Recessed Dormer Nook',
-        shape: 'dormer_peak',
+        id: 'sec-right-garage-gable',
+        label: 'Lower Full-Width Porch & Garage Flat Eave',
+        shape: 'flat_eave',
         wall: 'front',
-        story: 2,
-        x_start: 0.06,
-        x_end: 0.26,
-        eave_height: 0.56,
-        peak_height: 0.66,
+        story: 1,
+        x_start: 0.04,
+        x_end: 0.98,
+        eave_height: 0.38,
+        peak_height: 0.38,
         peak_offset: 0.50,
-        depth_offset: -0.06,
-        has_garage: false,
-        has_door: false,
-        window_style: 'arched',
+        depth_offset: 0.18,
+        has_garage: true,
+        has_door: true,
+        window_style: 'modern_grid',
       },
       {
         id: 'sec-center-flat-fascia',
@@ -336,36 +348,20 @@ export const ARCHITECTURAL_PRESETS = {
         window_style: 'modern_grid',
       },
       {
-        id: 'sec-right-garage-gable',
-        label: 'Lower Full-Width Porch & Garage Flat Eave',
-        shape: 'flat_eave',
+        id: 'sec-left-tower-gable',
+        label: 'Upper Left Recessed Dormer Nook',
+        shape: 'dormer_peak',
         wall: 'front',
-        story: 1,
-        x_start: 0.04,
-        x_end: 0.98,
-        eave_height: 0.38,
-        peak_height: 0.38,
-        peak_offset: 0.50,
-        depth_offset: 0.18,
-        has_garage: true,
-        has_door: true,
-        window_style: 'modern_grid',
-      },
-      {
-        id: 'sec-left-wing',
-        label: 'Left Side Upper & Lower Eave',
-        shape: 'flat_eave',
-        wall: 'left',
         story: 2,
-        x_start: 0.04,
-        x_end: 0.96,
-        eave_height: 0.58,
-        peak_height: 0.58,
+        x_start: 0.06,
+        x_end: 0.26,
+        eave_height: 0.56,
+        peak_height: 0.66,
         peak_offset: 0.50,
-        depth_offset: 0.0,
+        depth_offset: -0.06,
         has_garage: false,
         has_door: false,
-        window_style: 'modern_grid',
+        window_style: 'arched',
       },
       {
         id: 'sec-right-wing',
@@ -398,6 +394,22 @@ export const ARCHITECTURAL_PRESETS = {
         has_garage: false,
         has_door: false,
         window_style: 'picture',
+      },
+      {
+        id: 'sec-left-wing',
+        label: 'Left Side Upper & Lower Eave',
+        shape: 'flat_eave',
+        wall: 'left',
+        story: 2,
+        x_start: 0.04,
+        x_end: 0.96,
+        eave_height: 0.58,
+        peak_height: 0.58,
+        peak_offset: 0.50,
+        depth_offset: 0.0,
+        has_garage: false,
+        has_door: false,
+        window_style: 'modern_grid',
       },
     ],
   },
@@ -558,11 +570,26 @@ export function getRealPhotoPresetKeyForHouse(house, houseIndex = 0) {
   return keys[houseIndex % keys.length];
 }
 
+function sortSectionsBottomToTopCCW(sections = []) {
+  const normalized = sections.map((s, i) => normalizeSection(s, i));
+  const lowerFront = normalized
+    .filter((s) => s.wall === 'front' && Number(s.story) !== 2)
+    .sort((a, b) => a.x_start - b.x_start);
+  const upperFront = normalized
+    .filter((s) => s.wall === 'front' && Number(s.story) === 2)
+    .sort((a, b) => b.x_start - a.x_start);
+  const rightSide = normalized.filter((s) => s.wall === 'right');
+  const backSide = normalized.filter((s) => s.wall === 'back');
+  const leftSide = normalized.filter((s) => s.wall === 'left');
+  return [...lowerFront, ...upperFront, ...rightSide, ...backSide, ...leftSide];
+}
+
 /**
  * Resolves the effective architecture for a house, combining:
- * 1. User-saved localStorage overrides (v2, if any)
+ * 1. User-saved localStorage overrides (v3, if any)
  * 2. Backend `house.architecture` (if populated and already 2-story photo-accurate or custom)
  * 3. Exact 3 Real House Models (`craftsman_multi_section`, `a_frame_gable`, `two_story_estate`)
+ * Ordered Bottom (`story: 1` LTR) → Top (`story: 2` RTL) Counter-Clockwise.
  */
 export function getEffectiveHouseArchitecture(house, houseIndex = 0) {
   const savedMap = loadSavedArchitectureOverrides();
@@ -588,10 +615,14 @@ export function getEffectiveHouseArchitecture(house, houseIndex = 0) {
     const hasStory2 = backendArch.sections.some((s) => Number(s.story) === 2);
     const hasStory1 = backendArch.sections.some((s) => Number(s.story) === 1);
     if ((hasStory2 && hasStory1) || backendArch.preset_style === 'custom') {
+      const ordered =
+        backendArch.preset_style === 'custom'
+          ? backendArch.sections.map((s, i) => normalizeSection(s, i))
+          : sortSectionsBottomToTopCCW(backendArch.sections);
       return {
         preset_style: backendArch.preset_style || 'custom',
         label: backendArch.label || 'Custom Architecture',
-        sections: backendArch.sections.map((s, i) => normalizeSection(s, i)),
+        sections: ordered,
       };
     }
   }
@@ -614,13 +645,155 @@ function distributeSegmentsEvenly(targetSections, segCount, direction = 'ltr') {
   return chosen.map((sec) => {
     const extra = remainder > 0 ? 1 : 0;
     if (remainder > 0) remainder -= 1;
+    const resolvedDir =
+      direction === 'ccw' ? (Number(sec.story) === 2 ? 'rtl' : 'ltr') : direction;
     return {
       section_id: sec.id,
       wall: sec.wall || 'front',
       segments: Math.max(1, basePerSec + extra),
-      direction,
+      direction: resolvedDir,
     };
   });
+}
+
+function scaleWeightedSpanSpecs(specs, totalSegs) {
+  if (!specs || specs.length === 0) return [];
+  const cleanTotal = Math.max(specs.length, Number(totalSegs || 9));
+  const baseSum = specs.reduce((acc, s) => acc + Number(s.segments || 1), 0);
+  if (baseSum === cleanTotal) {
+    return specs.map((s) => ({ ...s }));
+  }
+  const scaled = specs.map((s) => ({
+    ...s,
+    segments: Math.max(1, Math.round((Number(s.segments || 1) / Math.max(1, baseSum)) * cleanTotal)),
+  }));
+  let diff = cleanTotal - scaled.reduce((acc, s) => acc + s.segments, 0);
+  let idx = scaled.length - 1;
+  while (diff !== 0 && scaled.length > 0) {
+    if (diff > 0) {
+      scaled[idx % scaled.length].segments += 1;
+      diff -= 1;
+    } else if (scaled[idx % scaled.length].segments > 1) {
+      scaled[idx % scaled.length].segments -= 1;
+      diff += 1;
+    }
+    idx = (idx - 1 + scaled.length) % scaled.length;
+  }
+  return scaled;
+}
+
+function buildFrontBottomToTopCCWSpans(architecture, segCount = 9) {
+  const sections = architecture?.sections || [];
+  const byId = new Map(sections.map((s) => [s.id, s]));
+  const presetStyle = architecture?.preset_style || '';
+
+  // House 1 (Neighbor 1 Left): 12 segs -> sec-entry-gable (2, ltr) -> sec-garage-square (4, ltr) -> sec-upper-right-eave (2, rtl) -> sec-upper-dormer (4, rtl)
+  if (
+    presetStyle === 'craftsman_multi_section' ||
+    (byId.has('sec-entry-gable') &&
+      byId.has('sec-garage-square') &&
+      byId.has('sec-upper-right-eave') &&
+      byId.has('sec-upper-dormer'))
+  ) {
+    return scaleWeightedSpanSpecs(
+      [
+        { section_id: 'sec-entry-gable', wall: 'front', segments: 2, direction: 'ltr' },
+        { section_id: 'sec-garage-square', wall: 'front', segments: 4, direction: 'ltr' },
+        { section_id: 'sec-upper-right-eave', wall: 'front', segments: 2, direction: 'rtl' },
+        { section_id: 'sec-upper-dormer', wall: 'front', segments: 4, direction: 'rtl' },
+      ],
+      segCount
+    );
+  }
+
+  // House 2 (My House Middle): 9 segs -> sec-lower-garage-eave (2, ltr) -> sec-lower-porch-gable (2, ltr) -> sec-main-gable (5, rtl)
+  if (
+    presetStyle === 'a_frame_gable' ||
+    (byId.has('sec-lower-garage-eave') &&
+      byId.has('sec-lower-porch-gable') &&
+      byId.has('sec-main-gable'))
+  ) {
+    return scaleWeightedSpanSpecs(
+      [
+        { section_id: 'sec-lower-garage-eave', wall: 'front', segments: 2, direction: 'ltr' },
+        { section_id: 'sec-lower-porch-gable', wall: 'front', segments: 2, direction: 'ltr' },
+        { section_id: 'sec-main-gable', wall: 'front', segments: 5, direction: 'rtl' },
+      ],
+      segCount
+    );
+  }
+
+  // House 3 (Neighbor 2 Right): 15 segs -> sec-right-garage-gable (7, ltr) -> sec-center-flat-fascia (6, rtl) -> sec-left-tower-gable (2, rtl)
+  if (
+    presetStyle === 'two_story_estate' ||
+    (byId.has('sec-right-garage-gable') &&
+      byId.has('sec-center-flat-fascia') &&
+      byId.has('sec-left-tower-gable'))
+  ) {
+    return scaleWeightedSpanSpecs(
+      [
+        { section_id: 'sec-right-garage-gable', wall: 'front', segments: 7, direction: 'ltr' },
+        { section_id: 'sec-center-flat-fascia', wall: 'front', segments: 6, direction: 'rtl' },
+        { section_id: 'sec-left-tower-gable', wall: 'front', segments: 2, direction: 'rtl' },
+      ],
+      segCount
+    );
+  }
+
+  const lowerFront = sections
+    .filter((s) => s.wall === 'front' && Number(s.story) !== 2)
+    .sort((a, b) => a.x_start - b.x_start);
+  const upperFront = sections
+    .filter((s) => s.wall === 'front' && Number(s.story) === 2)
+    .sort((a, b) => b.x_start - a.x_start);
+  const ccwPool = [...lowerFront, ...upperFront];
+  return distributeSegmentsEvenly(
+    ccwPool.length > 0 ? ccwPool : sections,
+    Math.max(1, Number(segCount || 9)),
+    'ccw'
+  );
+}
+
+function buildSidesAndBackCCWSpans(architecture, segCount = 12) {
+  const sections = architecture?.sections || [];
+  const byId = new Map(sections.map((s) => [s.id, s]));
+
+  // House 1 Sides & Back CCW (12 segs): sec-right-eave (4, ltr) -> sec-back-eave (4, rtl) -> sec-left-eave (4, rtl)
+  if (byId.has('sec-right-eave') && byId.has('sec-back-eave') && byId.has('sec-left-eave')) {
+    return scaleWeightedSpanSpecs(
+      [
+        { section_id: 'sec-right-eave', wall: 'right', segments: 4, direction: 'ltr' },
+        { section_id: 'sec-back-eave', wall: 'back', segments: 4, direction: 'rtl' },
+        { section_id: 'sec-left-eave', wall: 'left', segments: 4, direction: 'rtl' },
+      ],
+      segCount
+    );
+  }
+
+  // House 3 Sides & Back CCW (15 segs): sec-right-wing (5, ltr) -> sec-back-wing (5, rtl) -> sec-left-wing (5, rtl)
+  if (byId.has('sec-right-wing') && byId.has('sec-back-wing') && byId.has('sec-left-wing')) {
+    return scaleWeightedSpanSpecs(
+      [
+        { section_id: 'sec-right-wing', wall: 'right', segments: 5, direction: 'ltr' },
+        { section_id: 'sec-back-wing', wall: 'back', segments: 5, direction: 'rtl' },
+        { section_id: 'sec-left-wing', wall: 'left', segments: 5, direction: 'rtl' },
+      ],
+      segCount
+    );
+  }
+
+  const rightSecs = sections.filter((s) => s.wall === 'right');
+  const backSecs = sections.filter((s) => s.wall === 'back');
+  const leftSecs = sections.filter((s) => s.wall === 'left');
+  const sidePool = [...rightSecs, ...backSecs, ...leftSecs];
+  if (sidePool.length > 0) {
+    const raw = distributeSegmentsEvenly(sidePool, segCount, 'ltr');
+    return raw.map((sp) => ({
+      ...sp,
+      direction: sp.wall === 'right' ? 'ltr' : 'rtl',
+    }));
+  }
+  return buildFrontBottomToTopCCWSpans(architecture, segCount);
 }
 
 /**
@@ -629,6 +802,13 @@ function distributeSegmentsEvenly(targetSections, segCount, direction = 'ltr') {
 export function buildWiringRoutePresetSpans(routeId, architecture, segCount = 9) {
   const sections = architecture?.sections || [];
   if (!sections.length) return [];
+
+  if (routeId === 'bottom_to_top_ccw') {
+    return buildFrontBottomToTopCCWSpans(architecture, segCount);
+  }
+  if (routeId === 'sides_back_ccw') {
+    return buildSidesAndBackCCWSpans(architecture, segCount);
+  }
 
   const upperFront = sections.filter((s) => s.wall === 'front' && Number(s.story) === 2);
   const lowerFront = sections.filter((s) => s.wall === 'front' && Number(s.story) !== 2);
@@ -645,7 +825,7 @@ export function buildWiringRoutePresetSpans(routeId, architecture, segCount = 9)
   } else if (routeId === 'lower_front_left_back') {
     pool = [...lowerFront, ...leftSecs, ...backSecs];
   } else if (routeId === 'full_360_clockwise') {
-    pool = [...upperFront, ...lowerFront, ...rightSecs, ...backSecs, ...leftSecs];
+    pool = [...lowerFront, ...upperFront, ...rightSecs, ...backSecs, ...leftSecs];
   } else if (routeId === 'equal_split_all') {
     pool = [...sections];
   }
@@ -658,7 +838,8 @@ export function buildWiringRoutePresetSpans(routeId, architecture, segCount = 9)
 }
 
 /**
- * Builds photo-accurate default controller `section_spans` across Upper Front, Lower Front, and Sides/Back.
+ * Builds photo-accurate default controller `section_spans` in
+ * Bottom-to-Top Counter-Clockwise (`1st Story LTR → 2nd Story RTL`) order.
  */
 export function buildPhotoDefaultControllerSpans(
   controller,
@@ -667,56 +848,19 @@ export function buildPhotoDefaultControllerSpans(
   totalControllers = 1
 ) {
   const segCount = Math.max(1, Number(controller?.segment_count || 9));
-  const sections = architecture?.sections || [];
-  const upperFront = sections.filter((s) => s.wall === 'front' && Number(s.story) === 2);
-  const lowerFront = sections.filter((s) => s.wall === 'front' && Number(s.story) !== 2);
-  const sideBack = sections.filter((s) => s.wall !== 'front');
-  const allFront = [...upperFront, ...lowerFront];
-  const dir = controller?.reverse_direction ? 'rtl' : 'ltr';
+  const ctrlId = (controller?.id || '').toLowerCase();
 
-  if (totalControllers <= 1) {
-    // Single controller (e.g. House 2 My House — 9 segs across Upper Gable + Lower Garage + Lower Porch)
-    const pool = allFront.length > 0 ? allFront : sections;
-    if (
-      architecture?.preset_style === 'a_frame_gable' &&
-      pool.length === 3 &&
-      segCount >= 5
-    ) {
-      const upperSegs = Math.max(2, Math.round(segCount * 0.55));
-      const rem = Math.max(2, segCount - upperSegs);
-      const garageSegs = Math.max(1, Math.ceil(rem / 2));
-      const porchSegs = Math.max(1, rem - garageSegs);
-      return [
-        { section_id: pool[0].id, wall: pool[0].wall, segments: upperSegs, direction: dir },
-        { section_id: pool[1].id, wall: pool[1].wall, segments: garageSegs, direction: dir },
-        { section_id: pool[2].id, wall: pool[2].wall, segments: porchSegs, direction: dir },
-      ];
+  // Explicit controller ID matching for House 1, House 2, and House 3
+  if (ctrlId.includes('ctrl-2') || (totalControllers >= 2 && ctrlIndex >= 1)) {
+    const sections = architecture?.sections || [];
+    const hasSideBack = sections.some((s) => s.wall !== 'front');
+    if (hasSideBack && (totalControllers === 2 || ctrlIndex >= totalControllers - 1)) {
+      return buildSidesAndBackCCWSpans(architecture, segCount);
     }
-    return distributeSegmentsEvenly(pool, segCount, dir);
   }
 
-  if (totalControllers === 2) {
-    if (ctrlIndex === 0) {
-      return distributeSegmentsEvenly(allFront.length > 0 ? allFront : sections, segCount, dir);
-    }
-    return distributeSegmentsEvenly(
-      sideBack.length > 0 ? sideBack : lowerFront.length > 0 ? lowerFront : sections,
-      segCount,
-      dir
-    );
-  }
-
-  // 3+ controllers (e.g. House 1 & House 3: Ctrl 0 = Upper Front, Ctrl 1 = Lower Front, Ctrl 2 = Sides & Back)
-  if (ctrlIndex === 0 && upperFront.length > 0) {
-    return distributeSegmentsEvenly(upperFront, segCount, dir);
-  }
-  if (ctrlIndex === 1 && lowerFront.length > 0) {
-    return distributeSegmentsEvenly(lowerFront, segCount, dir);
-  }
-  if (sideBack.length > 0) {
-    return distributeSegmentsEvenly(sideBack, segCount, dir);
-  }
-  return distributeSegmentsEvenly(allFront.length > 0 ? allFront : sections, segCount, dir);
+  // Default Front Bottom-to-Top Counter-Clockwise (1F LTR -> 2F RTL)
+  return buildFrontBottomToTopCCWSpans(architecture, segCount);
 }
 
 /**
@@ -759,12 +903,20 @@ export function getEffectiveControllerSpans(
 
   if (Array.isArray(controller?.section_spans) && controller.section_spans.length > 0) {
     const allMatch = controller.section_spans.every((sp) => validIds.has(sp.section_id));
-    // Avoid legacy 1-span fallback when the house has multiple 2-story photo sections on a single controller
+    // Avoid legacy 1-span fallback or legacy Top-to-Bottom (2F first) order
     const isLegacySingleSpan =
       totalControllers === 1 &&
       sections.length >= 3 &&
       controller.section_spans.length === 1;
-    if (allMatch && !isLegacySingleSpan) {
+    const firstSec = sections.find((s) => s.id === controller.section_spans[0]?.section_id);
+    const hasLowerFront = sections.some((s) => s.wall === 'front' && Number(s.story) === 1);
+    const isLegacyTopDown =
+      ctrlIndex === 0 &&
+      hasLowerFront &&
+      firstSec &&
+      firstSec.wall === 'front' &&
+      Number(firstSec.story) === 2;
+    if (allMatch && !isLegacySingleSpan && !isLegacyTopDown) {
       return controller.section_spans.map((sp, idx) => {
         const matchedSec = sections.find((s) => s.id === sp.section_id) || sections[0];
         return {
@@ -957,7 +1109,9 @@ function samplePointsAlong3DPolyline(polyline, count, reverse = false) {
 }
 
 /**
- * Builds the complete list of 3D/2D mapped LED pucks for a house across all its controllers.
+ * Builds the complete list of 3D/2D mapped high-density LED pucks for a house across all its controllers.
+ * Subdivides each logical controller segment into `SUB_PUCKS_PER_SEGMENT` (5) physical Govee LED pucks
+ * so a 9-segment house renders 45 glowing pucks and 24-30 segment houses render 120-150 glowing pucks!
  */
 export function buildHousePucks3D(house, houseIndex, liveSegmentsMap, anim, phaseSec) {
   const arch = getEffectiveHouseArchitecture(house, houseIndex);
@@ -965,18 +1119,90 @@ export function buildHousePucks3D(house, houseIndex, liveSegmentsMap, anim, phas
   const controllers = (house?.controllers || []).filter((c) => c.enabled !== false);
   const pucks = [];
 
-  const primaryRgb = hexToRgb(anim?.primary_color || '#00f5d4');
-  const secondaryRgb = hexToRgb(anim?.secondary_color || '#7b2cbf');
-  const accentRgb = hexToRgb(anim?.accent_color || '#ff007f');
   const isRunning = anim?.running !== false;
   const blackout = Boolean(anim?.blackout_on_stop && !isRunning);
-  const zoneMode = anim?.zone_mode || 'front_street_sync';
+  const zoneMode = anim?.zone_mode || 'all_segments';
+  const speed = Math.max(0.08, Number(anim?.speed || 0.28));
+  const unwrappedPhase = phaseSec * speed * 1.15;
 
   let houseSegCursor = 0;
   const totalHouseSegs = Math.max(
     1,
     controllers.reduce((sum, c) => sum + Math.max(1, Number(c.segment_count || 9)), 0)
   );
+
+  // Helper to compute normalized [0..1) shader coordinate `u` for a sub-puck
+  const computeSubPuckShaderU = (continuousHouseSeg, pt, wall) => {
+    const houseFrac = Math.max(0, Math.min(0.9999, continuousHouseSeg / totalHouseSegs));
+    if (zoneMode === 'bottom_to_top') {
+      // Vertical rise from 1st-story bottom eave (y ~ 0.35) to 2nd-story gable peak (y ~ 0.95)
+      const normY = Math.max(0, Math.min(0.999, (pt.y - 0.34) / 0.61));
+      const xRipple = (pt.x + 0.5) * 0.08;
+      return ((normY * 0.92 + xRipple + houseIndex * 0.18) % 1 + 1) % 1;
+    }
+    if (zoneMode === 'front_street_sync') {
+      // Lock both Upper (2F) and Lower (1F) front sections to horizontal street X coordinate
+      const localX = Math.max(0, Math.min(0.999, pt.x + 0.5));
+      return Math.max(0, Math.min(0.999, (houseIndex + localX) / 3));
+    }
+    if (zoneMode === 'depth_front_to_back') {
+      return Math.max(0, Math.min(0.999, (0.38 - pt.z) / 0.65));
+    }
+    if (zoneMode === 'perimeter_360') {
+      const angle = Math.atan2(pt.z, pt.x);
+      return (angle + Math.PI) / (2 * Math.PI);
+    }
+    if (zoneMode === 'ccw_loop') {
+      // Pure per-house Bottom -> Top Counter-Clockwise loop (1F LTR -> 2F RTL)
+      return houseFrac;
+    }
+    // Default (`all_segments`): Smart CCW + 3-House Street Sync
+    if (anim?.mapping_mode === 'parallel_zones') {
+      return houseFrac;
+    }
+    return Math.max(0, Math.min(0.9999, (houseIndex + houseFrac) / 3));
+  };
+
+  // Helper to evaluate high-density sub-puck RGB by blending smooth live segment interpolation + analytical shader detail
+  const computeSubPuckRgb = (ctrlId, localIdx, nextLocalIdx, subFrac, continuousHouseSeg, pt, wall) => {
+    if (blackout) return [0, 0, 0];
+
+    const u = computeSubPuckShaderU(continuousHouseSeg, pt, wall);
+    const shaderRgb = evaluateEffectAtPoint(u, unwrappedPhase, phaseSec, {
+      ...anim,
+      effect: anim?.effect || 'multi_house_chase',
+    });
+
+    const keyCurr = `${house.id}::${ctrlId}::${localIdx}`;
+    const keyNext = `${house.id}::${ctrlId}::${nextLocalIdx}`;
+    const fallbackCurr = `${house.id}::idx::${houseSegCursor + localIdx}`;
+    const fallbackNext = `${house.id}::idx::${houseSegCursor + nextLocalIdx}`;
+
+    const liveCurr = liveSegmentsMap.get(keyCurr) || liveSegmentsMap.get(fallbackCurr);
+    const liveNext = liveSegmentsMap.get(keyNext) || liveSegmentsMap.get(fallbackNext) || liveCurr;
+
+    let rgb = shaderRgb;
+    if (liveCurr && typeof liveCurr.r === 'number') {
+      const c0 = [liveCurr.r, liveCurr.g, liveCurr.b];
+      const c1 =
+        liveNext && typeof liveNext.r === 'number'
+          ? [liveNext.r, liveNext.g, liveNext.b]
+          : c0;
+      const interpLive = lerpRgb(c0, c1, subFrac);
+      // Blend interpolated live backend color with high-resolution sub-puck shader detail
+      // so multi-puck gradients, chases, and sparkles are crisp across all 5 sub-pucks!
+      rgb = lerpRgb(interpLive, shaderRgb, 0.42);
+    }
+
+    if (zoneMode === 'front_only_quiet_sides' && (wall || 'front') !== 'front') {
+      rgb = [
+        Math.round(rgb[0] * 0.35),
+        Math.round(rgb[1] * 0.35),
+        Math.round(rgb[2] * 0.35),
+      ];
+    }
+    return rgb;
+  };
 
   controllers.forEach((ctrl, cIdx) => {
     const customNodes = getEffectiveCustomNodes(ctrl);
@@ -988,42 +1214,49 @@ export function buildHousePucks3D(house, houseIndex, liveSegmentsMap, anim, phas
         y: Math.max(0.15, Math.min(0.98, Number(n.y ?? 0.6))),
         z: 0.26 + Number(n.z ?? 0) * 0.4,
       }));
+      const totalSub = totalCtrlSegs * SUB_PUCKS_PER_SEGMENT;
       const pts = samplePointsAlong3DPolyline(
         poly3d,
-        totalCtrlSegs,
+        totalSub,
         Boolean(ctrl.reverse_direction)
       );
-      pts.forEach((pt, localIdx) => {
-        const key = `${house.id}::${ctrl.id}::${localIdx}`;
-        const liveSeg = liveSegmentsMap.get(key);
-        let rgb = [0, 0, 0];
-        if (!blackout) {
-          if (liveSeg && typeof liveSeg.r === 'number') {
-            rgb = [liveSeg.r, liveSeg.g, liveSeg.b];
-          } else {
-            const u = (houseSegCursor + localIdx) / totalHouseSegs;
-            const wave =
-              (u - phaseSec * (anim?.speed || 0.35) * 1.4 + houseIndex * 0.25 + 10) % 1;
-            rgb =
-              wave < 0.33
-                ? lerpRgb(primaryRgb, secondaryRgb, wave / 0.33)
-                : wave < 0.66
-                ? lerpRgb(secondaryRgb, accentRgb, (wave - 0.33) / 0.33)
-                : lerpRgb(accentRgb, primaryRgb, (wave - 0.66) / 0.34);
-          }
-        }
+      pts.forEach((pt, subIdxGlobal) => {
+        const localIdx = Math.min(
+          totalCtrlSegs - 1,
+          Math.floor(subIdxGlobal / SUB_PUCKS_PER_SEGMENT)
+        );
+        const nextLocalIdx = Math.min(totalCtrlSegs - 1, localIdx + 1);
+        const subIdx = subIdxGlobal % SUB_PUCKS_PER_SEGMENT;
+        const subFrac = (subIdx + 0.5) / SUB_PUCKS_PER_SEGMENT;
+        const continuousHouseSeg = houseSegCursor + subIdxGlobal / SUB_PUCKS_PER_SEGMENT;
+        const logicalKey = `${house.id}::${ctrl.id}::${localIdx}`;
+        const subKey = `${logicalKey}::sub${subIdx}`;
+        const rgb = computeSubPuckRgb(
+          ctrl.id,
+          localIdx,
+          nextLocalIdx,
+          subFrac,
+          continuousHouseSeg,
+          pt,
+          'front'
+        );
+
         pucks.push({
-          id: key,
+          id: subKey,
+          logicalId: logicalKey,
           houseId: house.id,
           houseName: house.name,
           controllerId: ctrl.id,
           controllerName: ctrl.name || `Controller ${cIdx + 1}`,
           localIndex: localIdx,
+          subPuckIndex: subIdx,
           houseSegIndex: houseSegCursor + localIdx,
           sectionId: 'custom_nodes',
           sectionLabel: 'Custom Polyline Path',
+          direction: ctrl.reverse_direction ? 'rtl' : 'ltr',
           wall: 'front',
           story: 1,
+          uInSection: pt.t ?? 0.5,
           x: pt.x,
           y: pt.y,
           z: pt.z,
@@ -1045,62 +1278,51 @@ export function buildHousePucks3D(house, houseIndex, liveSegmentsMap, anim, phas
         sections[0];
       if (!sec) return;
       const segsInSpan = Math.max(1, Number(sp.segments || 1));
+      const totalSubInSpan = segsInSpan * SUB_PUCKS_PER_SEGMENT;
       const poly3d = getSectionRooflinePolyline3D(sec);
-      const pts = samplePointsAlong3DPolyline(poly3d, segsInSpan, sp.direction === 'rtl');
+      const pts = samplePointsAlong3DPolyline(
+        poly3d,
+        totalSubInSpan,
+        sp.direction === 'rtl'
+      );
 
-      pts.forEach((pt, idxInSpan) => {
+      pts.forEach((pt, subIdxInSpan) => {
+        const idxInSpan = Math.min(
+          segsInSpan - 1,
+          Math.floor(subIdxInSpan / SUB_PUCKS_PER_SEGMENT)
+        );
+        const subIdx = subIdxInSpan % SUB_PUCKS_PER_SEGMENT;
+        const subFrac = (subIdx + 0.5) / SUB_PUCKS_PER_SEGMENT;
         const localIdx = localCursor + idxInSpan;
-        const key = `${house.id}::${ctrl.id}::${localIdx}`;
-        const fallbackHouseKey = `${house.id}::idx::${houseSegCursor + localIdx}`;
-        const liveSeg = liveSegmentsMap.get(key) || liveSegmentsMap.get(fallbackHouseKey);
+        const nextLocalIdx = Math.min(totalCtrlSegs - 1, localIdx + 1);
+        const continuousHouseSeg =
+          houseSegCursor + localCursor + subIdxInSpan / SUB_PUCKS_PER_SEGMENT;
 
-        let rgb = [0, 0, 0];
-        if (!blackout) {
-          if (liveSeg && typeof liveSeg.r === 'number') {
-            rgb = [liveSeg.r, liveSeg.g, liveSeg.b];
-          } else {
-            // Respect 3-House Sync Alignment mode (`zoneMode`)
-            let u = (houseSegCursor + localIdx) / totalHouseSegs;
-            if (zoneMode === 'front_street_sync') {
-              // Both Upper (story 2) and Lower (story 1) front sections lock to horizontal X!
-              u = Math.max(0, Math.min(1, pt.x + 0.5));
-            } else if (zoneMode === 'depth_front_to_back') {
-              u = Math.max(0, Math.min(1, (0.38 - pt.z) / 0.65));
-            } else if (zoneMode === 'perimeter_360') {
-              const angle = Math.atan2(pt.z, pt.x);
-              u = (angle + Math.PI) / (2 * Math.PI);
-            }
-            const dirSign = anim?.direction === 'reverse' ? -1 : 1;
-            const wave =
-              ((u * dirSign - phaseSec * (anim?.speed || 0.35) * 1.35 + houseIndex * 0.28) % 1 +
-                1) %
-              1;
-            rgb =
-              wave < 0.35
-                ? lerpRgb(primaryRgb, secondaryRgb, wave / 0.35)
-                : wave < 0.7
-                ? lerpRgb(secondaryRgb, accentRgb, (wave - 0.35) / 0.35)
-                : lerpRgb(accentRgb, primaryRgb, (wave - 0.7) / 0.3);
-            if (zoneMode === 'front_only_quiet_sides' && (sec.wall || 'front') !== 'front') {
-              rgb = [
-                Math.round(rgb[0] * 0.35),
-                Math.round(rgb[1] * 0.35),
-                Math.round(rgb[2] * 0.35),
-              ];
-            }
-          }
-        }
+        const logicalKey = `${house.id}::${ctrl.id}::${localIdx}`;
+        const subKey = `${logicalKey}::sub${subIdx}`;
+        const rgb = computeSubPuckRgb(
+          ctrl.id,
+          localIdx,
+          nextLocalIdx,
+          subFrac,
+          continuousHouseSeg,
+          pt,
+          sec.wall || 'front'
+        );
 
         pucks.push({
-          id: key,
+          id: subKey,
+          logicalId: logicalKey,
           houseId: house.id,
           houseName: house.name,
           controllerId: ctrl.id,
           controllerName: ctrl.name || `Controller ${cIdx + 1}`,
           localIndex: localIdx,
+          subPuckIndex: subIdx,
           houseSegIndex: houseSegCursor + localIdx,
           sectionId: sec.id,
           sectionLabel: sec.label,
+          direction: sp.direction === 'rtl' ? 'rtl' : 'ltr',
           wall: sec.wall || 'front',
           story: Number(sec.story) === 2 ? 2 : 1,
           uInSection: pt.t ?? 0.5,
@@ -2248,7 +2470,7 @@ export function ArchitecturalViewportCanvas({
           }
         }
 
-        // Draw roofline strip wire path per section
+        // Draw roofline strip wire path per section + ↺ Bottom-to-Top CCW directional indicators
         sections.forEach((sec) => {
           if (is2D && sec.wall !== 'front') return;
           const poly3d = getSectionRooflinePolyline3D(sec).map((pt) => ({
@@ -2261,13 +2483,100 @@ export function ArchitecturalViewportCanvas({
           pts2d.forEach((p, i) => (i === 0 ? ctx.moveTo(p.x, p.y) : ctx.lineTo(p.x, p.y)));
           ctx.strokeStyle =
             selectedSectionId === sec.id
-              ? 'rgba(0, 245, 212, 0.9)'
-              : 'rgba(148, 163, 184, 0.48)';
-          ctx.lineWidth = selectedSectionId === sec.id ? 3 : 1.8;
+              ? 'rgba(0, 245, 212, 0.95)'
+              : 'rgba(148, 163, 184, 0.55)';
+          ctx.lineWidth = selectedSectionId === sec.id ? 3.2 : 2.0;
           ctx.stroke();
         });
 
-        // Draw each LED Puck + Downward Soffit Wall-Wash Cone + Halo
+        // Draw clear ↺ Bottom -> Top CCW (1F LTR -> 2F RTL) flow arrows & badge on each house
+        const frontLowerSecs = sections.filter((s) => s.wall === 'front' && Number(s.story) !== 2);
+        const frontUpperSecs = sections.filter((s) => s.wall === 'front' && Number(s.story) === 2);
+        if (frontLowerSecs.length > 0 && frontUpperSecs.length > 0) {
+          const minLowerX = Math.min(...frontLowerSecs.map((s) => s.x_start));
+          const maxLowerX = Math.max(...frontLowerSecs.map((s) => s.x_end));
+          const avgLowerY =
+            frontLowerSecs.reduce((acc, s) => acc + s.eave_height, 0) / frontLowerSecs.length;
+          const maxUpperPeakY = Math.max(...frontUpperSecs.map((s) => s.peak_height || s.eave_height));
+          const avgUpperEaveY =
+            frontUpperSecs.reduce((acc, s) => acc + s.eave_height, 0) / frontUpperSecs.length;
+
+          // 1) Bottom 1F LTR flow tag ("1F LTR →")
+          const p1fFlow = project3D(
+            houseCenterX + ((minLowerX + maxLowerX) * 0.5 - 0.5),
+            Math.max(0.14, avgLowerY - 0.11),
+            0.39
+          );
+          // 2) Right-side rising CCW turn arrow ("⤴ CCW")
+          const pRightTurnBot = project3D(
+            houseCenterX + (maxLowerX - 0.5) + 0.03,
+            avgLowerY + 0.02,
+            0.35
+          );
+          const pRightTurnTop = project3D(
+            houseCenterX + (maxLowerX - 0.5) + 0.03,
+            avgUpperEaveY - 0.02,
+            0.30
+          );
+          // 3) Top 2F RTL flow tag ("← 2F RTL")
+          const p2fFlow = project3D(
+            houseCenterX,
+            Math.min(0.99, maxUpperPeakY + 0.055),
+            0.28
+          );
+
+          ctx.save();
+          // Dashed cyan rising CCW connector on the right side (1F end -> 2F start)
+          ctx.setLineDash([3, 3]);
+          ctx.strokeStyle = 'rgba(0, 245, 212, 0.65)';
+          ctx.lineWidth = 1.5;
+          ctx.beginPath();
+          ctx.moveTo(pRightTurnBot.x, pRightTurnBot.y);
+          ctx.lineTo(pRightTurnTop.x, pRightTurnTop.y);
+          ctx.stroke();
+          ctx.setLineDash([]);
+
+          // Small arrowhead at top of rising CCW connector
+          ctx.beginPath();
+          ctx.moveTo(pRightTurnTop.x - 3.5, pRightTurnTop.y + 4.5);
+          ctx.lineTo(pRightTurnTop.x, pRightTurnTop.y);
+          ctx.lineTo(pRightTurnTop.x + 3.5, pRightTurnTop.y + 4.5);
+          ctx.strokeStyle = '#00f5d4';
+          ctx.lineWidth = 1.6;
+          ctx.stroke();
+
+          // Top 2F RTL pill above roof peak
+          const topLabel = '↺ 2F RTL ←';
+          ctx.font = '700 8.5px JetBrains Mono, monospace';
+          const topW = ctx.measureText(topLabel).width + 10;
+          ctx.fillStyle = 'rgba(6, 11, 24, 0.86)';
+          ctx.strokeStyle = 'rgba(251, 191, 36, 0.65)';
+          ctx.lineWidth = 1;
+          ctx.beginPath();
+          ctx.roundRect(p2fFlow.x - topW * 0.5, p2fFlow.y - 8, topW, 14, 4);
+          ctx.fill();
+          ctx.stroke();
+          ctx.fillStyle = '#fde68a';
+          ctx.textAlign = 'center';
+          ctx.fillText(topLabel, p2fFlow.x, p2fFlow.y + 2);
+
+          // Bottom 1F LTR pill on 1st story
+          const botLabel = '1F LTR → ⤴';
+          const botW = ctx.measureText(botLabel).width + 10;
+          ctx.fillStyle = 'rgba(6, 11, 24, 0.86)';
+          ctx.strokeStyle = 'rgba(0, 245, 212, 0.65)';
+          ctx.lineWidth = 1;
+          ctx.beginPath();
+          ctx.roundRect(p1fFlow.x - botW * 0.5, p1fFlow.y - 8, botW, 14, 4);
+          ctx.fill();
+          ctx.stroke();
+          ctx.fillStyle = '#67e8f9';
+          ctx.textAlign = 'center';
+          ctx.fillText(botLabel, p1fFlow.x, p1fFlow.y + 2);
+          ctx.restore();
+        }
+
+        // Draw each high-density LED Sub-Puck + Downward Soffit Wall-Wash Cone + Halo
         pucks.forEach((puck) => {
           const wx = houseCenterX + puck.x;
           const wy = puck.y;
@@ -2280,27 +2589,32 @@ export function ArchitecturalViewportCanvas({
             wy,
             wz
           );
-          const coneDrop = puck.story === 2 ? 0.22 : 0.26;
+          const coneDrop = puck.story === 2 ? 0.21 : 0.25;
           const pWallBottom =
             is2D && puck.wall !== 'front'
-              ? { x: pTop.x, y: pTop.y + 14 }
+              ? { x: pTop.x, y: pTop.y + 13 }
               : project3D(wx, Math.max(0.03, wy - coneDrop), wz - 0.012);
           const [r, g, b] = puck.rgb;
           const isLit = r + g + b > 12;
-          const isSelected = selectedPuckId === puck.id;
-          const isHovered = hoveredItem?.type === 'puck' && hoveredItem?.id === puck.id;
+          const isSelected =
+            selectedPuckId === puck.id ||
+            (puck.logicalId && selectedPuckId === puck.logicalId);
+          const isHovered =
+            hoveredItem?.type === 'puck' &&
+            (hoveredItem?.id === puck.id ||
+              (puck.logicalId && hoveredItem?.logicalId === puck.logicalId));
 
           if (isLit) {
-            // Downward Soffit Wall-Wash Cone
-            const coneSpread = Math.max(7, pTop.scale * 0.055);
+            // Rich Downward Soffit Wall-Wash Cone under dense puck string
+            const coneSpread = Math.max(5.5, pTop.scale * 0.038);
             const coneGrad = ctx.createLinearGradient(
               pTop.x,
               pTop.y,
               pWallBottom.x,
               pWallBottom.y
             );
-            coneGrad.addColorStop(0, `rgba(${r}, ${g}, ${b}, 0.58)`);
-            coneGrad.addColorStop(0.55, `rgba(${r}, ${g}, ${b}, 0.18)`);
+            coneGrad.addColorStop(0, `rgba(${r}, ${g}, ${b}, 0.42)`);
+            coneGrad.addColorStop(0.52, `rgba(${r}, ${g}, ${b}, 0.14)`);
             coneGrad.addColorStop(1, `rgba(${r}, ${g}, ${b}, 0.0)`);
 
             ctx.beginPath();
@@ -2312,17 +2626,17 @@ export function ArchitecturalViewportCanvas({
             ctx.fill();
 
             // Outer Puck Bloom Halo
-            const haloRadius = Math.max(7, pTop.scale * 0.048);
+            const haloRadius = Math.max(6.2, pTop.scale * 0.036);
             const haloGrad = ctx.createRadialGradient(
               pTop.x,
               pTop.y,
-              1,
+              0.8,
               pTop.x,
               pTop.y,
               haloRadius
             );
-            haloGrad.addColorStop(0, `rgba(${r}, ${g}, ${b}, 0.95)`);
-            haloGrad.addColorStop(0.45, `rgba(${r}, ${g}, ${b}, 0.42)`);
+            haloGrad.addColorStop(0, `rgba(${r}, ${g}, ${b}, 0.96)`);
+            haloGrad.addColorStop(0.48, `rgba(${r}, ${g}, ${b}, 0.45)`);
             haloGrad.addColorStop(1, `rgba(${r}, ${g}, ${b}, 0.0)`);
             ctx.beginPath();
             ctx.arc(pTop.x, pTop.y, haloRadius, 0, Math.PI * 2);
@@ -2330,8 +2644,13 @@ export function ArchitecturalViewportCanvas({
             ctx.fill();
           }
 
-          // Crisp LED Puck Core
-          const puckRadius = isSelected || isHovered ? 5.6 : Math.max(3.2, pTop.scale * 0.018);
+          // Crisp High-Density Govee LED Puck Core
+          const isCenterSubPuck = puck.subPuckIndex === Math.floor(SUB_PUCKS_PER_SEGMENT / 2);
+          const baseRadius = Math.max(
+            2.5,
+            pTop.scale * (isCenterSubPuck ? 0.0155 : 0.0135)
+          );
+          const puckRadius = isSelected || isHovered ? baseRadius + 2.0 : baseRadius;
           ctx.beginPath();
           ctx.arc(pTop.x, pTop.y, puckRadius, 0, Math.PI * 2);
           ctx.fillStyle = isLit ? `rgb(${r}, ${g}, ${b})` : '#1e293b';
@@ -2339,14 +2658,22 @@ export function ArchitecturalViewportCanvas({
           ctx.strokeStyle = isSelected
             ? '#ffffff'
             : isLit
-            ? 'rgba(255,255,255,0.85)'
+            ? 'rgba(255,255,255,0.88)'
             : '#475569';
-          ctx.lineWidth = isSelected ? 2.2 : 1;
+          ctx.lineWidth = isSelected ? 2.0 : 0.85;
           ctx.stroke();
 
-          if (isSelected) {
+          // Tiny white hot-core inside bright LED pucks so colors pop vividly
+          if (isLit && Math.max(r, g, b) > 130) {
             ctx.beginPath();
-            ctx.arc(pTop.x, pTop.y, puckRadius + 4.5, 0, Math.PI * 2);
+            ctx.arc(pTop.x, pTop.y, Math.max(1.0, puckRadius * 0.38), 0, Math.PI * 2);
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.72)';
+            ctx.fill();
+          }
+
+          if (isSelected && isCenterSubPuck) {
+            ctx.beginPath();
+            ctx.arc(pTop.x, pTop.y, puckRadius + 4.2, 0, Math.PI * 2);
             ctx.strokeStyle = '#00f5d4';
             ctx.lineWidth = 1.8;
             ctx.stroke();
@@ -2356,7 +2683,7 @@ export function ArchitecturalViewportCanvas({
             ...puck,
             screenX: pTop.x,
             screenY: pTop.y,
-            radius: Math.max(10, puckRadius + 5),
+            radius: Math.max(8, puckRadius + 4),
           });
         });
 
@@ -2441,22 +2768,29 @@ export function ArchitecturalViewportCanvas({
         // House Nameplate Badge under each house
         const badgePos = project3D(houseCenterX, -0.06, 0.36);
         const shortName = (house.name || `House ${effectiveIdx + 1}`).split('(')[0].trim();
-        const archSummary =
+        const logicalSegCount = Math.max(
+          1,
+          Math.round(pucks.length / SUB_PUCKS_PER_SEGMENT)
+        );
+        const archSummary = `↺ 1F LTR → 2F RTL CCW • ${
           sections
             .filter((s) => s.wall === 'front')
             .map((s) =>
               s.shape === 'flat_eave'
-                ? '⬛ Square'
+                ? '⬛ Sq'
                 : s.shape === 'dormer_peak'
                 ? '🏠 Dormer'
-                : '🔺 Triangle'
+                : '🔺 Peak'
             )
-            .join(' + ') || '🔺 Triangle';
+            .join('+') || '🔺 Peak'
+        }`;
 
-        const badgeText = `#${effectiveIdx + 1} ${shortName} (${pucks.length} segs)`;
+        const badgeText = `#${effectiveIdx + 1} ${shortName} (${logicalSegCount}s · ${pucks.length} LEDs)`;
         ctx.font = '700 11px Inter, system-ui, sans-serif';
         const tw = ctx.measureText(badgeText).width;
-        const bw = Math.max(tw + 18, 128);
+        ctx.font = '600 9.5px JetBrains Mono, monospace';
+        const sw = ctx.measureText(archSummary).width;
+        const bw = Math.max(tw + 18, sw + 18, 142);
         const bh = 32;
         const bx = badgePos.x - bw * 0.5;
         const by = Math.min(H - bh - 4, Math.max(12, badgePos.y - 6));
@@ -2475,6 +2809,7 @@ export function ArchitecturalViewportCanvas({
         ctx.fill();
         ctx.stroke();
 
+        ctx.font = '700 11px Inter, system-ui, sans-serif';
         ctx.fillStyle = '#f8fafc';
         ctx.textAlign = 'center';
         ctx.fillText(badgeText, badgePos.x, by + 13);
@@ -2640,7 +2975,8 @@ export function ArchitecturalViewportCanvas({
       setHoveredItem({
         type: 'puck',
         id: hPuck.id,
-        label: `${hPuck.controllerName} · Seg #${hPuck.localIndex + 1} (${hPuck.sectionLabel})`,
+        logicalId: hPuck.logicalId,
+        label: `${hPuck.controllerName} · Seg #${hPuck.localIndex + 1} · Puck ${(hPuck.subPuckIndex ?? 0) + 1}/${SUB_PUCKS_PER_SEGMENT} (${hPuck.sectionLabel} · ${(hPuck.direction || 'ltr').toUpperCase()})`,
       });
       return;
     }
@@ -2678,10 +3014,13 @@ export function ArchitecturalViewportCanvas({
                     {preset.label}
                   </button>
                 ))}
+                <span className="ml-1 px-2 py-0.5 rounded-md bg-amber-500/15 border border-amber-400/40 text-[10px] font-mono font-bold text-amber-200">
+                  ↺ Bottom → Top CCW (1F LTR → 2F RTL)
+                </span>
               </>
             ) : (
               <span className="text-[10px] font-mono text-cyan-300 font-bold px-1">
-                📐 2D Front Architectural Elevation Blueprint (Multi-Section Gables, Dormers &amp; Square Eaves)
+                📐 2D Front Architectural Elevation Blueprint • ↺ Bottom → Top CCW (1F LTR → 2F RTL)
               </span>
             )}
           </div>
@@ -3245,32 +3584,30 @@ export default function HouseArchitectureDesigner({
 
   const handleAutoBalanceController = (ctrlId) => {
     if (!activeHouse) return;
-    const frontSecs = activeSections.filter((s) => s.wall === 'front');
-    const targetSecs = frontSecs.length > 0 ? frontSecs : activeSections;
     setDraftHouses((prev) =>
       prev.map((h) => {
         if (h.id !== activeHouse.id) return h;
-        const nextCtrls = (h.controllers || []).map((c) => {
+        const totalCtrls = (h.controllers || []).length;
+        const nextCtrls = (h.controllers || []).map((c, cIdx) => {
           if (c.id !== ctrlId) return c;
-          const total = Math.max(targetSecs.length, Number(c.segment_count || 9));
-          const base = Math.floor(total / targetSecs.length);
-          let rem = total - base * targetSecs.length;
-          const balanced = targetSecs.map((sec) => {
-            const add = rem > 0 ? 1 : 0;
-            if (rem > 0) rem -= 1;
-            return {
-              section_id: sec.id,
-              wall: sec.wall,
-              segments: Math.max(1, base + add),
-              direction: 'ltr',
-            };
-          });
+          const total = Math.max(
+            1,
+            Number(c.target_segment_count || c.segment_count || 9)
+          );
+          const balanced = buildPhotoDefaultControllerSpans(
+            { ...c, segment_count: total },
+            activeArch,
+            cIdx,
+            totalCtrls
+          );
           return { ...c, section_spans: balanced, custom_nodes: [] };
         });
         return { ...h, controllers: nextCtrls };
       })
     );
-    flashStatus('Auto-balanced controller segments across all front roof sections!');
+    flashStatus(
+      '↺ Auto-balanced controller segments in Bottom → Top Counter-Clockwise (1F LTR → 2F RTL) order!'
+    );
   };
 
   // Custom Polyline Nodes for a Controller
@@ -4104,12 +4441,16 @@ export default function HouseArchitectureDesigner({
                       </span>
                     </div>
                     <div className="flex flex-wrap gap-1">
-                      {WIRING_ROUTE_PRESETS.map((route) => (
+                      {WIRING_ROUTE_PRESETS.map((route, rIdx) => (
                         <button
                           key={route.id}
                           type="button"
                           onClick={() => handleApplyWiringRoutePreset(ctrl.id, route.id)}
-                          className="px-2 py-1 rounded-md bg-[#0c1324] hover:bg-cyan-500/20 text-slate-200 hover:text-cyan-200 border border-[#1e293b] hover:border-cyan-400/50 text-[10px] font-bold transition"
+                          className={`px-2 py-1 rounded-md text-[10px] font-bold border transition ${
+                            rIdx === 0
+                              ? 'bg-[#00f5d4]/20 hover:bg-[#00f5d4]/30 text-[#00f5d4] border-[#00f5d4]/60 shadow-sm shadow-[#00f5d4]/10'
+                              : 'bg-[#0c1324] hover:bg-cyan-500/20 text-slate-200 hover:text-cyan-200 border-[#1e293b] hover:border-cyan-400/50'
+                          }`}
                           title={route.subtitle}
                         >
                           {route.label}

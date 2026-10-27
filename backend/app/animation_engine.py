@@ -355,6 +355,7 @@ def build_virtual_strip_map(config: SystemConfig) -> List[VirtualSegmentSlot]:
         back_seen = 0
         back_total = sum(1 for _, _, _, w, _, _ in house_seg_items if w == "back")
 
+        effect = config.animation.effect
         for house_seg_cursor, (c_idx, ctrl, phys_seg_idx, w_label, sec_id, sec_t) in enumerate(house_seg_items):
             if ctrl.custom_nodes and len(ctrl.custom_nodes) >= 2 and not ctrl.section_spans:
                 ctrl_u = 0.5 if ctrl.segment_count <= 1 else (phys_seg_idx / (ctrl.segment_count - 1))
@@ -362,7 +363,19 @@ def build_virtual_strip_map(config: SystemConfig) -> List[VirtualSegmentSlot]:
             else:
                 arch_x, arch_y, arch_z = evaluate_arch_section_point(sec_by_id.get(sec_id), sec_t, w_label)
 
-            if zone_mode in ("front_street_sync", "front_only_quiet_sides") and front_total > 0:
+            ccw_u = (house_seg_cursor + 0.5) / max(1, house_seg_total)
+            y_norm = max(0.0, min(1.0, (arch_y - 0.34) / 0.62))
+            x_norm = max(0.0, min(1.0, (arch_x - 0.02) / 0.96))
+
+            if zone_mode == "bottom_to_top":
+                # Bottom-to-Top elevation wave: rises from 1st-story bottom eaves (story=1) up to 2nd-story gable peaks (story=2)
+                house_local_pos = max(0.01, min(0.99, 0.78 * y_norm + 0.22 * x_norm))
+                house_local_width = 1.0 / max(1, house_seg_total)
+            elif zone_mode == "ccw_loop":
+                # Physical Bottom-to-Top Counter-Clockwise wire path (1F LTR -> 2F RTL)
+                house_local_pos = ccw_u
+                house_local_width = 1.0 / max(1, house_seg_total)
+            elif zone_mode in ("front_street_sync", "front_only_quiet_sides") and front_total > 0:
                 if w_label == "front":
                     house_local_pos = max(0.02, min(0.98, (arch_x - 0.02) / 0.96))
                     house_local_width = 1.0 / max(1, front_total)
@@ -401,13 +414,32 @@ def build_virtual_strip_map(config: SystemConfig) -> List[VirtualSegmentSlot]:
                     house_local_pos = 0.67 + 0.33 * u
                 house_local_width = 1.0 / max(1, house_seg_total)
             elif zone_mode == "perimeter_360":
-                # 360° Clockwise Rooftop Orbit: Front (0..0.25) -> Right (0.25..0.50) -> Back (0.50..0.75) -> Left (0.75..1.0)
+                # 360° Counter-Clockwise / Perimeter Rooftop Orbit: Front (0..0.25) -> Right (0.25..0.50) -> Back (0.50..0.75) -> Left (0.75..1.0)
                 wall_base = {"front": 0.0, "right": 0.25, "back": 0.50, "left": 0.75}.get(w_label, 0.0)
-                u = (house_seg_cursor + 0.5) / max(1, house_seg_total)
-                house_local_pos = (wall_base + 0.25 * u) % 1.0
+                house_local_pos = (wall_base + 0.25 * ccw_u) % 1.0
                 house_local_width = 1.0 / max(1, house_seg_total)
             else:
-                house_local_pos = (house_seg_cursor + 0.5) / max(1, house_seg_total)
+                # Default "all_segments": scene-aware for Bottom-to-Top Counter-Clockwise (1F LTR -> 2F RTL) wiring
+                if effect in (EffectType.FIRE_SPARKLE, EffectType.SPARKLE_TWINKLE, EffectType.BREATHING_PULSE):
+                    # Rise naturally from 1st-story bottom eaves up to 2nd-story gable peaks
+                    house_local_pos = max(0.01, min(0.99, 0.72 * y_norm + 0.28 * arch_x))
+                elif (
+                    effect
+                    in (
+                        EffectType.CENTER_OUT_SHOCKWAVE,
+                        EffectType.RAINBOW_WAVE,
+                        EffectType.GOVEE_RAINBOW1,
+                        EffectType.GOVEE_RAINBOW2,
+                        EffectType.LIGHTNING_STORM,
+                        EffectType.COLOR_WIPE,
+                    )
+                    and w_label == "front"
+                ):
+                    # Align 1st-story (LTR) and 2nd-story (RTL) horizontally with a subtle bottom-to-top crest
+                    house_local_pos = max(0.01, min(0.99, arch_x - 0.08 * (arch_y - 0.36)))
+                else:
+                    # Chases, comets, snakes, marquees, and holiday cascades swirl along the Bottom-to-Top Counter-Clockwise loop
+                    house_local_pos = ccw_u
                 house_local_width = 1.0 / max(1, house_seg_total)
 
             if zone_mode == "depth_front_to_back":
@@ -477,13 +509,22 @@ def evaluate_effect_at_point(
         reverse_flow = False
 
     if effect == EffectType.MULTI_HOUSE_CHASE:
-        # Smooth multi-house chase: anti-aliased glowing head + smooth exponential/cosine tail
-        # flowing continuously from House 1 -> House 2 -> House 3
-        best_intensity = 0.0
-        best_color = primary
-        for p in range(pulses):
-            p_head = (head_pos + p / pulses) % 1.0
-            # Signed distance behind the chase head along travel direction
+        # High-density multi-house chase: multiple glowing heads + long multi-color tails
+        # plus a moving secondary <-> accent ambient wave so 100% of segments are vividly lit.
+        eff_pulses = max(2, pulses + 1)
+        eff_tail = min(0.85, max(0.55, tail * 1.8))
+        dir_sign = -1.0 if reverse_flow else 1.0
+        amb_wave = 0.5 * (1.0 + math.sin(2.0 * math.pi * (x * 2.0 - dir_sign * unwrapped_phase * 1.5)))
+        amb_col = lerp_rgb(secondary, accent, amb_wave)
+        best_intensity = 0.38
+        best_color = amb_col
+        palette = [primary, accent, secondary]
+
+        for p in range(eff_pulses):
+            p_head = (head_pos + p / eff_pulses) % 1.0
+            head_base_col = palette[p % len(palette)]
+            mid_col = palette[(p + 1) % len(palette)]
+            end_col = palette[(p + 2) % len(palette)]
             if not reverse_flow:
                 dist_behind = (p_head - x) % 1.0
                 dist_ahead = (x - p_head) % 1.0
@@ -491,23 +532,21 @@ def evaluate_effect_at_point(
                 dist_behind = (x - p_head) % 1.0
                 dist_ahead = (p_head - x) % 1.0
 
-            # Soft leading glow + smooth trailing tail
-            lead_width = max(0.02, tail * 0.18)
+            lead_width = max(0.03, eff_tail * 0.18)
             if dist_ahead <= lead_width:
                 u = 1.0 - (dist_ahead / lead_width)
-                energy = (u * u) * (3.0 - 2.0 * u)
-                col = lerp_rgb(primary, (255, 255, 255), 0.35 * energy)
-            elif dist_behind <= tail:
-                t_norm = dist_behind / tail
-                # Raised cosine + power decay for silky tail across house boundaries
-                energy = math.pow(0.5 * (1.0 + math.cos(math.pi * t_norm)), 1.35)
+                energy = 0.38 + 0.62 * ((u * u) * (3.0 - 2.0 * u))
+                col = lerp_rgb(head_base_col, (255, 255, 255), 0.38 * u)
+            elif dist_behind <= eff_tail:
+                t_norm = dist_behind / eff_tail
+                energy = 0.38 + 0.62 * math.pow(0.5 * (1.0 + math.cos(math.pi * t_norm)), 1.2)
                 if t_norm < 0.45:
-                    col = lerp_rgb(primary, secondary, t_norm / 0.45)
+                    col = lerp_rgb(head_base_col, mid_col, t_norm / 0.45)
                 else:
-                    col = lerp_rgb(secondary, accent, (t_norm - 0.45) / 0.55)
+                    col = lerp_rgb(mid_col, end_col, (t_norm - 0.45) / 0.55)
             else:
                 energy = 0.0
-                col = primary
+                col = amb_col
 
             if energy > best_intensity:
                 best_intensity = energy
@@ -517,41 +556,50 @@ def evaluate_effect_at_point(
 
     if effect == EffectType.RAINBOW_WAVE:
         dir_sign = -1.0 if reverse_flow else 1.0
-        hue = (x * pulses - dir_sign * unwrapped_phase) % 1.0
+        hue = (x * max(2, pulses) - dir_sign * unwrapped_phase) % 1.0
         r, g, b = colorsys.hsv_to_rgb(hue, 0.92, 1.0)
         return (round(r * 255), round(g * 255), round(b * 255))
 
     if effect == EffectType.COMET_METEOR:
-        best_rgb = bg_scaled
-        for p in range(pulses):
-            p_head = (head_pos + p / pulses) % 1.0
+        eff_pulses = max(3, pulses + 1)
+        eff_tail = min(0.85, max(0.50, tail * 1.75))
+        dir_sign = -1.0 if reverse_flow else 1.0
+        star_wave = 0.5 * (1.0 + math.sin(2.0 * math.pi * (x * 3.0 - dir_sign * unwrapped_phase * 1.4)))
+        glitter = 0.32 + 0.18 * math.sin(elapsed_sec * 16.0 + x * 48.0)
+        best_rgb = add_rgb(bg_scaled, scale_rgb(lerp_rgb(secondary, accent, star_wave), glitter))
+        palette = [primary, accent, secondary]
+
+        for p in range(eff_pulses):
+            p_head = (head_pos + p / eff_pulses) % 1.0
             dist_behind = ((p_head - x) % 1.0) if not reverse_flow else ((x - p_head) % 1.0)
             dist_ahead = ((x - p_head) % 1.0) if not reverse_flow else ((p_head - x) % 1.0)
+            head_col = palette[p % len(palette)]
+            tail_mid = palette[(p + 1) % len(palette)]
+            tail_end = palette[(p + 2) % len(palette)]
 
-            core_w = max(0.015, tail * 0.12)
+            core_w = max(0.025, eff_tail * 0.14)
             if dist_ahead <= core_w:
                 u = 1.0 - dist_ahead / core_w
-                core_col = lerp_rgb(primary, (255, 255, 255), 0.75 * u)
-                best_rgb = add_rgb(best_rgb, scale_rgb(core_col, u * u))
-            elif dist_behind <= tail:
-                t_norm = dist_behind / tail
-                decay = math.exp(-3.2 * t_norm) * (1.0 - t_norm)
-                # Subtle meteor tail shimmer
-                shimmer = 0.78 + 0.22 * math.sin(elapsed_sec * 28.0 + x * 65.0)
-                tail_col = lerp_rgb(primary, accent if t_norm > 0.5 else secondary, t_norm)
+                core_col = lerp_rgb(head_col, (255, 255, 255), 0.72 * u)
+                best_rgb = add_rgb(best_rgb, scale_rgb(core_col, 0.45 + 0.55 * (u * u)))
+            elif dist_behind <= eff_tail:
+                t_norm = dist_behind / eff_tail
+                decay = math.exp(-2.1 * t_norm) * (1.0 - 0.65 * t_norm)
+                shimmer = 0.80 + 0.20 * math.sin(elapsed_sec * 28.0 + x * 65.0)
+                tail_col = lerp_rgb(head_col, tail_end if t_norm > 0.5 else tail_mid, t_norm)
                 best_rgb = add_rgb(best_rgb, scale_rgb(tail_col, decay * shimmer))
         return best_rgb
 
     if effect == EffectType.BREATHING_PULSE:
-        # Synchronized harmonic breathing across all houses with gentle spatial wave & shimmer
+        # Synchronized harmonic breathing across all houses with rich multi-color spatial wave & shimmer
         dir_sign = -1.0 if reverse_flow else 1.0
-        wave = 0.5 * (1.0 + math.sin(2.0 * math.pi * (unwrapped_phase - dir_sign * x * 0.35) - math.pi / 2.0))
-        breath = math.pow(wave, 1.5)
-        color_mix = 0.5 * (1.0 + math.sin(2.0 * math.pi * unwrapped_phase + x * math.pi * 1.25))
+        wave = 0.5 * (1.0 + math.sin(2.0 * math.pi * (unwrapped_phase - dir_sign * x * 0.65) - math.pi / 2.0))
+        breath = math.pow(wave, 1.25)
+        color_mix = 0.5 * (1.0 + math.sin(2.0 * math.pi * unwrapped_phase + x * math.pi * 2.0))
         base_col = lerp_rgb(primary, secondary, color_mix)
-        accent_glow = 0.5 * (1.0 + math.cos(2.0 * math.pi * (x * max(1, pulses) - dir_sign * unwrapped_phase)))
-        blended_col = lerp_rgb(base_col, accent, 0.22 * accent_glow)
-        return add_rgb(bg_scaled, scale_rgb(blended_col, 0.10 + 0.90 * breath))
+        accent_glow = 0.5 * (1.0 + math.cos(2.0 * math.pi * (x * max(2, pulses) - dir_sign * unwrapped_phase * 1.5)))
+        blended_col = lerp_rgb(base_col, accent, 0.38 * accent_glow)
+        return add_rgb(bg_scaled, scale_rgb(blended_col, 0.35 + 0.65 * breath))
 
     if effect == EffectType.COLOR_WIPE:
         # Continuous 3-stage color wipe across all houses (Primary -> Secondary -> Accent)
@@ -561,7 +609,7 @@ def evaluate_effect_at_point(
         curr_col = palette[stage]
         prog = unwrapped_phase % 1.0
         pos = (1.0 - x) if reverse_flow else x
-        edge_softness = 0.025
+        edge_softness = 0.04
         if pos < prog - edge_softness:
             return curr_col
         if pos > prog + edge_softness:
@@ -570,79 +618,85 @@ def evaluate_effect_at_point(
         return lerp_rgb(prev_col, curr_col, blend)
 
     if effect == EffectType.THEATER_CHASE:
-        # Classic marquee theater chase scaled to normalized virtual strip coordinates
-        total_slots = max(18, pulses * 24)
+        # 100%-lit 3-color rotating marquee theater chase (Primary / Secondary / Accent) with no dead dark bulbs
+        total_slots = max(18, pulses * 18)
         dir_sign = -1.0 if reverse_flow else 1.0
-        virtual_slot = (x * total_slots - dir_sign * unwrapped_phase * total_slots) % 3.0
-        # Smooth slot window so uneven segment counts don't alias harshly
-        dist_from_slot_center = min(abs(virtual_slot - 0.5), abs(virtual_slot - 3.5))
-        if dist_from_slot_center < 0.55:
-            strength = math.cos((dist_from_slot_center / 0.55) * (math.pi / 2.0))
-            col = primary if (int(x * total_slots) % 2 == 0) else secondary
-            return add_rgb(bg_scaled, scale_rgb(col, strength))
-        return bg_scaled
+        palette = [primary, secondary, accent]
+        slot_coord = x * total_slots - dir_sign * unwrapped_phase * total_slots
+        slot_idx = int(math.floor(slot_coord)) % 3
+        frac = slot_coord - math.floor(slot_coord)
+        curr_col = palette[slot_idx]
+        next_col = palette[(slot_idx + 1) % 3]
+        smooth_u = 0.5 - 0.5 * math.cos(math.pi * frac)
+        marquee_col = lerp_rgb(curr_col, next_col, smooth_u)
+        bulb_crest = 0.58 + 0.42 * (0.5 * (1.0 + math.sin(2.0 * math.pi * (frac - 0.25))))
+        luminous = lerp_rgb(marquee_col, (255, 255, 255), 0.22 * math.pow(bulb_crest, 2.0))
+        return add_rgb(bg_scaled, scale_rgb(luminous, bulb_crest))
 
     if effect == EffectType.FIRE_SPARKLE:
-        # Continuous roaring fire + rising embers across houses
+        # Continuous roaring fire + rising embers from bottom eaves to upper gable peaks across houses
         n1 = value_noise_1d(x * 18.0 - elapsed_sec * (3.5 + anim.speed * 4.0))
         n2 = value_noise_1d(x * 37.0 + elapsed_sec * 7.2)
-        heat = max(0.0, min(1.0, 0.62 * n1 + 0.38 * n2))
-        if heat < 0.35:
-            col = lerp_rgb((20, 2, 0), (190, 25, 0), heat / 0.35)
-        elif heat < 0.72:
-            col = lerp_rgb((190, 25, 0), (255, 135, 0), (heat - 0.35) / 0.37)
+        heat = max(0.18, min(1.0, 0.16 + 0.54 * n1 + 0.34 * n2))
+        if heat < 0.42:
+            col = lerp_rgb(accent, primary, heat / 0.42)
+        elif heat < 0.76:
+            col = lerp_rgb(primary, secondary, (heat - 0.42) / 0.34)
         else:
-            col = lerp_rgb((255, 135, 0), (255, 240, 160), (heat - 0.72) / 0.28)
+            col = lerp_rgb(secondary, (255, 245, 185), (heat - 0.76) / 0.24)
         return col
 
     if effect == EffectType.SPARKLE_TWINKLE:
-        # Synchronized starlight sparkle over moving aurora wave
-        aurora_phase = 0.5 * (1.0 + math.sin(2.0 * math.pi * (x * pulses - unwrapped_phase)))
-        aurora_col = lerp_rgb(primary, secondary, aurora_phase)
-        base = add_rgb(bg_scaled, scale_rgb(aurora_col, 0.35))
+        # High-density starlight sparkle over moving 3-color aurora wave
+        eff_pulses = max(2, pulses)
+        aurora_phase = 0.5 * (1.0 + math.sin(2.0 * math.pi * (x * eff_pulses - unwrapped_phase)))
+        aurora_accent = 0.5 * (1.0 + math.cos(2.0 * math.pi * (x * (eff_pulses + 1) + unwrapped_phase * 0.8)))
+        aurora_col = lerp_rgb(lerp_rgb(primary, secondary, aurora_phase), accent, 0.35 * aurora_accent)
+        base = add_rgb(bg_scaled, scale_rgb(aurora_col, 0.62))
         cell = int(x * 60.0)
-        tick = int(elapsed_sec * (4.0 + anim.speed * 8.0))
+        tick = int(elapsed_sec * (4.5 + anim.speed * 8.0))
         rnd = deterministic_hash(cell * 997 + tick * 131)
-        if rnd > 0.84:
-            sub = (elapsed_sec * (4.0 + anim.speed * 8.0)) % 1.0
+        if rnd > 0.55:
+            sub = (elapsed_sec * (4.5 + anim.speed * 8.0)) % 1.0
             twinkle = math.sin(sub * math.pi)
-            spark_col = lerp_rgb(accent, (255, 255, 255), 0.65)
+            spark_col = lerp_rgb(accent, (255, 255, 255), 0.68)
             return add_rgb(base, scale_rgb(spark_col, twinkle))
         return base
 
     if effect == EffectType.HALLOWEEN_SPOOKY:
         # Halloween Phantom & Lightning Chase:
-        # Toxic green / haunted violet / pumpkin orange phantom orbs traveling House 1 -> 2 -> 3
-        # with eerie ghostly mist and periodic rooftop lightning flashes.
-        mist_wave = 0.5 * (1.0 + math.sin(2.0 * math.pi * (x * 2.0 - unwrapped_phase * 0.5)))
-        mist_col = lerp_rgb(primary, secondary, mist_wave)
-        base_rgb = add_rgb(bg_scaled, scale_rgb(mist_col, 0.16))
+        # Vivid pumpkin orange / haunted violet / toxic green phantom orbs + glowing cauldron mist
+        eff_pulses = max(3, pulses + 1)
+        eff_tail = min(0.85, max(0.52, tail * 1.7))
+        mist_wave = 0.5 * (1.0 + math.sin(2.0 * math.pi * (x * 2.5 - unwrapped_phase * 0.9)))
+        mist_col = lerp_rgb(secondary, accent, mist_wave)
+        base_rgb = add_rgb(bg_scaled, scale_rgb(mist_col, 0.44))
 
         palette = [primary, secondary, accent]
-        for p in range(pulses):
-            p_head = (head_pos + p / pulses) % 1.0
+        for p in range(eff_pulses):
+            p_head = (head_pos + p / eff_pulses) % 1.0
             dist_behind = ((p_head - x) % 1.0) if not reverse_flow else ((x - p_head) % 1.0)
             dist_ahead = ((x - p_head) % 1.0) if not reverse_flow else ((p_head - x) % 1.0)
             orb_col = palette[p % len(palette)]
             next_col = palette[(p + 1) % len(palette)]
 
-            lead_w = max(0.02, tail * 0.20)
+            lead_w = max(0.025, eff_tail * 0.20)
             if dist_ahead <= lead_w:
                 u = 1.0 - (dist_ahead / lead_w)
-                wobble = 0.82 + 0.18 * math.sin(elapsed_sec * 18.0 + x * 40.0)
+                wobble = 0.85 + 0.15 * math.sin(elapsed_sec * 18.0 + x * 40.0)
                 core = lerp_rgb(orb_col, accent, 0.45 * u)
-                base_rgb = add_rgb(base_rgb, scale_rgb(core, (u * u) * wobble))
-            elif dist_behind <= tail:
-                t_norm = dist_behind / tail
-                decay = math.pow(0.5 * (1.0 + math.cos(math.pi * t_norm)), 1.5)
-                flicker = 0.75 + 0.25 * value_noise_1d(x * 28.0 - elapsed_sec * 9.0)
+                base_rgb = add_rgb(base_rgb, scale_rgb(core, (0.45 + 0.55 * u * u) * wobble))
+            elif dist_behind <= eff_tail:
+                t_norm = dist_behind / eff_tail
+                decay = math.pow(0.5 * (1.0 + math.cos(math.pi * t_norm)), 1.25)
+                flicker = 0.80 + 0.20 * value_noise_1d(x * 28.0 - elapsed_sec * 9.0)
                 trail_col = lerp_rgb(orb_col, next_col, t_norm)
                 base_rgb = add_rgb(base_rgb, scale_rgb(trail_col, decay * flicker))
 
         # Periodic eerie lightning strike across rooflines
         strike_slot = int(elapsed_sec * 2.5)
         strike_rnd = deterministic_hash(strike_slot * 313 + int(x * 3.0) * 17)
-        if strike_rnd > 0.88:
+        if strike_rnd > 0.82:
             sub_t = (elapsed_sec * 2.5) % 1.0
             bolt = math.pow(max(0.0, math.sin(sub_t * math.pi * 3.0)), 2.0) * (1.0 - sub_t)
             lightning_col = lerp_rgb(secondary, (235, 225, 255), 0.7)
@@ -652,8 +706,7 @@ def evaluate_effect_at_point(
 
     if effect == EffectType.CHRISTMAS_MAGIC:
         # Christmas Candy Cane & Sleigh Wave:
-        # Crisp rotating red/white/emerald candy-cane ribbons with a sparkling gold sleigh head
-        # gliding smoothly from house to house.
+        # Full-brightness rotating red/white/emerald candy-cane ribbons + multiple gold sleigh comets
         dir_sign = -1.0 if reverse_flow else 1.0
         stripe_freq = max(6.0, pulses * 9.0)
         ribbon_phase = (x * stripe_freq - dir_sign * unwrapped_phase * 2.0) % 1.0
@@ -672,32 +725,34 @@ def evaluate_effect_at_point(
             edge = 0.5 * (1.0 - math.cos(math.pi * min(1.0, local_u * 4.0)))
             cane_col = lerp_rgb(snow_white, secondary, edge)
 
-        base_rgb = add_rgb(bg_scaled, scale_rgb(cane_col, 0.52))
+        base_rgb = add_rgb(bg_scaled, scale_rgb(cane_col, 0.72))
 
-        # Sparkling gold sleigh head + magic dust wake gliding across all 3 houses
-        sleigh_head = head_pos
-        dist_behind = ((sleigh_head - x) % 1.0) if not reverse_flow else ((x - sleigh_head) % 1.0)
-        dist_ahead = ((x - sleigh_head) % 1.0) if not reverse_flow else ((sleigh_head - x) % 1.0)
-        head_w = max(0.025, tail * 0.22)
-        if dist_ahead <= head_w:
-            u = 1.0 - (dist_ahead / head_w)
-            sleigh_col = lerp_rgb(accent, (255, 255, 255), 0.65 * u)
-            base_rgb = add_rgb(base_rgb, scale_rgb(sleigh_col, u * u))
-        elif dist_behind <= tail:
-            t_norm = dist_behind / tail
-            wake = math.exp(-2.6 * t_norm) * (1.0 - t_norm)
-            sparkle = 0.65 + 0.35 * math.sin(elapsed_sec * 32.0 + x * 90.0)
-            wake_col = lerp_rgb(accent, snow_white, 0.35 * (1.0 - t_norm))
-            base_rgb = add_rgb(base_rgb, scale_rgb(wake_col, wake * sparkle))
+        eff_pulses = max(2, pulses)
+        eff_tail = min(0.85, max(0.45, tail * 1.6))
+        for p in range(eff_pulses):
+            sleigh_head = (head_pos + p / eff_pulses) % 1.0
+            dist_behind = ((sleigh_head - x) % 1.0) if not reverse_flow else ((x - sleigh_head) % 1.0)
+            dist_ahead = ((x - sleigh_head) % 1.0) if not reverse_flow else ((sleigh_head - x) % 1.0)
+            head_w = max(0.03, eff_tail * 0.22)
+            if dist_ahead <= head_w:
+                u = 1.0 - (dist_ahead / head_w)
+                sleigh_col = lerp_rgb(accent, (255, 255, 255), 0.65 * u)
+                base_rgb = add_rgb(base_rgb, scale_rgb(sleigh_col, u * u))
+            elif dist_behind <= eff_tail:
+                t_norm = dist_behind / eff_tail
+                wake = math.exp(-2.1 * t_norm) * (1.0 - t_norm)
+                sparkle = 0.72 + 0.28 * math.sin(elapsed_sec * 32.0 + x * 90.0)
+                wake_col = lerp_rgb(accent, snow_white, 0.35 * (1.0 - t_norm))
+                base_rgb = add_rgb(base_rgb, scale_rgb(wake_col, wake * sparkle))
 
         return base_rgb
 
     if effect == EffectType.DIWALI_FESTIVAL:
         # Diwali Diya & Rangoli Cascade:
         # Warm golden saffron, marigold, royal magenta, and turquoise rangoli waves
-        # with flickering oil-lamp (diya) shimmer flowing across all 3 houses.
+        # with bright flickering oil-lamp (diya) shimmer flowing across all 3 houses.
         dir_sign = -1.0 if reverse_flow else 1.0
-        rangoli_u = (x * max(1, pulses) * 1.5 - dir_sign * unwrapped_phase) % 1.0
+        rangoli_u = (x * max(2, pulses + 1) * 1.5 - dir_sign * unwrapped_phase) % 1.0
         if rangoli_u < 0.333:
             rangoli_col = lerp_rgb(primary, secondary, rangoli_u / 0.333)
         elif rangoli_u < 0.666:
@@ -705,28 +760,35 @@ def evaluate_effect_at_point(
         else:
             rangoli_col = lerp_rgb(accent, primary, (rangoli_u - 0.666) / 0.334)
 
-        # Diya oil-lamp warm flame flicker nodes along each house
         lamp_density = 18.0
         lamp_pos = (x * lamp_density) % 1.0
-        lamp_arch = math.pow(math.sin(math.pi * lamp_pos), 1.8)
+        lamp_arch = math.pow(math.sin(math.pi * lamp_pos), 1.4)
         flicker_1 = value_noise_1d(x * 32.0 + elapsed_sec * 8.5)
         flicker_2 = value_noise_1d(x * 64.0 - elapsed_sec * 13.0)
-        flame_flicker = 0.58 + 0.42 * (0.65 * flicker_1 + 0.35 * flicker_2)
+        flame_flicker = 0.68 + 0.32 * (0.65 * flicker_1 + 0.35 * flicker_2)
 
         diya_gold = lerp_rgb(primary, (255, 242, 175), 0.55 * lamp_arch * flame_flicker)
-        combined = lerp_rgb(rangoli_col, diya_gold, 0.55 * lamp_arch)
-        return add_rgb(bg_scaled, scale_rgb(combined, 0.35 + 0.65 * flame_flicker))
+        combined = lerp_rgb(rangoli_col, diya_gold, 0.52 * lamp_arch)
+        return add_rgb(bg_scaled, scale_rgb(combined, 0.55 + 0.45 * flame_flicker))
 
     if effect == EffectType.CENTER_OUT_SHOCKWAVE:
         # Center-Out Shockwave (From My Middle House #2 at x=0.50 -> Both Neighbors Simultaneously!):
         # Symmetrical dual wave originating at x = 0.50 and expanding outward left to Neighbor 1
         # and right to Neighbor 2 in exact lockstep.
         radial_dist = abs(x - 0.50) * 2.0  # 0.0 at center of My House (x=0.50), 1.0 at street outer edges
-        best_intensity = 0.0
-        best_color = primary
+        eff_pulses = max(2, pulses)
+        eff_tail = min(0.85, max(0.55, tail * 1.75))
+        dir_sign = -1.0 if reverse_flow else 1.0
+        amb_wave = 0.5 * (1.0 + math.sin(2.0 * math.pi * (radial_dist * 1.5 - dir_sign * unwrapped_phase)))
+        best_intensity = 0.36
+        best_color = lerp_rgb(secondary, accent, amb_wave)
+        palette = [primary, accent, secondary]
 
-        for p in range(pulses):
-            ring_pos = (head_pos + p / pulses) % 1.0
+        for p in range(eff_pulses):
+            ring_pos = (head_pos + p / eff_pulses) % 1.0
+            ring_col = palette[p % len(palette)]
+            mid_col = palette[(p + 1) % len(palette)]
+            end_col = palette[(p + 2) % len(palette)]
             if not reverse_flow:
                 dist_behind = (ring_pos - radial_dist) % 1.0
                 dist_ahead = (radial_dist - ring_pos) % 1.0
@@ -734,60 +796,63 @@ def evaluate_effect_at_point(
                 dist_behind = (radial_dist - ring_pos) % 1.0
                 dist_ahead = (ring_pos - radial_dist) % 1.0
 
-            lead_w = max(0.025, tail * 0.22)
+            lead_w = max(0.03, eff_tail * 0.22)
             if dist_ahead <= lead_w:
                 u = 1.0 - (dist_ahead / lead_w)
-                energy = (u * u) * (3.0 - 2.0 * u)
-                col = lerp_rgb(primary, (255, 255, 255), 0.45 * energy)
-            elif dist_behind <= tail:
-                t_norm = dist_behind / tail
-                energy = math.pow(0.5 * (1.0 + math.cos(math.pi * t_norm)), 1.3)
+                energy = 0.36 + 0.64 * ((u * u) * (3.0 - 2.0 * u))
+                col = lerp_rgb(ring_col, (255, 255, 255), 0.45 * u)
+            elif dist_behind <= eff_tail:
+                t_norm = dist_behind / eff_tail
+                energy = 0.36 + 0.64 * math.pow(0.5 * (1.0 + math.cos(math.pi * t_norm)), 1.2)
                 if t_norm < 0.5:
-                    col = lerp_rgb(primary, secondary, t_norm / 0.5)
+                    col = lerp_rgb(ring_col, mid_col, t_norm / 0.5)
                 else:
-                    col = lerp_rgb(secondary, accent, (t_norm - 0.5) / 0.5)
+                    col = lerp_rgb(mid_col, end_col, (t_norm - 0.5) / 0.5)
             else:
                 energy = 0.0
-                col = primary
+                col = best_color
 
             if energy > best_intensity:
                 best_intensity = energy
                 best_color = col
 
         # Heartbeat core glow at the center of My House (x = 0.50)
-        core_proximity = max(0.0, 1.0 - (radial_dist / 0.18))
-        core_pulse = 0.45 + 0.55 * (0.5 * (1.0 + math.cos(2.0 * math.pi * head_pos)))
-        core_rgb = scale_rgb(lerp_rgb(primary, accent, 0.35), core_proximity * core_pulse * 0.55)
+        core_proximity = max(0.0, 1.0 - (radial_dist / 0.24))
+        core_pulse = 0.50 + 0.50 * (0.5 * (1.0 + math.cos(2.0 * math.pi * head_pos)))
+        core_rgb = scale_rgb(lerp_rgb(primary, accent, 0.35), core_proximity * core_pulse * 0.60)
 
         return add_rgb(add_rgb(bg_scaled, core_rgb), scale_rgb(best_color, best_intensity))
 
     if effect == EffectType.LIGHTNING_STORM:
         # Rolling Thunder & Chain Lightning:
-        # Deep storm clouds with high-velocity electric chain lightning bolts jumping House 1 -> 2 -> 3.
-        cloud_n = value_noise_1d(x * 10.0 - elapsed_sec * 1.4)
-        cloud_col = lerp_rgb(bg_scaled, secondary, 0.35 * cloud_n)
-        rgb_out = add_rgb(bg_scaled, scale_rgb(cloud_col, 0.55))
+        # Vivid storm clouds with high-velocity electric chain lightning bolts jumping House 1 -> 2 -> 3.
+        eff_pulses = max(3, pulses + 1)
+        eff_tail = min(0.85, max(0.48, tail * 1.6))
+        cloud_n = value_noise_1d(x * 10.0 - elapsed_sec * 1.8)
+        storm_wave = 0.5 * (1.0 + math.sin(2.0 * math.pi * (x * 2.0 - unwrapped_phase)))
+        cloud_col = lerp_rgb(secondary, accent, 0.55 * cloud_n + 0.45 * storm_wave)
+        rgb_out = add_rgb(bg_scaled, scale_rgb(cloud_col, 0.48))
 
-        # High-velocity chain lightning bolt jumping across houses
-        for p in range(pulses):
-            bolt_pos = (head_pos + p / pulses) % 1.0
+        palette = [primary, accent, secondary]
+        for p in range(eff_pulses):
+            bolt_pos = (head_pos + p / eff_pulses) % 1.0
             dist = abs(x - bolt_pos)
             dist = min(dist, 1.0 - dist)
-            bolt_w = max(0.03, tail * 0.35)
+            bolt_w = max(0.045, eff_tail * 0.38)
             if dist <= bolt_w:
                 u = 1.0 - (dist / bolt_w)
-                jagged = 0.65 + 0.35 * deterministic_hash(int(x * 80.0) + int(elapsed_sec * 45.0) * 31)
-                energy = math.pow(u, 1.6) * jagged
-                bolt_col = lerp_rgb(primary, (235, 250, 255), 0.72 * u)
+                jagged = 0.72 + 0.28 * deterministic_hash(int(x * 80.0) + int(elapsed_sec * 45.0) * 31)
+                energy = math.pow(u, 1.35) * jagged
+                bolt_col = lerp_rgb(palette[p % len(palette)], (235, 250, 255), 0.70 * u)
                 rgb_out = add_rgb(rgb_out, scale_rgb(bolt_col, energy))
 
         # Sequential house-wide sheet lightning flashes
         house_zone = min(2, int(x * 3.0))
         flash_tick = int(elapsed_sec * (3.0 + anim.speed * 4.0))
         flash_hash = deterministic_hash(flash_tick * 199 + house_zone * 53)
-        if flash_hash > 0.83:
+        if flash_hash > 0.74:
             sub = (elapsed_sec * (3.0 + anim.speed * 4.0)) % 1.0
-            flash_amp = math.pow(max(0.0, math.sin(sub * math.pi * 2.0)), 2.2)
+            flash_amp = math.pow(max(0.0, math.sin(sub * math.pi * 2.0)), 2.0)
             sheet_col = lerp_rgb(accent, (245, 250, 255), 0.65)
             rgb_out = add_rgb(rgb_out, scale_rgb(sheet_col, flash_amp))
 
@@ -799,23 +864,26 @@ def evaluate_effect_at_point(
         # with bright white sparks when they pass through each other in the middle house.
         s1_head = (unwrapped_phase) % 1.0
         s2_head = (-unwrapped_phase) % 1.0
+        eff_pulses = max(2, pulses)
+        eff_tail = min(0.85, max(0.46, tail * 1.65))
 
-        rgb_out = bg_scaled
-        for p in range(pulses):
-            offset = p / pulses
+        amb_u = 0.5 * (1.0 + math.sin(2.0 * math.pi * (x * 2.0 + unwrapped_phase)))
+        rgb_out = add_rgb(bg_scaled, scale_rgb(lerp_rgb(secondary, primary, amb_u), 0.30))
+        for p in range(eff_pulses):
+            offset = p / eff_pulses
             h1 = (s1_head + offset) % 1.0
             h2 = (s2_head + offset) % 1.0
 
             # Serpent 1 (forward: primary -> secondary)
             d1_behind = (h1 - x) % 1.0
             d1_ahead = (x - h1) % 1.0
-            head_w = max(0.018, tail * 0.16)
+            head_w = max(0.025, eff_tail * 0.18)
             if d1_ahead <= head_w:
                 u1 = 1.0 - (d1_ahead / head_w)
                 rgb_out = add_rgb(rgb_out, scale_rgb(lerp_rgb(primary, (255, 255, 255), 0.55 * u1), u1 * u1))
-            elif d1_behind <= tail:
-                t1 = d1_behind / tail
-                e1 = math.pow(1.0 - t1, 1.4)
+            elif d1_behind <= eff_tail:
+                t1 = d1_behind / eff_tail
+                e1 = math.pow(1.0 - t1, 1.2)
                 rgb_out = add_rgb(rgb_out, scale_rgb(lerp_rgb(primary, secondary, t1), e1))
 
             # Serpent 2 (reverse: accent -> secondary)
@@ -824,21 +892,21 @@ def evaluate_effect_at_point(
             if d2_ahead <= head_w:
                 u2 = 1.0 - (d2_ahead / head_w)
                 rgb_out = add_rgb(rgb_out, scale_rgb(lerp_rgb(accent, (255, 255, 255), 0.55 * u2), u2 * u2))
-            elif d2_behind <= tail:
-                t2 = d2_behind / tail
-                e2 = math.pow(1.0 - t2, 1.4)
+            elif d2_behind <= eff_tail:
+                t2 = d2_behind / eff_tail
+                e2 = math.pow(1.0 - t2, 1.2)
                 rgb_out = add_rgb(rgb_out, scale_rgb(lerp_rgb(accent, secondary, t2), e2))
 
             # Collision spark burst when serpents cross each other (especially in middle house x ~ 0.50)
             head_sep = abs(h1 - h2)
             head_sep = min(head_sep, 1.0 - head_sep)
-            if head_sep < 0.14:
+            if head_sep < 0.16:
                 clash_center = 0.5 * (h1 + h2) if abs(h1 - h2) <= 0.5 else ((0.5 * (h1 + h2 + 1.0)) % 1.0)
                 dist_clash = abs(x - clash_center)
                 dist_clash = min(dist_clash, 1.0 - dist_clash)
-                if dist_clash < 0.16:
-                    clash_strength = (1.0 - head_sep / 0.14) * (1.0 - dist_clash / 0.16)
-                    spark = 0.7 + 0.3 * math.sin(elapsed_sec * 45.0 + x * 120.0)
+                if dist_clash < 0.18:
+                    clash_strength = (1.0 - head_sep / 0.16) * (1.0 - dist_clash / 0.18)
+                    spark = 0.72 + 0.28 * math.sin(elapsed_sec * 45.0 + x * 120.0)
                     clash_col = lerp_rgb(secondary, (255, 255, 255), 0.8)
                     rgb_out = add_rgb(rgb_out, scale_rgb(clash_col, clash_strength * spark))
 

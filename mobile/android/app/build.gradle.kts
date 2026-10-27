@@ -32,8 +32,8 @@ android {
         applicationId = "com.goveesync.govee_sync"
         minSdk = 24
         targetSdk = 35
-        versionCode = 10
-        versionName = "3.7.0"
+        versionCode = 11
+        versionName = "3.8.0"
     }
 
     signingConfigs {

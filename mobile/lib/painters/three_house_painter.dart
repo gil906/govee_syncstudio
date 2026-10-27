@@ -20,8 +20,10 @@ class _LedPlacement {
   final String controllerId;
   final int controllerIndex;
   final int segmentIndex;
+  final int subPuckIndex;
   final String sectionId;
   final String wall;
+  final int story;
 
   const _LedPlacement({
     required this.pos,
@@ -31,9 +33,134 @@ class _LedPlacement {
     required this.controllerId,
     required this.controllerIndex,
     required this.segmentIndex,
+    this.subPuckIndex = 0,
     required this.sectionId,
     required this.wall,
+    this.story = 1,
   });
+}
+
+/// Returns the number of physical LED sub-pucks to render per logical Govee segment
+/// so that:
+/// - My House (#2, 9 logical segments) renders 45 physical glowing LED pucks (5 per segment)
+/// - Neighbor 1 (#1, 24 segments) & Neighbor 2 (#3, 30 segments) render 72–90 physical glowing LED pucks
+int physicalSubPucksPerSegment(
+  int houseTotalSegments, {
+  bool compact = false,
+  String wall = 'front',
+}) {
+  if (compact) {
+    return houseTotalSegments <= 12 ? 4 : 3;
+  }
+  if (houseTotalSegments <= 12) {
+    return 5; // 9 segs * 5 = 45 physical LED pucks on My House
+  }
+  if (wall == 'front' && houseTotalSegments <= 24) {
+    return 4; // 4 sub-pucks on front sections + 3 on sides = 84 pucks on Neighbor 1
+  }
+  return 3; // 30 segs * 3 = 90 physical LED pucks on Neighbor 2
+}
+
+/// Evaluates the shader color for a fractional segment / sub-puck position on a house,
+/// supporting Bottom-to-Top Counter-Clockwise (`1F LTR -> 2F RTL`), `bottom_to_top`,
+/// `ccw_loop`, `front_street_sync`, `perimeter_360`, `front_back_sync`, and `all_segments`.
+Color evaluateHouseSubPuckColor({
+  required HouseConfig house,
+  required double fractionalSegIndex,
+  required int segCount,
+  required String wall,
+  required int story,
+  required double archX,
+  required double houseStartNorm,
+  required double houseSpanNorm,
+  required int globalSegCursor,
+  required int totalAllSegs,
+  required double unwrappedPhase,
+  required double elapsedSec,
+  required AnimationConfig animation,
+}) {
+  if (!house.enabled || !animation.running) {
+    return const Color(0xFF1E293B);
+  }
+
+  final localPos = (fractionalSegIndex / math.max(1, segCount)).clamp(0.0, 0.9999);
+  final wName = wall;
+
+  double effectiveLocalPos = localPos;
+  if (animation.zoneMode == 'bottom_to_top') {
+    // ⬆️ Bottom -> Top Rise: 1st Story (0.0..0.48 LTR) rises to 2nd Story (0.50..1.0 RTL)
+    if (wName == 'front') {
+      if (story <= 1) {
+        effectiveLocalPos = (archX * 0.48).clamp(0.0, 0.48);
+      } else {
+        effectiveLocalPos = (0.50 + (1.0 - archX) * 0.50).clamp(0.50, 0.9999);
+      }
+    } else {
+      effectiveLocalPos = (0.55 + localPos * 0.44).clamp(0.0, 0.9999);
+    }
+  } else if (animation.zoneMode == 'ccw_loop') {
+    // ↺ Bottom -> Top Counter-Clockwise Loop: 1F Front LTR -> 2F Front RTL -> Right -> Back -> Left
+    if (house.isMyHouse || wName == 'front') {
+      if (story <= 1) {
+        effectiveLocalPos = (archX * 0.44).clamp(0.0, 0.44);
+      } else {
+        effectiveLocalPos = (0.44 + (1.0 - archX) * 0.56).clamp(0.44, 0.9999);
+      }
+    } else if (wName == 'right') {
+      effectiveLocalPos = 0.72 + localPos * 0.09;
+    } else if (wName == 'back') {
+      effectiveLocalPos = 0.81 + localPos * 0.09;
+    } else {
+      effectiveLocalPos = 0.90 + localPos * 0.099;
+    }
+  } else if (animation.zoneMode == 'front_street_sync') {
+    effectiveLocalPos = archX;
+  } else if (animation.zoneMode == 'front_back_sync') {
+    if (wName == 'front' || wName == 'back') {
+      effectiveLocalPos = archX;
+    } else {
+      effectiveLocalPos = 0.5;
+    }
+  } else if (animation.zoneMode == 'perimeter_360') {
+    if (wName == 'front') {
+      effectiveLocalPos = archX * 0.40;
+    } else if (wName == 'right') {
+      effectiveLocalPos = 0.40 + (archX - 0.96).clamp(0.0, 0.04) * 5.0;
+    } else if (wName == 'back') {
+      effectiveLocalPos = 0.60 + (1.0 - archX) * 0.20;
+    } else {
+      effectiveLocalPos = 0.80 + (1.0 - (archX / 0.04).clamp(0.0, 1.0)) * 0.20;
+    }
+  }
+
+  double normX;
+  if (animation.mappingMode == 'parallel_zones') {
+    normX = effectiveLocalPos;
+  } else if (animation.mappingMode == 'virtual_strip' &&
+      totalAllSegs > 0 &&
+      animation.zoneMode != 'front_street_sync' &&
+      animation.zoneMode != 'bottom_to_top' &&
+      animation.zoneMode != 'ccw_loop') {
+    normX = (globalSegCursor + fractionalSegIndex) / totalAllSegs;
+  } else {
+    normX = houseStartNorm + effectiveLocalPos * houseSpanNorm;
+  }
+
+  Color col = evaluateEffectAtPoint(
+    x: normX.clamp(0.0, 0.9999),
+    unwrappedPhase: unwrappedPhase,
+    elapsedSec: elapsedSec,
+    anim: animation,
+  );
+  if (animation.zoneMode == 'front_only_quiet_sides' && wName != 'front') {
+    col = Color.fromARGB(
+      (col.a * 255.0).round(),
+      (col.r * 255.0 * 0.22).round(),
+      (col.g * 255.0 * 0.22).round(),
+      (col.b * 255.0 * 0.22).round(),
+    );
+  }
+  return col;
 }
 
 /// Computes the per-segment colors for a house at `elapsedSec`.
@@ -65,62 +192,29 @@ List<Color> computeHouseSegmentColors({
       continue;
     }
 
-    final localPos = (s + 0.5) / math.max(1, segCount);
     final archInfo = s < segArchPositions.length ? segArchPositions[s] : null;
-    final wName = archInfo?.wall ?? (s < segWalls.length ? segWalls[s] : 'front');
+    final wName =
+        archInfo?.wall ?? (s < segWalls.length ? segWalls[s] : 'front');
+    final story = archInfo?.story ?? 1;
+    final archX = archInfo?.archX ?? ((s + 0.5) / math.max(1, segCount));
 
-    // Determine effective horizontal position within the house [0.0..1.0].
-    // In 'front_street_sync' (Street X-Lock) or 'front_back_sync', segments on the
-    // front (and back) wall use their horizontal `archX` coordinate so Upper (story 2)
-    // and Lower (story 1) rooflines stay locked in horizontal unison!
-    double effectiveLocalPos = localPos;
-    if (animation.zoneMode == 'front_street_sync' && archInfo != null) {
-      effectiveLocalPos = archInfo.archX;
-    } else if (animation.zoneMode == 'front_back_sync' && archInfo != null) {
-      if (wName == 'front' || wName == 'back') {
-        effectiveLocalPos = archInfo.archX;
-      } else {
-        effectiveLocalPos = 0.5;
-      }
-    } else if (animation.zoneMode == 'perimeter_360' && archInfo != null) {
-      // Continuous 360° roof orbit around front -> right -> back -> left
-      if (wName == 'front') {
-        effectiveLocalPos = archInfo.archX * 0.40;
-      } else if (wName == 'right') {
-        effectiveLocalPos = 0.40 + (archInfo.archX - 0.96).clamp(0.0, 0.04) * 5.0;
-      } else if (wName == 'back') {
-        effectiveLocalPos = 0.60 + (1.0 - archInfo.archX) * 0.20;
-      } else {
-        effectiveLocalPos = 0.80 + (1.0 - (archInfo.archX / 0.04).clamp(0.0, 1.0)) * 0.20;
-      }
-    }
-
-    double normX;
-    if (animation.mappingMode == 'parallel_zones') {
-      normX = effectiveLocalPos;
-    } else if (animation.mappingMode == 'virtual_strip' &&
-        totalAllSegs > 0 &&
-        animation.zoneMode != 'front_street_sync') {
-      normX = (globalSegCursor + s + 0.5) / totalAllSegs;
-    } else {
-      normX = houseStartNorm + effectiveLocalPos * houseSpanNorm;
-    }
-
-    Color col = evaluateEffectAtPoint(
-      x: normX.clamp(0.0, 0.9999),
-      unwrappedPhase: unwrappedPhase,
-      elapsedSec: elapsedSec,
-      anim: animation,
+    segColors.add(
+      evaluateHouseSubPuckColor(
+        house: house,
+        fractionalSegIndex: s + 0.5,
+        segCount: segCount,
+        wall: wName,
+        story: story,
+        archX: archX,
+        houseStartNorm: houseStartNorm,
+        houseSpanNorm: houseSpanNorm,
+        globalSegCursor: globalSegCursor,
+        totalAllSegs: totalAllSegs,
+        unwrappedPhase: unwrappedPhase,
+        elapsedSec: elapsedSec,
+        animation: animation,
+      ),
     );
-    if (animation.zoneMode == 'front_only_quiet_sides' && wName != 'front') {
-      col = Color.fromARGB(
-        (col.a * 255.0).round(),
-        (col.r * 255.0 * 0.22).round(),
-        (col.g * 255.0 * 0.22).round(),
-        (col.b * 255.0 * 0.22).round(),
-      );
-    }
-    segColors.add(col);
   }
   return segColors;
 }
@@ -751,9 +845,12 @@ class ThreeHouseScenePainter extends CustomPainter {
         }
       }
 
-      // Map each controller's segments onto its assigned sections' rooflines
+      // Map each controller's segments & high-density physical sub-pucks onto its assigned sections' rooflines
+      // following Bottom-to-Top Counter-Clockwise (1F LTR -> 2F RTL) wiring flow.
       final placements = <_LedPlacement>[];
       int colorCursor = 0;
+      final secById = {for (final s in arch.sections) s.id: s};
+      final houseLiveColors = liveHouseColors?[house.id];
       final activeCtrls = house.controllers.where((c) => c.enabled).toList();
       final ctrlsToMap = activeCtrls.isNotEmpty
           ? activeCtrls
@@ -770,44 +867,99 @@ class ThreeHouseScenePainter extends CustomPainter {
         final spans = house.effectiveControllerSpans(ctrl);
         int localSegIdx = 0;
         for (final sp in spans) {
+          final secObj = secById[sp.sectionId];
+          final secWall = secObj?.wall ?? sp.wall;
+          final secStory = secObj?.story ?? 1;
+          final x0 = (secObj?.xStart ?? 0.05).clamp(0.0, 1.0);
+          final x1 = (secObj?.xEnd ?? 0.95).clamp(0.0, 1.0);
           final poly = sectionPolylines[sp.sectionId] ??
               (sectionPolylines.values.isNotEmpty
                   ? sectionPolylines.values.first
-                  : [Offset(left + 4, groundY - usableHeight * 0.5), Offset(right - 4, groundY - usableHeight * 0.5)]);
+                  : [
+                      Offset(left + 4, groundY - usableHeight * 0.5),
+                      Offset(right - 4, groundY - usableHeight * 0.5),
+                    ]);
           final n = sp.segments;
+          final subPucks = physicalSubPucksPerSegment(
+            segCount,
+            compact: compact,
+            wall: secWall,
+          );
+          final isRev = sp.isReverseDirection != ctrl.reversed;
+
           for (int k = 0; k < n && localSegIdx < ctrl.segmentCount; k++) {
-            double u = n <= 1 ? 0.5 : (k + 0.5) / n;
-            if (sp.direction == 'reverse' || ctrl.reversed) {
-              u = 1.0 - u;
+            for (int sub = 0; sub < subPucks; sub++) {
+              final spanProgress =
+                  (k + (sub + 0.5) / subPucks) / math.max(1, n);
+              final u = isRev ? (1.0 - spanProgress) : spanProgress;
+              final pt = _samplePolyline2D(poly, u);
+
+              double subArchX;
+              if (secWall == 'front') {
+                subArchX = (x0 + u * (x1 - x0)).clamp(0.0, 1.0);
+              } else if (secWall == 'left') {
+                subArchX = (0.04 * (1.0 - u)).clamp(0.0, 1.0);
+              } else if (secWall == 'right') {
+                subArchX = (0.96 + 0.04 * u).clamp(0.0, 1.0);
+              } else {
+                subArchX = (1.0 - u).clamp(0.0, 1.0);
+              }
+
+              Color col;
+              if (houseLiveColors != null &&
+                  houseLiveColors.isNotEmpty &&
+                  segColors.isNotEmpty) {
+                final currCol =
+                    segColors[colorCursor.clamp(0, segColors.length - 1)];
+                final nextCol =
+                    segColors[(colorCursor + 1).clamp(0, segColors.length - 1)];
+                col = Color.lerp(currCol, nextCol, sub / subPucks) ?? currCol;
+              } else {
+                col = evaluateHouseSubPuckColor(
+                  house: house,
+                  fractionalSegIndex: colorCursor + (sub + 0.5) / subPucks,
+                  segCount: segCount,
+                  wall: secWall,
+                  story: secStory,
+                  archX: subArchX,
+                  houseStartNorm: houseStartNorm,
+                  houseSpanNorm: houseSpanNorm,
+                  globalSegCursor: globalSegCursor,
+                  totalAllSegs: totalAllSegs,
+                  unwrappedPhase: unwrappedPhase,
+                  elapsedSec: elapsedSec,
+                  animation: animation,
+                );
+              }
+
+              final washDrop = compact ? 10.0 : 20.0;
+              final washSpread = compact ? 3.2 : 6.0;
+              placements.add(
+                _LedPlacement(
+                  pos: pt,
+                  washBaseLeft: Offset(pt.dx - washSpread, pt.dy + washDrop),
+                  washBaseRight: Offset(pt.dx + washSpread, pt.dy + washDrop),
+                  color: col,
+                  controllerId: ctrl.id,
+                  controllerIndex: ci,
+                  segmentIndex: localSegIdx,
+                  subPuckIndex: sub,
+                  sectionId: sp.sectionId,
+                  wall: secWall,
+                  story: secStory,
+                ),
+              );
             }
-            final pt = _samplePolyline2D(poly, u);
-            final col = colorCursor < segColors.length
-                ? segColors[colorCursor]
-                : const Color(0xFF00F5D4);
-            final washDrop = compact ? 11.0 : 22.0;
-            final washSpread = compact ? 4.5 : 8.5;
-            placements.add(
-              _LedPlacement(
-                pos: pt,
-                washBaseLeft: Offset(pt.dx - washSpread, pt.dy + washDrop),
-                washBaseRight: Offset(pt.dx + washSpread, pt.dy + washDrop),
-                color: col,
-                controllerId: ctrl.id,
-                controllerIndex: ci,
-                segmentIndex: localSegIdx,
-                sectionId: sp.sectionId,
-                wall: sp.wall,
-              ),
-            );
             localSegIdx++;
             colorCursor++;
           }
         }
       }
 
-      // 1. Draw downward conical soffit wall-wash cones
+      // 1. Draw downward conical soffit wall-wash cones under the high-density pucks
       if (animation.running && house.enabled) {
-        for (final p in placements) {
+        for (int pi = 0; pi < placements.length; pi++) {
+          final p = placements[pi];
           final conePath = Path()
             ..moveTo(p.pos.dx, p.pos.dy)
             ..lineTo(p.washBaseLeft.dx, p.washBaseLeft.dy)
@@ -820,7 +972,7 @@ class ThreeHouseScenePainter extends CustomPainter {
                 begin: Alignment.topCenter,
                 end: Alignment.bottomCenter,
                 colors: [
-                  p.color.withValues(alpha: compact ? 0.30 : 0.44),
+                  p.color.withValues(alpha: compact ? 0.24 : 0.34),
                   p.color.withValues(alpha: 0.0),
                 ],
               ).createShader(
@@ -835,12 +987,12 @@ class ThreeHouseScenePainter extends CustomPainter {
         }
       }
 
-      // 2. Draw glowing LED pucks along the multi-section roofline
+      // 2. Draw high-density glowing physical Govee LED pucks along the multi-section roofline
       final ledRadius = compact
-          ? (segCount > 14 ? 2.4 : 3.0)
-          : (designMode ? 4.8 : (segCount > 20 ? 3.2 : 4.1));
+          ? 2.15
+          : (designMode ? 3.2 : (placements.length > 65 ? 2.45 : 2.85));
       final bloomPaint = Paint()
-        ..maskFilter = MaskFilter.blur(BlurStyle.normal, compact ? 4.5 : 6.5);
+        ..maskFilter = MaskFilter.blur(BlurStyle.normal, compact ? 3.8 : 5.2);
 
       for (final p in placements) {
         final isHighlighted = designMode &&
@@ -850,7 +1002,7 @@ class ThreeHouseScenePainter extends CustomPainter {
 
         if (animation.running && house.enabled) {
           bloomPaint.color =
-              p.color.withValues(alpha: isHighlighted ? 0.95 : 0.75);
+              p.color.withValues(alpha: isHighlighted ? 0.95 : 0.72);
           canvas.drawCircle(
             p.pos,
             ledRadius * (isHighlighted ? 2.4 : 1.85),
@@ -862,16 +1014,66 @@ class ThreeHouseScenePainter extends CustomPainter {
           isHighlighted ? ledRadius * 1.35 : ledRadius,
           Paint()..color = isHighlighted ? Colors.white : p.color,
         );
-        if (isHighlighted) {
+        if (animation.running && house.enabled && !isHighlighted) {
           canvas.drawCircle(
             p.pos,
-            ledRadius * 1.7,
+            ledRadius * 0.42,
+            Paint()
+              ..color = Color.lerp(p.color, Colors.white, 0.55)!
+                  .withValues(alpha: 0.92),
+          );
+        }
+        if (isHighlighted && p.subPuckIndex == 2) {
+          canvas.drawCircle(
+            p.pos,
+            ledRadius * 1.85,
             Paint()
               ..style = PaintingStyle.stroke
-              ..strokeWidth = 1.6
+              ..strokeWidth = 1.5
               ..color = const Color(0xFFFBBF24),
           );
         }
+      }
+
+      // 3. In Design Mode, draw subtle "↺ Bottom → Top CCW (1F → | ← 2F)" flow indicator
+      if (designMode && !compact) {
+        final ccwText = TextPainter(
+          text: const TextSpan(
+            text: '↺ Bottom→Top CCW (1F LTR →  •  ← 2F RTL)',
+            style: TextStyle(
+              color: Color(0xFFFDE68A),
+              fontSize: 9.5,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          textDirection: TextDirection.ltr,
+        )..layout(maxWidth: houseW - 8);
+        final badgeRect = RRect.fromRectAndRadius(
+          Rect.fromCenter(
+            center: Offset(centerX, topCeilingY + 6),
+            width: ccwText.width + 12,
+            height: ccwText.height + 5,
+          ),
+          const Radius.circular(6),
+        );
+        canvas.drawRRect(
+          badgeRect,
+          Paint()..color = const Color(0xFF060B18).withValues(alpha: 0.88),
+        );
+        canvas.drawRRect(
+          badgeRect,
+          Paint()
+            ..style = PaintingStyle.stroke
+            ..strokeWidth = 0.9
+            ..color = const Color(0xFFFBBF24).withValues(alpha: 0.65),
+        );
+        ccwText.paint(
+          canvas,
+          Offset(
+            centerX - ccwText.width * 0.5,
+            topCeilingY + 6 - ccwText.height * 0.5,
+          ),
+        );
       }
 
       // Inter-house flow chevron
@@ -1830,9 +2032,12 @@ class Isometric3DHousePainter extends CustomPainter {
         }
       }
 
-      // 5. Map each controller's segments onto its assigned 3D section rooflines
+      // 5. Map each controller's segments & high-density physical sub-pucks onto its assigned 3D section rooflines
+      // following Bottom-to-Top Counter-Clockwise (1F LTR -> 2F RTL) wiring flow.
       final placements = <_LedPlacement>[];
       int colorCursor = 0;
+      final secById = {for (final s in arch.sections) s.id: s};
+      final houseLiveColors = liveHouseColors?[house.id];
       final activeCtrls = house.controllers.where((c) => c.enabled).toList();
       final ctrlsToMap = activeCtrls.isNotEmpty
           ? activeCtrls
@@ -1849,19 +2054,25 @@ class Isometric3DHousePainter extends CustomPainter {
         final spans = house.effectiveControllerSpans(ctrl);
         int localSegIdx = 0;
         for (final sp in spans) {
+          final secObj = secById[sp.sectionId];
+          final secWall = secObj?.wall ?? sp.wall;
+          final secStory = secObj?.story ?? 1;
+          final x0 = (secObj?.xStart ?? 0.05).clamp(0.0, 1.0);
+          final x1 = (secObj?.xEnd ?? 0.95).clamp(0.0, 1.0);
+
           List<Offset>? poly = section3DPolylines[sp.sectionId];
           if (poly == null || poly.isEmpty) {
-            if (sp.wall == 'left') {
+            if (secWall == 'left') {
               poly = [
                 project3D(-0.46, 0.50, 0.22),
                 project3D(-0.46, 0.50, -0.22),
               ];
-            } else if (sp.wall == 'right') {
+            } else if (secWall == 'right') {
               poly = [
                 project3D(0.46, 0.50, 0.22),
                 project3D(0.46, 0.50, -0.22),
               ];
-            } else if (sp.wall == 'back') {
+            } else if (secWall == 'back') {
               poly = [
                 project3D(-0.44, 0.50, -0.24),
                 project3D(0.44, 0.50, -0.24),
@@ -1877,37 +2088,83 @@ class Isometric3DHousePainter extends CustomPainter {
             }
           }
           final n = sp.segments;
+          final subPucks = physicalSubPucksPerSegment(
+            segTotal,
+            compact: false,
+            wall: secWall,
+          );
+          final isRev = sp.isReverseDirection != ctrl.reversed;
+
           for (int k = 0; k < n && localSegIdx < ctrl.segmentCount; k++) {
-            double u = n <= 1 ? 0.5 : (k + 0.5) / n;
-            if (sp.direction == 'reverse' || ctrl.reversed) {
-              u = 1.0 - u;
+            for (int sub = 0; sub < subPucks; sub++) {
+              final spanProgress =
+                  (k + (sub + 0.5) / subPucks) / math.max(1, n);
+              final u = isRev ? (1.0 - spanProgress) : spanProgress;
+              final pt = _samplePolyline2D(poly, u);
+
+              double subArchX;
+              if (secWall == 'front') {
+                subArchX = (x0 + u * (x1 - x0)).clamp(0.0, 1.0);
+              } else if (secWall == 'left') {
+                subArchX = (0.04 * (1.0 - u)).clamp(0.0, 1.0);
+              } else if (secWall == 'right') {
+                subArchX = (0.96 + 0.04 * u).clamp(0.0, 1.0);
+              } else {
+                subArchX = (1.0 - u).clamp(0.0, 1.0);
+              }
+
+              Color col;
+              if (houseLiveColors != null &&
+                  houseLiveColors.isNotEmpty &&
+                  segColors.isNotEmpty) {
+                final currCol =
+                    segColors[colorCursor.clamp(0, segColors.length - 1)];
+                final nextCol =
+                    segColors[(colorCursor + 1).clamp(0, segColors.length - 1)];
+                col = Color.lerp(currCol, nextCol, sub / subPucks) ?? currCol;
+              } else {
+                col = evaluateHouseSubPuckColor(
+                  house: house,
+                  fractionalSegIndex: colorCursor + (sub + 0.5) / subPucks,
+                  segCount: segTotal,
+                  wall: secWall,
+                  story: secStory,
+                  archX: subArchX,
+                  houseStartNorm: houseStartNorm,
+                  houseSpanNorm: houseSpanNorm,
+                  globalSegCursor: globalSegCursor,
+                  totalAllSegs: totalAllSegs,
+                  unwrappedPhase: unwrappedPhase,
+                  elapsedSec: elapsedSec,
+                  animation: animation,
+                );
+              }
+
+              final washDrop = singleZoom ? 22.0 : 14.0;
+              final washSpread = singleZoom ? 6.5 : 4.2;
+              placements.add(
+                _LedPlacement(
+                  pos: pt,
+                  washBaseLeft: Offset(pt.dx - washSpread, pt.dy + washDrop),
+                  washBaseRight: Offset(pt.dx + washSpread, pt.dy + washDrop),
+                  color: col,
+                  controllerId: ctrl.id,
+                  controllerIndex: ci,
+                  segmentIndex: localSegIdx,
+                  subPuckIndex: sub,
+                  sectionId: sp.sectionId,
+                  wall: secWall,
+                  story: secStory,
+                ),
+              );
             }
-            final pt = _samplePolyline2D(poly, u);
-            final col = colorCursor < segColors.length
-                ? segColors[colorCursor]
-                : const Color(0xFF00F5D4);
-            final washDrop = singleZoom ? 24.0 : 15.0;
-            final washSpread = singleZoom ? 8.5 : 5.5;
-            placements.add(
-              _LedPlacement(
-                pos: pt,
-                washBaseLeft: Offset(pt.dx - washSpread, pt.dy + washDrop),
-                washBaseRight: Offset(pt.dx + washSpread, pt.dy + washDrop),
-                color: col,
-                controllerId: ctrl.id,
-                controllerIndex: ci,
-                segmentIndex: localSegIdx,
-                sectionId: sp.sectionId,
-                wall: sp.wall,
-              ),
-            );
             localSegIdx++;
             colorCursor++;
           }
         }
       }
 
-      // 6. Draw downward conical 3D soffit wall-wash light beams + glowing LED pucks
+      // 6. Draw downward conical 3D soffit wall-wash light beams + high-density glowing LED pucks
       if (animation.running && house.enabled) {
         for (final p in placements) {
           final isFront = p.wall == 'front';
@@ -1923,7 +2180,7 @@ class Isometric3DHousePainter extends CustomPainter {
                 begin: Alignment.topCenter,
                 end: Alignment.bottomCenter,
                 colors: [
-                  p.color.withValues(alpha: isFront ? 0.42 : 0.22),
+                  p.color.withValues(alpha: isFront ? 0.34 : 0.18),
                   p.color.withValues(alpha: 0.0),
                 ],
               ).createShader(
@@ -1938,10 +2195,10 @@ class Isometric3DHousePainter extends CustomPainter {
         }
       }
 
-      final ledR = singleZoom ? 4.4 : (count > 2 ? 3.1 : 3.7);
+      final ledR = singleZoom ? 3.25 : (count > 2 ? 2.35 : 2.75);
       final bloomPaint = Paint()
         ..maskFilter =
-            MaskFilter.blur(BlurStyle.normal, singleZoom ? 6.8 : 4.8);
+            MaskFilter.blur(BlurStyle.normal, singleZoom ? 5.6 : 4.2);
 
       for (final p in placements) {
         final isFront = p.wall == 'front';
@@ -1952,11 +2209,11 @@ class Isometric3DHousePainter extends CustomPainter {
 
         if (animation.running && house.enabled) {
           bloomPaint.color = p.color.withValues(
-            alpha: isHighlighted ? 0.95 : (isFront ? 0.85 : 0.60),
+            alpha: isHighlighted ? 0.95 : (isFront ? 0.82 : 0.58),
           );
           canvas.drawCircle(
             p.pos,
-            ledR * (isHighlighted ? 2.4 : (isFront ? 1.95 : 1.5)),
+            ledR * (isHighlighted ? 2.4 : (isFront ? 1.90 : 1.45)),
             bloomPaint,
           );
         }
@@ -1965,16 +2222,69 @@ class Isometric3DHousePainter extends CustomPainter {
           isHighlighted ? ledR * 1.35 : (isFront ? ledR : ledR * 0.86),
           Paint()..color = isHighlighted ? Colors.white : p.color,
         );
-        if (isHighlighted) {
+        if (animation.running && house.enabled && !isHighlighted) {
           canvas.drawCircle(
             p.pos,
-            ledR * 1.75,
+            ledR * 0.42,
+            Paint()
+              ..color = Color.lerp(p.color, Colors.white, 0.58)!
+                  .withValues(alpha: isFront ? 0.92 : 0.72),
+          );
+        }
+        if (isHighlighted && p.subPuckIndex == 2) {
+          canvas.drawCircle(
+            p.pos,
+            ledR * 1.85,
             Paint()
               ..style = PaintingStyle.stroke
-              ..strokeWidth = 1.6
+              ..strokeWidth = 1.5
               ..color = const Color(0xFFFBBF24),
           );
         }
+      }
+
+      // In Design Mode, draw subtle "↺ Bottom → Top CCW" flow indicator badge
+      if (designMode) {
+        final ccwTp = TextPainter(
+          text: TextSpan(
+            text: singleZoom
+                ? '↺ Bottom → Top CCW (1F LTR →  •  ← 2F RTL  •  ${placements.length} LED Pucks)'
+                : '↺ CCW (${placements.length} pucks)',
+            style: const TextStyle(
+              color: Color(0xFFFDE68A),
+              fontSize: 9.5,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          textDirection: TextDirection.ltr,
+        )..layout(maxWidth: slotW - 8);
+        final ccwCenter = Offset(slotCenterX, 14);
+        final ccwRect = RRect.fromRectAndRadius(
+          Rect.fromCenter(
+            center: ccwCenter,
+            width: ccwTp.width + 12,
+            height: ccwTp.height + 5,
+          ),
+          const Radius.circular(6),
+        );
+        canvas.drawRRect(
+          ccwRect,
+          Paint()..color = const Color(0xFF060B18).withValues(alpha: 0.88),
+        );
+        canvas.drawRRect(
+          ccwRect,
+          Paint()
+            ..style = PaintingStyle.stroke
+            ..strokeWidth = 0.9
+            ..color = const Color(0xFFFBBF24).withValues(alpha: 0.65),
+        );
+        ccwTp.paint(
+          canvas,
+          Offset(
+            ccwCenter.dx - ccwTp.width * 0.5,
+            ccwCenter.dy - ccwTp.height * 0.5,
+          ),
+        );
       }
 
       // 7. Section / Wall callout badges when zoomed into a single house

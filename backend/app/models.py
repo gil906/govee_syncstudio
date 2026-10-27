@@ -121,38 +121,6 @@ ARCHITECTURE_PRESETS: List[Dict[str, Any]] = [
         "roof_color": "#0f172a",
         "sections": [
             {
-                "id": "sec-upper-dormer",
-                "label": "Upper Left Steep Gable (3 Windows)",
-                "shape": "steep_gable",
-                "wall": "front",
-                "story": 2,
-                "x_start": 0.04,
-                "x_end": 0.58,
-                "eave_height": 0.60,
-                "peak_height": 0.95,
-                "peak_offset": 0.50,
-                "depth_offset": 0.04,
-                "has_garage": False,
-                "has_door": False,
-                "window_style": "modern_grid",
-            },
-            {
-                "id": "sec-upper-right-eave",
-                "label": "Upper Right Flat Eave (1 Window)",
-                "shape": "flat_eave",
-                "wall": "front",
-                "story": 2,
-                "x_start": 0.58,
-                "x_end": 0.96,
-                "eave_height": 0.60,
-                "peak_height": 0.60,
-                "peak_offset": 0.50,
-                "depth_offset": 0.0,
-                "has_garage": False,
-                "has_door": False,
-                "window_style": "double_hung",
-            },
-            {
                 "id": "sec-entry-gable",
                 "label": "Lower Left Entry Porch Eave",
                 "shape": "flat_eave",
@@ -185,17 +153,33 @@ ARCHITECTURE_PRESETS: List[Dict[str, Any]] = [
                 "window_style": "modern_grid",
             },
             {
-                "id": "sec-left-eave",
-                "label": "Left Side Eave",
+                "id": "sec-upper-right-eave",
+                "label": "Upper Right Flat Eave (1 Window)",
                 "shape": "flat_eave",
-                "wall": "left",
+                "wall": "front",
                 "story": 2,
-                "x_start": 0.0,
-                "x_end": 1.0,
-                "eave_height": 0.58,
-                "peak_height": 0.58,
+                "x_start": 0.58,
+                "x_end": 0.96,
+                "eave_height": 0.60,
+                "peak_height": 0.60,
                 "peak_offset": 0.50,
                 "depth_offset": 0.0,
+                "has_garage": False,
+                "has_door": False,
+                "window_style": "double_hung",
+            },
+            {
+                "id": "sec-upper-dormer",
+                "label": "Upper Left Steep Gable (3 Windows)",
+                "shape": "steep_gable",
+                "wall": "front",
+                "story": 2,
+                "x_start": 0.04,
+                "x_end": 0.58,
+                "eave_height": 0.60,
+                "peak_height": 0.95,
+                "peak_offset": 0.50,
+                "depth_offset": 0.04,
                 "has_garage": False,
                 "has_door": False,
                 "window_style": "modern_grid",
@@ -232,6 +216,22 @@ ARCHITECTURE_PRESETS: List[Dict[str, Any]] = [
                 "has_door": False,
                 "window_style": "modern_grid",
             },
+            {
+                "id": "sec-left-eave",
+                "label": "Left Side Eave",
+                "shape": "flat_eave",
+                "wall": "left",
+                "story": 2,
+                "x_start": 0.0,
+                "x_end": 1.0,
+                "eave_height": 0.58,
+                "peak_height": 0.58,
+                "peak_offset": 0.50,
+                "depth_offset": 0.0,
+                "has_garage": False,
+                "has_door": False,
+                "window_style": "modern_grid",
+            },
         ],
     },
     {
@@ -248,22 +248,6 @@ ARCHITECTURE_PRESETS: List[Dict[str, Any]] = [
         "trim_color": "#e2e8f0",
         "roof_color": "#0f172a",
         "sections": [
-            {
-                "id": "sec-main-gable",
-                "label": "Upper 2nd-Story Full-Width Triangle Peak (4 Windows)",
-                "shape": "triangle_gable",
-                "wall": "front",
-                "story": 2,
-                "x_start": 0.05,
-                "x_end": 0.95,
-                "eave_height": 0.58,
-                "peak_height": 0.93,
-                "peak_offset": 0.50,
-                "depth_offset": 0.04,
-                "has_garage": False,
-                "has_door": False,
-                "window_style": "picture",
-            },
             {
                 "id": "sec-lower-garage-eave",
                 "label": "Lower Left 2-Car Garage Flat Eave",
@@ -296,6 +280,22 @@ ARCHITECTURE_PRESETS: List[Dict[str, Any]] = [
                 "has_door": True,
                 "window_style": "double_hung",
             },
+            {
+                "id": "sec-main-gable",
+                "label": "Upper 2nd-Story Full-Width Triangle Peak (4 Windows)",
+                "shape": "triangle_gable",
+                "wall": "front",
+                "story": 2,
+                "x_start": 0.05,
+                "x_end": 0.95,
+                "eave_height": 0.58,
+                "peak_height": 0.93,
+                "peak_offset": 0.50,
+                "depth_offset": 0.04,
+                "has_garage": False,
+                "has_door": False,
+                "window_style": "picture",
+            },
         ],
     },
     {
@@ -313,20 +313,20 @@ ARCHITECTURE_PRESETS: List[Dict[str, Any]] = [
         "roof_color": "#0d1322",
         "sections": [
             {
-                "id": "sec-left-tower-gable",
-                "label": "Upper Left Recessed Dormer Nook",
-                "shape": "dormer_peak",
+                "id": "sec-right-garage-gable",
+                "label": "Lower Full-Width Porch & Garage Flat Eave",
+                "shape": "flat_eave",
                 "wall": "front",
-                "story": 2,
-                "x_start": 0.06,
-                "x_end": 0.26,
-                "eave_height": 0.56,
-                "peak_height": 0.66,
+                "story": 1,
+                "x_start": 0.04,
+                "x_end": 0.98,
+                "eave_height": 0.38,
+                "peak_height": 0.38,
                 "peak_offset": 0.50,
-                "depth_offset": -0.06,
-                "has_garage": False,
-                "has_door": False,
-                "window_style": "arched",
+                "depth_offset": 0.18,
+                "has_garage": True,
+                "has_door": True,
+                "window_style": "modern_grid",
             },
             {
                 "id": "sec-center-flat-fascia",
@@ -345,36 +345,20 @@ ARCHITECTURE_PRESETS: List[Dict[str, Any]] = [
                 "window_style": "modern_grid",
             },
             {
-                "id": "sec-right-garage-gable",
-                "label": "Lower Full-Width Porch & Garage Flat Eave",
-                "shape": "flat_eave",
+                "id": "sec-left-tower-gable",
+                "label": "Upper Left Recessed Dormer Nook",
+                "shape": "dormer_peak",
                 "wall": "front",
-                "story": 1,
-                "x_start": 0.04,
-                "x_end": 0.98,
-                "eave_height": 0.38,
-                "peak_height": 0.38,
-                "peak_offset": 0.50,
-                "depth_offset": 0.18,
-                "has_garage": True,
-                "has_door": True,
-                "window_style": "modern_grid",
-            },
-            {
-                "id": "sec-left-wing",
-                "label": "Left Side Upper & Lower Eaves",
-                "shape": "flat_eave",
-                "wall": "left",
                 "story": 2,
-                "x_start": 0.0,
-                "x_end": 1.0,
-                "eave_height": 0.58,
-                "peak_height": 0.58,
+                "x_start": 0.06,
+                "x_end": 0.26,
+                "eave_height": 0.56,
+                "peak_height": 0.66,
                 "peak_offset": 0.50,
-                "depth_offset": 0.0,
+                "depth_offset": -0.06,
                 "has_garage": False,
                 "has_door": False,
-                "window_style": "modern_grid",
+                "window_style": "arched",
             },
             {
                 "id": "sec-right-wing",
@@ -402,6 +386,22 @@ ARCHITECTURE_PRESETS: List[Dict[str, Any]] = [
                 "x_end": 1.0,
                 "eave_height": 0.54,
                 "peak_height": 0.54,
+                "peak_offset": 0.50,
+                "depth_offset": 0.0,
+                "has_garage": False,
+                "has_door": False,
+                "window_style": "modern_grid",
+            },
+            {
+                "id": "sec-left-wing",
+                "label": "Left Side Upper & Lower Eaves",
+                "shape": "flat_eave",
+                "wall": "left",
+                "story": 2,
+                "x_start": 0.0,
+                "x_end": 1.0,
+                "eave_height": 0.58,
+                "peak_height": 0.58,
                 "peak_offset": 0.50,
                 "depth_offset": 0.0,
                 "has_garage": False,
@@ -662,45 +662,50 @@ def default_controller_section_spans(
     if is_house_1:
         if ctrl_index == 0 or cid.endswith("-1"):
             template = [
-                {"section_id": "sec-upper-dormer", "wall": "front", "segments": 5, "direction": "ltr"},
-                {"section_id": "sec-upper-right-eave", "wall": "front", "segments": 3, "direction": "ltr"},
-                {"section_id": "sec-right-eave", "wall": "right", "segments": 4, "direction": "ltr"},
+                {"section_id": "sec-entry-gable", "wall": "front", "segments": 2, "direction": "ltr"},
+                {"section_id": "sec-garage-square", "wall": "front", "segments": 4, "direction": "ltr"},
+                {"section_id": "sec-upper-right-eave", "wall": "front", "segments": 2, "direction": "rtl"},
+                {"section_id": "sec-upper-dormer", "wall": "front", "segments": 4, "direction": "rtl"},
             ]
         else:
             template = [
-                {"section_id": "sec-entry-gable", "wall": "front", "segments": 2, "direction": "ltr"},
-                {"section_id": "sec-garage-square", "wall": "front", "segments": 4, "direction": "ltr"},
-                {"section_id": "sec-left-eave", "wall": "left", "segments": 3, "direction": "ltr"},
-                {"section_id": "sec-back-eave", "wall": "back", "segments": 3, "direction": "ltr"},
+                {"section_id": "sec-right-eave", "wall": "right", "segments": 4, "direction": "ltr"},
+                {"section_id": "sec-back-eave", "wall": "back", "segments": 4, "direction": "rtl"},
+                {"section_id": "sec-left-eave", "wall": "left", "segments": 4, "direction": "rtl"},
             ]
         return _scale_template_spans(template, segment_count)
 
     if is_house_2:
         template = [
-            {"section_id": "sec-main-gable", "wall": "front", "segments": 5, "direction": "ltr"},
             {"section_id": "sec-lower-garage-eave", "wall": "front", "segments": 2, "direction": "ltr"},
             {"section_id": "sec-lower-porch-gable", "wall": "front", "segments": 2, "direction": "ltr"},
+            {"section_id": "sec-main-gable", "wall": "front", "segments": 5, "direction": "rtl"},
         ]
         return _scale_template_spans(template, segment_count)
 
     if is_house_3:
         if ctrl_index == 0 or cid.endswith("-1"):
             template = [
-                {"section_id": "sec-left-tower-gable", "wall": "front", "segments": 2, "direction": "ltr"},
-                {"section_id": "sec-center-flat-fascia", "wall": "front", "segments": 6, "direction": "ltr"},
-                {"section_id": "sec-right-wing", "wall": "right", "segments": 7, "direction": "ltr"},
+                {"section_id": "sec-right-garage-gable", "wall": "front", "segments": 7, "direction": "ltr"},
+                {"section_id": "sec-center-flat-fascia", "wall": "front", "segments": 6, "direction": "rtl"},
+                {"section_id": "sec-left-tower-gable", "wall": "front", "segments": 2, "direction": "rtl"},
             ]
         else:
             template = [
-                {"section_id": "sec-right-garage-gable", "wall": "front", "segments": 6, "direction": "ltr"},
-                {"section_id": "sec-left-wing", "wall": "left", "segments": 5, "direction": "ltr"},
-                {"section_id": "sec-back-wing", "wall": "back", "segments": 4, "direction": "ltr"},
+                {"section_id": "sec-right-wing", "wall": "right", "segments": 5, "direction": "ltr"},
+                {"section_id": "sec-back-wing", "wall": "back", "segments": 5, "direction": "rtl"},
+                {"section_id": "sec-left-wing", "wall": "left", "segments": 5, "direction": "rtl"},
             ]
         return _scale_template_spans(template, segment_count)
 
     if sections:
         template = [
-            {"section_id": s.id, "wall": s.wall, "segments": max(1, segment_count // len(sections)), "direction": "ltr"}
+            {
+                "section_id": s.id,
+                "wall": s.wall,
+                "segments": max(1, segment_count // len(sections)),
+                "direction": "rtl" if getattr(s, "story", 1) >= 2 else "ltr",
+            }
             for s in sections
         ]
         return _scale_template_spans(template, segment_count)
@@ -1067,12 +1072,14 @@ class AnimationConfig(BaseModel):
     zone_mode: Literal[
         "all_segments",
         "front_street_sync",
+        "bottom_to_top",
+        "ccw_loop",
         "depth_front_to_back",
         "perimeter_360",
         "front_only_quiet_sides",
     ] = Field(
         default="all_segments",
-        description="How Front vs Left/Right/Back house walls are mapped in 3D space",
+        description="How Front vs Left/Right/Back and Bottom-to-Top Counter-Clockwise house walls are mapped in 3D space",
     )
     fps: int = Field(default=25, ge=5, le=60, description="Master loop update rate (frames per second)")
     intensity: int = Field(default=100, ge=1, le=100, description="Master brightness / intensity percentage")

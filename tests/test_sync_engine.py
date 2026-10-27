@@ -1131,7 +1131,35 @@ def test_house_architecture_presets_api_and_3d_roofline_geometry(tmp_path: Path)
         "sec-back-wing",
     }.issubset(h3_sec_ids)
 
-    # Check build_virtual_strip_map populates section_id, arch_x, arch_y, arch_z with peak at middle of sec-main-gable on House 2
+    # Check Bottom-to-Top Counter-Clockwise (1F LTR -> 2F RTL) section ordering and spans on all 3 houses
+    h1_front_secs = [s for s in h1.architecture.sections if s.wall == "front"]
+    assert [s.id for s in h1_front_secs] == [
+        "sec-entry-gable",
+        "sec-garage-square",
+        "sec-upper-right-eave",
+        "sec-upper-dormer",
+    ]
+    assert [s.story for s in h1_front_secs] == [1, 1, 2, 2]
+    assert [sp["direction"] for sp in h1.controllers[0].section_spans] == ["ltr", "ltr", "rtl", "rtl"]
+
+    assert [s.id for s in h2.architecture.sections] == [
+        "sec-lower-garage-eave",
+        "sec-lower-porch-gable",
+        "sec-main-gable",
+    ]
+    assert [s.story for s in h2.architecture.sections] == [1, 1, 2]
+    assert [sp["direction"] for sp in h2.controllers[0].section_spans] == ["ltr", "ltr", "rtl"]
+
+    h3_front_secs = [s for s in h3.architecture.sections if s.wall == "front"]
+    assert [s.id for s in h3_front_secs] == [
+        "sec-right-garage-gable",
+        "sec-center-flat-fascia",
+        "sec-left-tower-gable",
+    ]
+    assert [s.story for s in h3_front_secs] == [1, 2, 2]
+    assert [sp["direction"] for sp in h3.controllers[0].section_spans] == ["ltr", "rtl", "rtl"]
+
+    # Check build_virtual_strip_map populates section_id, arch_x, arch_y, arch_z with peak at middle of sec-main-gable on House 2 (wired RTL on story=2)
     slots = build_virtual_strip_map(cfg)
     h2_gable_slots = [s for s in slots if s.house.id == "house-2" and s.section_id == "sec-main-gable"]
     assert len(h2_gable_slots) == 5
@@ -1139,7 +1167,19 @@ def test_house_architecture_presets_api_and_3d_roofline_geometry(tmp_path: Path)
     assert h2_gable_slots[mid_idx].arch_y > h2_gable_slots[0].arch_y + 0.25
     assert h2_gable_slots[mid_idx].arch_y > h2_gable_slots[-1].arch_y + 0.25
     assert abs(h2_gable_slots[mid_idx].arch_x - 0.50) < 0.08
-    assert h2_gable_slots[0].arch_x < h2_gable_slots[mid_idx].arch_x < h2_gable_slots[-1].arch_x
+    assert h2_gable_slots[0].arch_x > h2_gable_slots[mid_idx].arch_x > h2_gable_slots[-1].arch_x
+
+    # Check bottom_to_top and ccw_loop zone modes
+    cfg.animation.zone_mode = "bottom_to_top"
+    b2t_slots = build_virtual_strip_map(cfg)
+    h2_lower = [s for s in b2t_slots if s.house.id == "house-2" and s.section_id == "sec-lower-garage-eave"]
+    h2_upper = [s for s in b2t_slots if s.house.id == "house-2" and s.section_id == "sec-main-gable"]
+    assert max(s.house_local_pos for s in h2_lower) < min(s.house_local_pos for s in h2_upper)
+
+    cfg.animation.zone_mode = "ccw_loop"
+    ccw_slots = build_virtual_strip_map(cfg)
+    h2_ccw = [s.house_local_pos for s in ccw_slots if s.house.id == "house-2"]
+    assert h2_ccw == sorted(h2_ccw)
 
     # Check front_street_sync horizontally aligns Upper (story=2) and Lower (story=1) front sections by arch_x
     cfg.animation.zone_mode = "front_street_sync"

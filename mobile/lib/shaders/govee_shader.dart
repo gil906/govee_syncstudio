@@ -108,7 +108,9 @@ Color evaluateEffectAtPoint({
   final bgRaw = hexToRgb(anim.backgroundColor);
   final bgScaled = scaleRgb(bgRaw, anim.backgroundDim.clamp(0.0, 1.0));
   final pulses = math.max(1, anim.pulseCount);
+  final effectivePulses = math.max(2, pulses + 1);
   final tail = anim.tailLength.clamp(0.03, 0.85);
+  final effTail = math.max(0.36, tail * 1.45).clamp(0.28, 0.88);
 
   double headPos;
   bool reverseFlow;
@@ -124,35 +126,50 @@ Color evaluateEffectAtPoint({
     reverseFlow = false;
   }
 
+  final dirSign = reverseFlow ? -1.0 : 1.0;
   final effect = anim.effect;
   RgbTriplet out = primary;
 
   if (effect == 'multi_house_chase') {
+    // Rich ambient secondary <-> accent wave in troughs so houses are never 70% dark
+    final troughMix = 0.5 *
+        (1.0 +
+            math.sin(2.0 * math.pi * (x * 2.0 - dirSign * unwrappedPhase * 1.2)));
+    final troughCol = lerpRgb(secondary, accent, troughMix);
+    final troughBase = addRgb(
+      bgScaled,
+      scaleRgb(troughCol, 0.28 + 0.14 * troughMix),
+    );
+
     double bestIntensity = 0.0;
     RgbTriplet bestColor = primary;
-    for (int p = 0; p < pulses; p++) {
-      final pHead = posMod(headPos + p / pulses, 1.0);
+    final palette = <RgbTriplet>[primary, secondary, accent];
+    for (int p = 0; p < effectivePulses; p++) {
+      final pHead = posMod(headPos + p / effectivePulses, 1.0);
       final distBehind =
           !reverseFlow ? posMod(pHead - x, 1.0) : posMod(x - pHead, 1.0);
       final distAhead =
           !reverseFlow ? posMod(x - pHead, 1.0) : posMod(pHead - x, 1.0);
 
-      final leadWidth = math.max(0.02, tail * 0.18);
+      final leadCol = palette[p % palette.length];
+      final midCol = palette[(p + 1) % palette.length];
+      final tailCol = palette[(p + 2) % palette.length];
+      final leadWidth = math.max(0.035, effTail * 0.22);
       double energy = 0.0;
-      RgbTriplet col = primary;
+      RgbTriplet col = leadCol;
 
       if (distAhead <= leadWidth) {
         final u = 1.0 - (distAhead / leadWidth);
         energy = (u * u) * (3.0 - 2.0 * u);
-        col = lerpRgb(primary, const RgbTriplet(255, 255, 255), 0.35 * energy);
-      } else if (distBehind <= tail) {
-        final tNorm = distBehind / tail;
+        col = lerpRgb(leadCol, const RgbTriplet(255, 255, 255), 0.42 * energy);
+      } else if (distBehind <= effTail) {
+        final tNorm = distBehind / effTail;
         energy =
-            math.pow(0.5 * (1.0 + math.cos(math.pi * tNorm)), 1.35).toDouble();
-        if (tNorm < 0.45) {
-          col = lerpRgb(primary, secondary, tNorm / 0.45);
+            math.pow(0.5 * (1.0 + math.cos(math.pi * tNorm)), 1.15).toDouble();
+        if (tNorm < 0.48) {
+          col = lerpRgb(leadCol, midCol, tNorm / 0.48);
         } else {
-          col = lerpRgb(secondary, accent, (tNorm - 0.45) / 0.55);
+          col = lerpRgb(midCol, tailCol, (tNorm - 0.48) / 0.52);
         }
       }
       if (energy > bestIntensity) {
@@ -160,123 +177,168 @@ Color evaluateEffectAtPoint({
         bestColor = col;
       }
     }
-    out = addRgb(bgScaled, scaleRgb(bestColor, bestIntensity));
+    out = addRgb(troughBase, scaleRgb(bestColor, bestIntensity));
   } else if (effect == 'rainbow_wave') {
-    final dirSign = reverseFlow ? -1.0 : 1.0;
-    final hue = posMod(x * pulses - dirSign * unwrappedPhase, 1.0);
-    out = hsvToRgb(hue, 0.92, 1.0);
+    final hue = posMod(x * effectivePulses - dirSign * unwrappedPhase, 1.0);
+    out = hsvToRgb(hue, 0.94, 1.0);
   } else if (effect == 'comet_meteor') {
-    RgbTriplet bestRgb = bgScaled;
-    for (int p = 0; p < pulses; p++) {
-      final pHead = posMod(headPos + p / pulses, 1.0);
+    final nebulaMix = 0.5 *
+        (1.0 +
+            math.sin(2.0 * math.pi * (x * 2.5 - dirSign * unwrappedPhase * 0.8)));
+    final nebulaCol = lerpRgb(secondary, accent, nebulaMix);
+    RgbTriplet bestRgb =
+        addRgb(bgScaled, scaleRgb(nebulaCol, 0.26 + 0.12 * nebulaMix));
+    final palette = <RgbTriplet>[primary, accent, secondary];
+
+    for (int p = 0; p < effectivePulses; p++) {
+      final pHead = posMod(headPos + p / effectivePulses, 1.0);
       final distBehind =
           !reverseFlow ? posMod(pHead - x, 1.0) : posMod(x - pHead, 1.0);
       final distAhead =
           !reverseFlow ? posMod(x - pHead, 1.0) : posMod(pHead - x, 1.0);
 
-      final coreW = math.max(0.015, tail * 0.12);
+      final headTone = palette[p % palette.length];
+      final midTone = palette[(p + 1) % palette.length];
+      final endTone = palette[(p + 2) % palette.length];
+      final coreW = math.max(0.03, effTail * 0.18);
       if (distAhead <= coreW) {
         final u = 1.0 - distAhead / coreW;
         final coreCol =
-            lerpRgb(primary, const RgbTriplet(255, 255, 255), 0.75 * u);
+            lerpRgb(headTone, const RgbTriplet(255, 255, 255), 0.78 * u);
         bestRgb = addRgb(bestRgb, scaleRgb(coreCol, u * u));
-      } else if (distBehind <= tail) {
-        final tNorm = distBehind / tail;
-        final decay = math.exp(-3.2 * tNorm) * (1.0 - tNorm);
-        final shimmer = 0.78 + 0.22 * math.sin(elapsedSec * 28.0 + x * 65.0);
-        final tailCol =
-            lerpRgb(primary, tNorm > 0.5 ? accent : secondary, tNorm);
+      } else if (distBehind <= effTail) {
+        final tNorm = distBehind / effTail;
+        final decay = math.exp(-2.1 * tNorm) * (1.0 - 0.65 * tNorm);
+        final shimmer = 0.80 + 0.20 * math.sin(elapsedSec * 28.0 + x * 65.0);
+        final tailCol = tNorm < 0.5
+            ? lerpRgb(headTone, midTone, tNorm / 0.5)
+            : lerpRgb(midTone, endTone, (tNorm - 0.5) / 0.5);
         bestRgb = addRgb(bestRgb, scaleRgb(tailCol, decay * shimmer));
       }
     }
     out = bestRgb;
   } else if (effect == 'breathing_pulse') {
-    final dirSign = reverseFlow ? -1.0 : 1.0;
     final wave = 0.5 *
         (1.0 +
-            math.sin(2.0 * math.pi * (unwrappedPhase - dirSign * x * 0.35) -
+            math.sin(2.0 * math.pi * (unwrappedPhase - dirSign * x * 0.65) -
                 math.pi / 2.0));
-    final breath = math.pow(wave, 1.5).toDouble();
+    final breath = math.pow(wave, 1.25).toDouble();
     final colorMix = 0.5 *
-        (1.0 + math.sin(2.0 * math.pi * unwrappedPhase + x * math.pi * 1.25));
+        (1.0 + math.sin(2.0 * math.pi * unwrappedPhase + x * math.pi * 2.2));
     final baseCol = lerpRgb(primary, secondary, colorMix);
     final accentGlow = 0.5 *
         (1.0 +
             math.cos(2.0 *
                 math.pi *
-                (x * math.max(1, pulses) - dirSign * unwrappedPhase)));
-    final blendedCol = lerpRgb(baseCol, accent, 0.22 * accentGlow);
-    out = addRgb(bgScaled, scaleRgb(blendedCol, 0.10 + 0.90 * breath));
+                (x * effectivePulses - dirSign * unwrappedPhase * 1.4)));
+    final blendedCol = lerpRgb(baseCol, accent, 0.38 * accentGlow);
+    out = addRgb(bgScaled, scaleRgb(blendedCol, 0.34 + 0.66 * breath));
   } else if (effect == 'color_wipe') {
     final palette = [primary, secondary, accent];
     final stage = unwrappedPhase.floor() % palette.length;
     final prevCol = palette[(stage - 1 + palette.length) % palette.length];
     final currCol = palette[(stage + palette.length) % palette.length];
+    final nextCol = palette[(stage + 1) % palette.length];
     final prog = posMod(unwrappedPhase, 1.0);
     final pos = reverseFlow ? (1.0 - x) : x;
-    const edgeSoftness = 0.025;
+    const edgeSoftness = 0.055;
+    RgbTriplet baseWipe;
     if (pos < prog - edgeSoftness) {
-      out = currCol;
+      final ripple =
+          0.5 * (1.0 + math.sin(2.0 * math.pi * (x * 3.0 - unwrappedPhase)));
+      baseWipe = lerpRgb(currCol, nextCol, 0.22 * ripple);
     } else if (pos > prog + edgeSoftness) {
-      out = prevCol;
+      final ripple =
+          0.5 * (1.0 + math.cos(2.0 * math.pi * (x * 3.0 + unwrappedPhase)));
+      baseWipe = lerpRgb(prevCol, nextCol, 0.22 * ripple);
     } else {
-      final blend = 1.0 - ((pos - (prog - edgeSoftness)) / (2.0 * edgeSoftness));
-      out = lerpRgb(prevCol, currCol, blend);
+      final blend =
+          1.0 - ((pos - (prog - edgeSoftness)) / (2.0 * edgeSoftness));
+      final boundaryFlash = math.sin(blend.clamp(0.0, 1.0) * math.pi);
+      baseWipe = lerpRgb(
+        lerpRgb(prevCol, currCol, blend),
+        const RgbTriplet(255, 255, 255),
+        0.55 * boundaryFlash,
+      );
     }
+    out = baseWipe;
   } else if (effect == 'theater_chase') {
-    final totalSlots = math.max(18, pulses * 24);
-    final dirSign = reverseFlow ? -1.0 : 1.0;
-    final virtualSlot =
-        posMod(x * totalSlots - dirSign * unwrappedPhase * totalSlots, 3.0);
-    final distFromSlotCenter =
-        math.min((virtualSlot - 0.5).abs(), (virtualSlot - 3.5).abs());
-    if (distFromSlotCenter < 0.55) {
-      final strength = math.cos((distFromSlotCenter / 0.55) * (math.pi / 2.0));
-      final col = ((x * totalSlots).floor() % 2 == 0) ? primary : secondary;
-      out = addRgb(bgScaled, scaleRgb(col, strength));
-    } else {
-      out = bgScaled;
-    }
+    final totalSlots = math.max(24, effectivePulses * 18);
+    final shifted = x * totalSlots - dirSign * unwrappedPhase * totalSlots * 0.45;
+    final slotIdx = shifted.floor();
+    final localU = posMod(shifted, 1.0);
+    final palette = <RgbTriplet>[primary, secondary, accent];
+    final currCol = palette[slotIdx.abs() % 3];
+    final nextCol = palette[(slotIdx.abs() + 1) % 3];
+    final bulbShape = 0.48 + 0.52 * math.sin(localU * math.pi);
+    final edgeBlend = localU > 0.75 ? (localU - 0.75) / 0.25 : 0.0;
+    final col = lerpRgb(currCol, nextCol, edgeBlend);
+    final highlight = math.pow(math.sin(localU * math.pi), 4.0).toDouble() * 0.30;
+    final litBulb = lerpRgb(col, const RgbTriplet(255, 255, 255), highlight);
+    out = addRgb(bgScaled, scaleRgb(litBulb, bulbShape));
   } else if (effect == 'fire_sparkle') {
-    final n1 = valueNoise1d(x * 18.0 - elapsedSec * (3.5 + anim.speed * 4.0));
-    final n2 = valueNoise1d(x * 37.0 + elapsedSec * 7.2);
-    final heat = (0.62 * n1 + 0.38 * n2).clamp(0.0, 1.0);
-    if (heat < 0.35) {
-      out = lerpRgb(
-          const RgbTriplet(20, 2, 0), const RgbTriplet(190, 25, 0), heat / 0.35);
-    } else if (heat < 0.72) {
-      out = lerpRgb(const RgbTriplet(190, 25, 0), const RgbTriplet(255, 135, 0),
-          (heat - 0.35) / 0.37);
+    final n1 = valueNoise1d(x * 18.0 - elapsedSec * (3.8 + anim.speed * 4.5));
+    final n2 = valueNoise1d(x * 37.0 + elapsedSec * 7.6);
+    final n3 = 0.5 * (1.0 + math.sin(2.0 * math.pi * (x * 3.0 - unwrappedPhase)));
+    final heat = (0.50 * n1 + 0.32 * n2 + 0.18 * n3).clamp(0.0, 1.0);
+    RgbTriplet flameCol;
+    if (heat < 0.38) {
+      flameCol = lerpRgb(secondary, primary, heat / 0.38);
+    } else if (heat < 0.74) {
+      flameCol = lerpRgb(primary, accent, (heat - 0.38) / 0.36);
     } else {
-      out = lerpRgb(const RgbTriplet(255, 135, 0),
-          const RgbTriplet(255, 240, 160), (heat - 0.72) / 0.28);
+      flameCol = lerpRgb(
+        accent,
+        const RgbTriplet(255, 245, 190),
+        (heat - 0.74) / 0.26,
+      );
     }
+    out = addRgb(bgScaled, scaleRgb(flameCol, 0.48 + 0.52 * heat));
   } else if (effect == 'sparkle_twinkle') {
-    final auroraPhase =
-        0.5 * (1.0 + math.sin(2.0 * math.pi * (x * pulses - unwrappedPhase)));
-    final auroraCol = lerpRgb(primary, secondary, auroraPhase);
-    final base = addRgb(bgScaled, scaleRgb(auroraCol, 0.35));
-    final cell = (x * 60.0).floor();
-    final tick = (elapsedSec * (4.0 + anim.speed * 8.0)).floor();
+    final auroraU = posMod(
+      x * effectivePulses * 1.2 - dirSign * unwrappedPhase * 1.1,
+      1.0,
+    );
+    RgbTriplet auroraCol;
+    if (auroraU < 0.333) {
+      auroraCol = lerpRgb(primary, secondary, auroraU / 0.333);
+    } else if (auroraU < 0.666) {
+      auroraCol = lerpRgb(secondary, accent, (auroraU - 0.333) / 0.333);
+    } else {
+      auroraCol = lerpRgb(accent, primary, (auroraU - 0.666) / 0.334);
+    }
+    final waveGlow = 0.55 +
+        0.25 *
+            math.sin(2.0 * math.pi * (x * effectivePulses + unwrappedPhase));
+    final base = addRgb(bgScaled, scaleRgb(auroraCol, waveGlow));
+    final cell = (x * 64.0).floor();
+    final tick = (elapsedSec * (4.5 + anim.speed * 8.5)).floor();
     final rnd = deterministicHash(cell * 997 + tick * 131);
-    if (rnd > 0.84) {
-      final sub = posMod(elapsedSec * (4.0 + anim.speed * 8.0), 1.0);
+    if (rnd > 0.62) {
+      final sub = posMod(elapsedSec * (4.5 + anim.speed * 8.5) + rnd * 3.0, 1.0);
       final twinkle = math.sin(sub * math.pi);
       final sparkCol =
-          lerpRgb(accent, const RgbTriplet(255, 255, 255), 0.65);
+          lerpRgb(accent, const RgbTriplet(255, 255, 255), 0.70);
       out = addRgb(base, scaleRgb(sparkCol, twinkle));
     } else {
       out = base;
     }
   } else if (effect == 'halloween_spooky') {
-    final mistWave =
-        0.5 * (1.0 + math.sin(2.0 * math.pi * (x * 2.0 - unwrappedPhase * 0.5)));
-    final mistCol = lerpRgb(primary, secondary, mistWave);
-    RgbTriplet baseRgb = addRgb(bgScaled, scaleRgb(mistCol, 0.16));
+    final mistU =
+        posMod(x * 2.2 - dirSign * unwrappedPhase * 0.65, 1.0);
+    RgbTriplet mistCol;
+    if (mistU < 0.333) {
+      mistCol = lerpRgb(primary, secondary, mistU / 0.333);
+    } else if (mistU < 0.666) {
+      mistCol = lerpRgb(secondary, accent, (mistU - 0.333) / 0.333);
+    } else {
+      mistCol = lerpRgb(accent, primary, (mistU - 0.666) / 0.334);
+    }
+    RgbTriplet baseRgb = addRgb(bgScaled, scaleRgb(mistCol, 0.38));
     final palette = [primary, secondary, accent];
 
-    for (int p = 0; p < pulses; p++) {
-      final pHead = posMod(headPos + p / pulses, 1.0);
+    for (int p = 0; p < effectivePulses; p++) {
+      final pHead = posMod(headPos + p / effectivePulses, 1.0);
       final distBehind =
           !reverseFlow ? posMod(pHead - x, 1.0) : posMod(x - pHead, 1.0);
       final distAhead =
@@ -284,88 +346,93 @@ Color evaluateEffectAtPoint({
       final orbCol = palette[p % palette.length];
       final nextCol = palette[(p + 1) % palette.length];
 
-      final leadW = math.max(0.02, tail * 0.20);
+      final leadW = math.max(0.035, effTail * 0.24);
       if (distAhead <= leadW) {
         final u = 1.0 - (distAhead / leadW);
-        final wobble = 0.82 + 0.18 * math.sin(elapsedSec * 18.0 + x * 40.0);
-        final core = lerpRgb(orbCol, accent, 0.45 * u);
+        final wobble = 0.85 + 0.15 * math.sin(elapsedSec * 18.0 + x * 40.0);
+        final core = lerpRgb(orbCol, const RgbTriplet(255, 255, 255), 0.45 * u);
         baseRgb = addRgb(baseRgb, scaleRgb(core, (u * u) * wobble));
-      } else if (distBehind <= tail) {
-        final tNorm = distBehind / tail;
+      } else if (distBehind <= effTail) {
+        final tNorm = distBehind / effTail;
         final decay =
-            math.pow(0.5 * (1.0 + math.cos(math.pi * tNorm)), 1.5).toDouble();
-        final flicker = 0.75 + 0.25 * valueNoise1d(x * 28.0 - elapsedSec * 9.0);
+            math.pow(0.5 * (1.0 + math.cos(math.pi * tNorm)), 1.2).toDouble();
+        final flicker = 0.78 + 0.22 * valueNoise1d(x * 28.0 - elapsedSec * 9.0);
         final trailCol = lerpRgb(orbCol, nextCol, tNorm);
         baseRgb = addRgb(baseRgb, scaleRgb(trailCol, decay * flicker));
       }
     }
 
-    final strikeSlot = (elapsedSec * 2.5).floor();
+    final strikeSlot = (elapsedSec * 2.8).floor();
     final strikeRnd =
-        deterministicHash(strikeSlot * 313 + (x * 3.0).floor() * 17);
-    if (strikeRnd > 0.88) {
-      final subT = posMod(elapsedSec * 2.5, 1.0);
+        deterministicHash(strikeSlot * 313 + (x * 4.0).floor() * 17);
+    if (strikeRnd > 0.76) {
+      final subT = posMod(elapsedSec * 2.8, 1.0);
       final bolt = math
-              .pow(math.max(0.0, math.sin(subT * math.pi * 3.0)), 2.0)
+              .pow(math.max(0.0, math.sin(subT * math.pi * 3.0)), 1.8)
               .toDouble() *
-          (1.0 - subT);
+          (1.0 - subT * 0.7);
       final lightningCol =
-          lerpRgb(secondary, const RgbTriplet(235, 225, 255), 0.7);
-      baseRgb = addRgb(baseRgb, scaleRgb(lightningCol, bolt * 0.95));
+          lerpRgb(accent, const RgbTriplet(240, 230, 255), 0.65);
+      baseRgb = addRgb(baseRgb, scaleRgb(lightningCol, bolt * 0.90));
     }
     out = baseRgb;
   } else if (effect == 'christmas_magic') {
-    final dirSign = reverseFlow ? -1.0 : 1.0;
-    final stripeFreq = math.max(6.0, pulses * 9.0);
+    final stripeFreq = math.max(6.0, effectivePulses * 5.0);
     final ribbonPhase =
         posMod(x * stripeFreq - dirSign * unwrappedPhase * 2.0, 1.0);
     const snowWhite = RgbTriplet(255, 250, 245);
 
     RgbTriplet caneCol;
-    if (ribbonPhase < 0.333) {
-      final localU = ribbonPhase / 0.333;
+    if (ribbonPhase < 0.25) {
+      final localU = ribbonPhase / 0.25;
       final edge =
-          0.5 * (1.0 - math.cos(math.pi * math.min(1.0, localU * 4.0)));
+          0.5 * (1.0 - math.cos(math.pi * math.min(1.0, localU * 3.0)));
       caneCol = lerpRgb(snowWhite, primary, edge);
-    } else if (ribbonPhase < 0.666) {
-      final localU = (ribbonPhase - 0.333) / 0.333;
+    } else if (ribbonPhase < 0.50) {
+      final localU = (ribbonPhase - 0.25) / 0.25;
       final edge =
-          0.5 * (1.0 - math.cos(math.pi * math.min(1.0, localU * 4.0)));
-      caneCol = lerpRgb(primary, snowWhite, edge);
+          0.5 * (1.0 - math.cos(math.pi * math.min(1.0, localU * 3.0)));
+      caneCol = lerpRgb(primary, accent, edge);
+    } else if (ribbonPhase < 0.75) {
+      final localU = (ribbonPhase - 0.50) / 0.25;
+      final edge =
+          0.5 * (1.0 - math.cos(math.pi * math.min(1.0, localU * 3.0)));
+      caneCol = lerpRgb(accent, secondary, edge);
     } else {
-      final localU = (ribbonPhase - 0.666) / 0.334;
+      final localU = (ribbonPhase - 0.75) / 0.25;
       final edge =
-          0.5 * (1.0 - math.cos(math.pi * math.min(1.0, localU * 4.0)));
-      caneCol = lerpRgb(snowWhite, secondary, edge);
+          0.5 * (1.0 - math.cos(math.pi * math.min(1.0, localU * 3.0)));
+      caneCol = lerpRgb(secondary, snowWhite, edge);
     }
 
-    RgbTriplet baseRgb = addRgb(bgScaled, scaleRgb(caneCol, 0.52));
-    final sleighHead = headPos;
-    final distBehind = !reverseFlow
-        ? posMod(sleighHead - x, 1.0)
-        : posMod(x - sleighHead, 1.0);
-    final distAhead = !reverseFlow
-        ? posMod(x - sleighHead, 1.0)
-        : posMod(sleighHead - x, 1.0);
-    final headW = math.max(0.025, tail * 0.22);
+    RgbTriplet baseRgb = addRgb(bgScaled, scaleRgb(caneCol, 0.72));
+    for (int p = 0; p < effectivePulses; p++) {
+      final sleighHead = posMod(headPos + p / effectivePulses, 1.0);
+      final distBehind = !reverseFlow
+          ? posMod(sleighHead - x, 1.0)
+          : posMod(x - sleighHead, 1.0);
+      final distAhead = !reverseFlow
+          ? posMod(x - sleighHead, 1.0)
+          : posMod(sleighHead - x, 1.0);
+      final headW = math.max(0.03, effTail * 0.22);
 
-    if (distAhead <= headW) {
-      final u = 1.0 - (distAhead / headW);
-      final sleighCol =
-          lerpRgb(accent, const RgbTriplet(255, 255, 255), 0.65 * u);
-      baseRgb = addRgb(baseRgb, scaleRgb(sleighCol, u * u));
-    } else if (distBehind <= tail) {
-      final tNorm = distBehind / tail;
-      final wake = math.exp(-2.6 * tNorm) * (1.0 - tNorm);
-      final sparkle = 0.65 + 0.35 * math.sin(elapsedSec * 32.0 + x * 90.0);
-      final wakeCol = lerpRgb(accent, snowWhite, 0.35 * (1.0 - tNorm));
-      baseRgb = addRgb(baseRgb, scaleRgb(wakeCol, wake * sparkle));
+      if (distAhead <= headW) {
+        final u = 1.0 - (distAhead / headW);
+        final sleighCol =
+            lerpRgb(accent, const RgbTriplet(255, 255, 255), 0.70 * u);
+        baseRgb = addRgb(baseRgb, scaleRgb(sleighCol, u * u));
+      } else if (distBehind <= effTail) {
+        final tNorm = distBehind / effTail;
+        final wake = math.exp(-2.1 * tNorm) * (1.0 - 0.7 * tNorm);
+        final sparkle = 0.72 + 0.28 * math.sin(elapsedSec * 32.0 + x * 90.0);
+        final wakeCol = lerpRgb(accent, snowWhite, 0.45 * (1.0 - tNorm));
+        baseRgb = addRgb(baseRgb, scaleRgb(wakeCol, wake * sparkle * 0.75));
+      }
     }
     out = baseRgb;
   } else if (effect == 'diwali_festival') {
-    final dirSign = reverseFlow ? -1.0 : 1.0;
     final rangoliU =
-        posMod(x * math.max(1, pulses) * 1.5 - dirSign * unwrappedPhase, 1.0);
+        posMod(x * effectivePulses * 1.4 - dirSign * unwrappedPhase, 1.0);
     RgbTriplet rangoliCol;
     if (rangoliU < 0.333) {
       rangoliCol = lerpRgb(primary, secondary, rangoliU / 0.333);
@@ -375,24 +442,34 @@ Color evaluateEffectAtPoint({
       rangoliCol = lerpRgb(accent, primary, (rangoliU - 0.666) / 0.334);
     }
 
-    const lampDensity = 18.0;
+    const lampDensity = 24.0;
     final lampPos = posMod(x * lampDensity, 1.0);
-    final lampArch = math.pow(math.sin(math.pi * lampPos), 1.8).toDouble();
+    final lampArch = math.pow(math.sin(math.pi * lampPos), 1.4).toDouble();
     final flicker1 = valueNoise1d(x * 32.0 + elapsedSec * 8.5);
     final flicker2 = valueNoise1d(x * 64.0 - elapsedSec * 13.0);
-    final flameFlicker = 0.58 + 0.42 * (0.65 * flicker1 + 0.35 * flicker2);
+    final flameFlicker = 0.68 + 0.32 * (0.65 * flicker1 + 0.35 * flicker2);
 
-    final diyaGold = lerpRgb(primary, const RgbTriplet(255, 242, 175),
-        0.55 * lampArch * flameFlicker);
-    final combined = lerpRgb(rangoliCol, diyaGold, 0.55 * lampArch);
-    out = addRgb(bgScaled, scaleRgb(combined, 0.35 + 0.65 * flameFlicker));
+    final diyaGold = lerpRgb(secondary, const RgbTriplet(255, 245, 185),
+        0.60 * lampArch * flameFlicker);
+    final combined = lerpRgb(rangoliCol, diyaGold, 0.52 * lampArch);
+    out = addRgb(bgScaled, scaleRgb(combined, 0.52 + 0.48 * flameFlicker));
   } else if (effect == 'center_out_shockwave') {
     final radialDist = (x - 0.50).abs() * 2.0;
+    final radialWave = 0.5 *
+        (1.0 +
+            math.sin(
+                2.0 * math.pi * (radialDist * 1.5 - dirSign * unwrappedPhase)));
+    final ambientField = addRgb(
+      bgScaled,
+      scaleRgb(lerpRgb(secondary, accent, radialWave), 0.30 + 0.12 * radialWave),
+    );
+
     double bestIntensity = 0.0;
     RgbTriplet bestColor = primary;
+    final palette = <RgbTriplet>[primary, secondary, accent];
 
-    for (int p = 0; p < pulses; p++) {
-      final ringPos = posMod(headPos + p / pulses, 1.0);
+    for (int p = 0; p < effectivePulses; p++) {
+      final ringPos = posMod(headPos + p / effectivePulses, 1.0);
       final distBehind = !reverseFlow
           ? posMod(ringPos - radialDist, 1.0)
           : posMod(radialDist - ringPos, 1.0);
@@ -400,22 +477,26 @@ Color evaluateEffectAtPoint({
           ? posMod(radialDist - ringPos, 1.0)
           : posMod(ringPos - radialDist, 1.0);
 
-      final leadW = math.max(0.025, tail * 0.22);
+      final leadTone = palette[p % palette.length];
+      final midTone = palette[(p + 1) % palette.length];
+      final endTone = palette[(p + 2) % palette.length];
+      final leadW = math.max(0.04, effTail * 0.25);
       double energy = 0.0;
-      RgbTriplet col = primary;
+      RgbTriplet col = leadTone;
 
       if (distAhead <= leadW) {
         final u = 1.0 - (distAhead / leadW);
         energy = (u * u) * (3.0 - 2.0 * u);
-        col = lerpRgb(primary, const RgbTriplet(255, 255, 255), 0.45 * energy);
-      } else if (distBehind <= tail) {
-        final tNorm = distBehind / tail;
+        col =
+            lerpRgb(leadTone, const RgbTriplet(255, 255, 255), 0.50 * energy);
+      } else if (distBehind <= effTail) {
+        final tNorm = distBehind / effTail;
         energy =
-            math.pow(0.5 * (1.0 + math.cos(math.pi * tNorm)), 1.3).toDouble();
+            math.pow(0.5 * (1.0 + math.cos(math.pi * tNorm)), 1.15).toDouble();
         if (tNorm < 0.5) {
-          col = lerpRgb(primary, secondary, tNorm / 0.5);
+          col = lerpRgb(leadTone, midTone, tNorm / 0.5);
         } else {
-          col = lerpRgb(secondary, accent, (tNorm - 0.5) / 0.5);
+          col = lerpRgb(midTone, endTone, (tNorm - 0.5) / 0.5);
         }
       }
       if (energy > bestIntensity) {
@@ -424,60 +505,73 @@ Color evaluateEffectAtPoint({
       }
     }
 
-    final coreProximity = math.max(0.0, 1.0 - (radialDist / 0.18));
+    final coreProximity = math.max(0.0, 1.0 - (radialDist / 0.28));
     final corePulse =
-        0.45 + 0.55 * (0.5 * (1.0 + math.cos(2.0 * math.pi * headPos)));
+        0.55 + 0.45 * (0.5 * (1.0 + math.cos(2.0 * math.pi * headPos)));
     final coreRgb = scaleRgb(
-        lerpRgb(primary, accent, 0.35), coreProximity * corePulse * 0.55);
-    out = addRgb(addRgb(bgScaled, coreRgb), scaleRgb(bestColor, bestIntensity));
+        lerpRgb(primary, accent, 0.35), coreProximity * corePulse * 0.65);
+    out = addRgb(
+      addRgb(ambientField, coreRgb),
+      scaleRgb(bestColor, bestIntensity),
+    );
   } else if (effect == 'lightning_storm') {
-    final cloudN = valueNoise1d(x * 10.0 - elapsedSec * 1.4);
-    final cloudCol = lerpRgb(bgScaled, secondary, 0.35 * cloudN);
-    RgbTriplet rgbOut = addRgb(bgScaled, scaleRgb(cloudCol, 0.55));
+    final cloudN = valueNoise1d(x * 10.0 - elapsedSec * 1.8);
+    final cloudWave =
+        0.5 * (1.0 + math.sin(2.0 * math.pi * (x * 2.0 - unwrappedPhase * 0.7)));
+    final cloudCol = lerpRgb(secondary, primary, 0.48 * cloudN + 0.25 * cloudWave);
+    RgbTriplet rgbOut = addRgb(bgScaled, scaleRgb(cloudCol, 0.44));
 
-    for (int p = 0; p < pulses; p++) {
-      final boltPos = posMod(headPos + p / pulses, 1.0);
+    for (int p = 0; p < effectivePulses; p++) {
+      final boltPos = posMod(headPos + p / effectivePulses, 1.0);
       double dist = (x - boltPos).abs();
       dist = math.min(dist, 1.0 - dist);
-      final boltW = math.max(0.03, tail * 0.35);
+      final boltW = math.max(0.08, effTail * 0.45);
       if (dist <= boltW) {
         final u = 1.0 - (dist / boltW);
-        final jagged = 0.65 +
-            0.35 *
+        final jagged = 0.70 +
+            0.30 *
                 deterministicHash(
                     (x * 80.0).floor() + (elapsedSec * 45.0).floor() * 31);
-        final energy = math.pow(u, 1.6).toDouble() * jagged;
-        final boltCol =
-            lerpRgb(primary, const RgbTriplet(235, 250, 255), 0.72 * u);
+        final energy = math.pow(u, 1.35).toDouble() * jagged;
+        final boltCol = lerpRgb(
+          p.isEven ? primary : accent,
+          const RgbTriplet(240, 250, 255),
+          0.72 * u,
+        );
         rgbOut = addRgb(rgbOut, scaleRgb(boltCol, energy));
       }
     }
 
     final houseZone = math.min(2, (x * 3.0).floor());
-    final flashTick = (elapsedSec * (3.0 + anim.speed * 4.0)).floor();
+    final flashTick = (elapsedSec * (3.5 + anim.speed * 4.5)).floor();
     final flashHash = deterministicHash(flashTick * 199 + houseZone * 53);
-    if (flashHash > 0.83) {
-      final sub = posMod(elapsedSec * (3.0 + anim.speed * 4.0), 1.0);
+    if (flashHash > 0.72) {
+      final sub = posMod(elapsedSec * (3.5 + anim.speed * 4.5), 1.0);
       final flashAmp =
-          math.pow(math.max(0.0, math.sin(sub * math.pi * 2.0)), 2.2).toDouble();
+          math.pow(math.max(0.0, math.sin(sub * math.pi * 2.0)), 1.8).toDouble();
       final sheetCol =
           lerpRgb(accent, const RgbTriplet(245, 250, 255), 0.65);
-      rgbOut = addRgb(rgbOut, scaleRgb(sheetCol, flashAmp));
+      rgbOut = addRgb(rgbOut, scaleRgb(sheetCol, flashAmp * 0.90));
     }
     out = rgbOut;
   } else if (effect == 'cyber_snake') {
     final s1Head = posMod(unwrappedPhase, 1.0);
     final s2Head = posMod(-unwrappedPhase, 1.0);
-    RgbTriplet rgbOut = bgScaled;
+    final gridWave =
+        0.5 * (1.0 + math.sin(2.0 * math.pi * (x * 3.0 - unwrappedPhase)));
+    RgbTriplet rgbOut = addRgb(
+      bgScaled,
+      scaleRgb(lerpRgb(secondary, primary, gridWave), 0.24),
+    );
 
-    for (int p = 0; p < pulses; p++) {
-      final offset = p / pulses;
+    for (int p = 0; p < effectivePulses; p++) {
+      final offset = p / effectivePulses;
       final h1 = posMod(s1Head + offset, 1.0);
       final h2 = posMod(s2Head + offset, 1.0);
 
       final d1Behind = posMod(h1 - x, 1.0);
       final d1Ahead = posMod(x - h1, 1.0);
-      final headW = math.max(0.018, tail * 0.16);
+      final headW = math.max(0.03, effTail * 0.20);
       if (d1Ahead <= headW) {
         final u1 = 1.0 - (d1Ahead / headW);
         rgbOut = addRgb(
@@ -485,9 +579,9 @@ Color evaluateEffectAtPoint({
             scaleRgb(
                 lerpRgb(primary, const RgbTriplet(255, 255, 255), 0.55 * u1),
                 u1 * u1));
-      } else if (d1Behind <= tail) {
-        final t1 = d1Behind / tail;
-        final e1 = math.pow(1.0 - t1, 1.4).toDouble();
+      } else if (d1Behind <= effTail) {
+        final t1 = d1Behind / effTail;
+        final e1 = math.pow(1.0 - t1, 1.2).toDouble();
         rgbOut = addRgb(rgbOut, scaleRgb(lerpRgb(primary, secondary, t1), e1));
       }
 
@@ -500,24 +594,24 @@ Color evaluateEffectAtPoint({
             scaleRgb(
                 lerpRgb(accent, const RgbTriplet(255, 255, 255), 0.55 * u2),
                 u2 * u2));
-      } else if (d2Behind <= tail) {
-        final t2 = d2Behind / tail;
-        final e2 = math.pow(1.0 - t2, 1.4).toDouble();
+      } else if (d2Behind <= effTail) {
+        final t2 = d2Behind / effTail;
+        final e2 = math.pow(1.0 - t2, 1.2).toDouble();
         rgbOut = addRgb(rgbOut, scaleRgb(lerpRgb(accent, secondary, t2), e2));
       }
 
       double headSep = (h1 - h2).abs();
       headSep = math.min(headSep, 1.0 - headSep);
-      if (headSep < 0.14) {
+      if (headSep < 0.18) {
         final clashCenter = (h1 - h2).abs() <= 0.5
             ? 0.5 * (h1 + h2)
             : posMod(0.5 * (h1 + h2 + 1.0), 1.0);
         double distClash = (x - clashCenter).abs();
         distClash = math.min(distClash, 1.0 - distClash);
-        if (distClash < 0.16) {
+        if (distClash < 0.20) {
           final clashStrength =
-              (1.0 - headSep / 0.14) * (1.0 - distClash / 0.16);
-          final spark = 0.7 + 0.3 * math.sin(elapsedSec * 45.0 + x * 120.0);
+              (1.0 - headSep / 0.18) * (1.0 - distClash / 0.20);
+          final spark = 0.75 + 0.25 * math.sin(elapsedSec * 45.0 + x * 120.0);
           final clashCol =
               lerpRgb(secondary, const RgbTriplet(255, 255, 255), 0.8);
           rgbOut = addRgb(rgbOut, scaleRgb(clashCol, clashStrength * spark));

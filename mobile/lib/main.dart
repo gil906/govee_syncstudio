@@ -997,13 +997,15 @@ class _GoveeStudioHomeScreenState extends State<GoveeStudioHomeScreen>
       return tempHouse.copyWith(controllers: rebuiltCtrls);
     }).toList();
     widget.api.saveHouses(updated);
-    widget.api.patchAnimation({'zone_mode': 'front_street_sync'});
+    widget.api.patchAnimation({'zone_mode': 'ccw_loop'});
     widget.api.setBanner(
-      '📸 Restored exact 3-house Craftsman photo layout & Street X-Lock alignment!',
+      '📸 Restored exact 3-house Craftsman photo layout & ↺ Bottom → Top CCW alignment!',
     );
   }
 
   static const List<({String id, String label})> _kSyncAlignmentModes = [
+    (id: 'ccw_loop', label: '↺ Bottom → Top CCW Loop'),
+    (id: 'bottom_to_top', label: '⬆️ Bottom → Top Rise'),
     (id: 'front_street_sync', label: 'Street X-Lock (Upper+Lower Synced)'),
     (id: 'all_segments', label: 'Continuous Strip'),
     (id: 'perimeter_360', label: '360° Roof Orbit'),
@@ -1911,13 +1913,53 @@ class _GoveeStudioHomeScreenState extends State<GoveeStudioHomeScreen>
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Live Multi-House CustomPainter Preview right inside the Scene Card!
+            // Live Multi-House CustomPainter Preview + High-Density 36-Puck Mini-Preview Bar!
             ThreeHouseScenePreview(
               clock: _masterClock,
               animation: scene.animation.copyWith(running: true),
               houses: houses,
-              height: panoramicPreview ? 104 : 82,
+              height: panoramicPreview ? 93 : 71,
               compact: !panoramicPreview,
+            ),
+            const SizedBox(height: 3),
+            SizedBox(
+              height: 8,
+              width: double.infinity,
+              child: AnimatedBuilder(
+                animation: _masterClock,
+                builder: (context, _) {
+                  final elapsedSec = _masterClock.value * 60.0;
+                  final unwrappedPhase = elapsedSec * scene.animation.speed;
+                  final activeAnim = scene.animation.copyWith(running: true);
+                  const puckCount = 36;
+                  return Row(
+                    children: List<Widget>.generate(puckCount, (i) {
+                      final x = (i + 0.5) / puckCount;
+                      final c = evaluateEffectAtPoint(
+                        x: x,
+                        unwrappedPhase: unwrappedPhase,
+                        elapsedSec: elapsedSec,
+                        anim: activeAnim,
+                      );
+                      return Expanded(
+                        child: Container(
+                          margin: const EdgeInsets.symmetric(horizontal: 0.4),
+                          decoration: BoxDecoration(
+                            color: c,
+                            borderRadius: BorderRadius.circular(99),
+                            boxShadow: [
+                              BoxShadow(
+                                color: c.withValues(alpha: 0.55),
+                                blurRadius: 3.0,
+                              ),
+                            ],
+                          ),
+                        ),
+                      );
+                    }),
+                  );
+                },
+              ),
             ),
             const SizedBox(height: 8),
             Row(
@@ -4322,7 +4364,11 @@ class _HouseLightDesignerSheetState extends State<_HouseLightDesignerSheet> {
     for (final sp in ctrl.sectionSpans) {
       if (sp.sectionId == sectionId) return sp.direction;
     }
-    return 'forward';
+    final sec = _workingArch.sections.where((s) => s.id == sectionId).firstOrNull;
+    if (sec != null && (sec.story >= 2 || sec.wall == 'back' || sec.wall == 'left')) {
+      return 'rtl';
+    }
+    return 'ltr';
   }
 
   void _setControllerSegmentsForSection(
@@ -4403,12 +4449,16 @@ class _HouseLightDesignerSheetState extends State<_HouseLightDesignerSheet> {
           : (ctrl.segmentCount / targetSecs.length).round().clamp(1, rem);
       rem -= cnt;
       if (cnt > 0) {
+        final ccwDir =
+            (sec.story >= 2 || sec.wall == 'back' || sec.wall == 'left')
+                ? 'rtl'
+                : 'ltr';
         spans.add(
           SectionSpan(
             sectionId: sec.id,
             wall: sec.wall,
             segments: cnt,
-            direction: 'forward',
+            direction: ccwDir,
           ),
         );
       }
@@ -4433,13 +4483,42 @@ class _HouseLightDesignerSheetState extends State<_HouseLightDesignerSheet> {
   void _applyWiringRoutePreset(ControllerConfig ctrl, String presetKey) {
     final allSecs = _workingArch.sections;
     if (allSecs.isEmpty) return;
+    if (presetKey == 'bottom_to_top_ccw') {
+      final tempHouse = _currentHouse.copyWith(
+        architecture: _workingArch,
+        controllers: _workingControllers
+            .map((c) => c.copyWith(sectionSpans: const []))
+            .toList(),
+      );
+      final ccwSpans = tempHouse.effectiveControllerSpans(
+        ctrl.copyWith(sectionSpans: const []),
+      );
+      if (ccwSpans.isNotEmpty) {
+        final wallTotals = <String, int>{};
+        for (final sp in ccwSpans) {
+          wallTotals[sp.wall] = (wallTotals[sp.wall] ?? 0) + sp.segments;
+        }
+        final nextZones = wallTotals.entries
+            .where((e) => e.value > 0)
+            .map((e) => <String, dynamic>{'wall': e.key, 'segments': e.value})
+            .toList();
+        setState(() {
+          _workingControllers = _workingControllers
+              .map((c) => c.id == ctrl.id
+                  ? c.copyWith(sectionSpans: ccwSpans, wallZones: nextZones)
+                  : c)
+              .toList();
+        });
+        return;
+      }
+    }
     List<ArchSection> targets = const [];
     if (presetKey == 'upper_lower_front') {
-      final upperF =
-          allSecs.where((s) => s.wall == 'front' && s.story == 2).toList();
       final lowerF =
           allSecs.where((s) => s.wall == 'front' && s.story == 1).toList();
-      targets = [...upperF, ...lowerF];
+      final upperF =
+          allSecs.where((s) => s.wall == 'front' && s.story == 2).toList();
+      targets = [...lowerF, ...upperF];
     } else if (presetKey == 'upper_front_right') {
       final upperF =
           allSecs.where((s) => s.wall == 'front' && s.story == 2).toList();
@@ -4664,6 +4743,8 @@ class _HouseLightDesignerSheetState extends State<_HouseLightDesignerSheet> {
                 ),
                 const SizedBox(width: 6),
                 for (final mode in const [
+                  ('ccw_loop', '↺ Bottom → Top CCW Loop'),
+                  ('bottom_to_top', '⬆️ Bottom → Top Rise'),
                   ('front_street_sync', 'Street X-Lock (Upper+Lower Synced)'),
                   ('all_segments', 'Continuous Strip'),
                   ('perimeter_360', '360° Roof Orbit'),
@@ -5544,6 +5625,7 @@ class _HouseLightDesignerSheetState extends State<_HouseLightDesignerSheet> {
                 runSpacing: 6,
                 children: [
                   for (final route in const [
+                    ('bottom_to_top_ccw', '↺ Bottom → Top CCW (Real House Default)'),
                     ('upper_lower_front', 'Upper + Lower Front'),
                     ('upper_front_right', 'Upper Front + Right Side'),
                     ('lower_front_left_back', 'Lower Front + Left + Back'),
@@ -5616,9 +5698,10 @@ class _HouseLightDesignerSheetState extends State<_HouseLightDesignerSheet> {
                               ctrl,
                               sec,
                               segsOnSec,
-                              direction: dirOnSec == 'forward'
-                                  ? 'reverse'
-                                  : 'forward',
+                              direction: (dirOnSec == 'rtl' ||
+                                      dirOnSec == 'reverse')
+                                  ? 'ltr'
+                                  : 'rtl',
                             ),
                             child: Container(
                               padding: const EdgeInsets.symmetric(
@@ -5630,9 +5713,9 @@ class _HouseLightDesignerSheetState extends State<_HouseLightDesignerSheet> {
                                     color: const Color(0xFF334155)),
                               ),
                               child: Text(
-                                dirOnSec == 'reverse'
-                                    ? 'RTL ⇄ (Reversed)'
-                                    : 'LTR → (Normal)',
+                                (dirOnSec == 'rtl' || dirOnSec == 'reverse')
+                                    ? 'RTL ← (2F CCW)'
+                                    : 'LTR → (1F CCW)',
                                 style: const TextStyle(
                                   fontSize: 10,
                                   fontWeight: FontWeight.w700,
