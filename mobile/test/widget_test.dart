@@ -132,33 +132,50 @@ void main() {
     expect(find.text('🏗️ Design House & Lights'), findsWidgets);
   });
 
-  test('HouseArchitecture defaults: House 1 triangle gable, House 2 & 3 multi-section, and JSON round-trip', () {
+  test('HouseArchitecture defaults: exact 3 real Craftsman houses from photos, controller spans & Street X-Lock sync', () {
     final h1Arch = HouseArchitecture.defaultForHouse('house-1', 1);
-    expect(h1Arch.presetStyle, 'a_frame_gable');
+    expect(h1Arch.presetStyle, 'craftsman_multi_section');
     expect(h1Arch.defaultViewMode, '3d');
-    expect(h1Arch.frontSections.first.shape, 'triangle_gable');
-    expect(h1Arch.frontSections.first.hasDoor, isTrue);
+    expect(h1Arch.sections.length, 7);
+    expect(
+      h1Arch.frontSections.any((s) => s.id == 'sec-upper-dormer' && s.shape == 'steep_gable' && s.story == 2),
+      isTrue,
+    );
+    expect(
+      h1Arch.frontSections.any((s) => s.id == 'sec-upper-right-eave' && s.shape == 'flat_eave' && s.story == 2),
+      isTrue,
+    );
+    expect(
+      h1Arch.frontSections.any((s) => s.id == 'sec-entry-gable' && s.shape == 'flat_eave' && s.hasDoor),
+      isTrue,
+    );
+    expect(
+      h1Arch.frontSections.any((s) => s.id == 'sec-garage-square' && s.shape == 'flat_eave' && s.hasGarage),
+      isTrue,
+    );
 
     final h2Arch = HouseArchitecture.defaultForHouse('house-2', 2);
-    expect(h2Arch.presetStyle, 'craftsman_multi_section');
-    expect(h2Arch.frontSections.length, greaterThanOrEqualTo(3));
+    expect(h2Arch.presetStyle, 'a_frame_gable');
+    expect(h2Arch.sections.length, 3);
+    expect(h2Arch.sections.every((s) => s.wall == 'front'), isTrue);
     expect(
-      h2Arch.frontSections.any((s) => s.id == 'sec-garage-square' && s.shape == 'flat_eave' && s.hasGarage),
+      h2Arch.frontSections.any((s) => s.id == 'sec-main-gable' && s.shape == 'triangle_gable' && s.story == 2),
       isTrue,
     );
     expect(
-      h2Arch.frontSections.any((s) => s.id == 'sec-entry-gable' && s.shape == 'triangle_gable'),
+      h2Arch.frontSections.any((s) => s.id == 'sec-lower-garage-eave' && s.shape == 'flat_eave' && s.hasGarage),
       isTrue,
     );
     expect(
-      h2Arch.frontSections.any((s) => s.id == 'sec-upper-dormer' && s.shape == 'dormer_peak' && s.story == 2),
+      h2Arch.frontSections.any((s) => s.id == 'sec-lower-porch-gable' && s.shape == 'triangle_gable' && s.hasDoor),
       isTrue,
     );
 
     final h3Arch = HouseArchitecture.defaultForHouse('house-3', 3);
     expect(h3Arch.presetStyle, 'two_story_estate');
+    expect(h3Arch.sections.length, 6);
     expect(
-      h3Arch.frontSections.any((s) => s.id == 'sec-left-tower-gable' && s.shape == 'steep_gable'),
+      h3Arch.frontSections.any((s) => s.id == 'sec-left-tower-gable' && s.shape == 'dormer_peak'),
       isTrue,
     );
     expect(
@@ -166,12 +183,40 @@ void main() {
       isTrue,
     );
     expect(
-      h3Arch.frontSections.any((s) => s.id == 'sec-right-garage-gable' && s.shape == 'triangle_gable'),
+      h3Arch.frontSections.any((s) => s.id == 'sec-right-garage-gable' && s.shape == 'flat_eave' && s.hasGarage && s.hasDoor),
       isTrue,
     );
 
+    // Verify defaultThreeHouses controller spans
+    final sys = SystemConfig.defaultThreeHouses();
+    final h2 = sys.houses.firstWhere((h) => h.id == 'house-2');
+    final h2Spans = h2.effectiveControllerSpans(h2.controllers.first);
+    expect(h2Spans.map((sp) => (sp.sectionId, sp.segments)).toList(), [
+      ('sec-main-gable', 5),
+      ('sec-lower-garage-eave', 2),
+      ('sec-lower-porch-gable', 2),
+    ]);
+
+    // Verify Street X-Lock ('front_street_sync') computes colors cleanly
+    final xLockedColors = computeHouseSegmentColors(
+      house: h2,
+      segCount: h2.totalSegments,
+      houseStartNorm: 0.33,
+      houseSpanNorm: 0.34,
+      globalSegCursor: 24,
+      totalAllSegs: 63,
+      unwrappedPhase: 0.25,
+      elapsedSec: 1.0,
+      animation: const AnimationConfig(
+        running: true,
+        effect: 'multi_house_chase',
+        zoneMode: 'front_street_sync',
+      ),
+    );
+    expect(xLockedColors.length, 9);
+
     // Verify all 5 architectural presets exist and serialize cleanly
-    expect(kArchitecturePresets.keys, containsAll([
+    expect(HouseArchitecture.presets.keys, containsAll([
       'a_frame_gable',
       'craftsman_multi_section',
       'two_story_estate',
@@ -180,7 +225,7 @@ void main() {
     ]));
 
     final roundTrip = HouseArchitecture.fromJson(h2Arch.toJson());
-    expect(roundTrip.presetStyle, 'craftsman_multi_section');
+    expect(roundTrip.presetStyle, 'a_frame_gable');
     expect(roundTrip.sections.length, h2Arch.sections.length);
   });
 }

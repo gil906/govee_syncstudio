@@ -7,6 +7,7 @@
 data/*
 !data/.gitkeep
 *.apk
+Screenshot_*.png
 
 # Android signing keys & credentials
 *.jks

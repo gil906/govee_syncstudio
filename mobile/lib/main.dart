@@ -232,21 +232,24 @@ class _GoveeStudioHomeScreenState extends State<GoveeStudioHomeScreen>
                 Row(
                   children: [
                     const Flexible(
+                      flex: 3,
                       child: Text(
                         'Govee Multi-House Sync',
+                        maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
-                          fontSize: 15.5,
+                          fontSize: 15.0,
                           fontWeight: FontWeight.w800,
                           letterSpacing: -0.2,
                         ),
                       ),
                     ),
-                    const SizedBox(width: 8),
+                    const SizedBox(width: 6),
                     Flexible(
+                      flex: 2,
                       child: Container(
                         padding: const EdgeInsets.symmetric(
-                            horizontal: 7, vertical: 2),
+                            horizontal: 6, vertical: 2),
                         decoration: BoxDecoration(
                           color: (isUnfoldedFoldable
                                   ? const Color(0xFF00F5D4)
@@ -264,9 +267,10 @@ class _GoveeStudioHomeScreenState extends State<GoveeStudioHomeScreen>
                           isUnfoldedFoldable
                               ? 'Z FOLD 7 STUDIO'
                               : 'Z FOLD 7 COVER',
+                          maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(
-                            fontSize: 9.5,
+                            fontSize: 9.0,
                             fontWeight: FontWeight.w700,
                             color: isUnfoldedFoldable
                                 ? const Color(0xFF00F5D4)
@@ -275,23 +279,28 @@ class _GoveeStudioHomeScreenState extends State<GoveeStudioHomeScreen>
                         ),
                       ),
                     ),
-                    const SizedBox(width: 6),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 6, vertical: 2),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF7B2CBF).withValues(alpha: 0.22),
-                        borderRadius: BorderRadius.circular(99),
-                        border: Border.all(
-                          color: const Color(0xFFA855F7).withValues(alpha: 0.45),
+                    const SizedBox(width: 4),
+                    Flexible(
+                      flex: 2,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 5, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF7B2CBF).withValues(alpha: 0.22),
+                          borderRadius: BorderRadius.circular(99),
+                          border: Border.all(
+                            color: const Color(0xFFA855F7).withValues(alpha: 0.45),
+                          ),
                         ),
-                      ),
-                      child: const Text(
-                        'v$kAppVersionName (b$kAppVersionCode)',
-                        style: TextStyle(
-                          fontSize: 9.5,
-                          fontWeight: FontWeight.w700,
-                          color: Color(0xFFE9D5FF),
+                        child: const Text(
+                          'v$kAppVersionName (b$kAppVersionCode)',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: 9.0,
+                            fontWeight: FontWeight.w700,
+                            color: Color(0xFFE9D5FF),
+                          ),
                         ),
                       ),
                     ),
@@ -869,7 +878,7 @@ class _GoveeStudioHomeScreenState extends State<GoveeStudioHomeScreen>
             );
           }),
           Padding(
-            padding: const EdgeInsets.only(right: 4),
+            padding: const EdgeInsets.only(right: 6),
             child: InkWell(
               borderRadius: BorderRadius.circular(99),
               onTap: () => _openHouseLightDesigner(
@@ -915,6 +924,144 @@ class _GoveeStudioHomeScreenState extends State<GoveeStudioHomeScreen>
               ),
             ),
           ),
+          Padding(
+            padding: const EdgeInsets.only(right: 4),
+            child: InkWell(
+              borderRadius: BorderRadius.circular(99),
+              onTap: _resetAllHousesToRealPhotoLayout,
+              child: Container(
+                padding: EdgeInsets.symmetric(
+                  horizontal: compact ? 8 : 10,
+                  vertical: compact ? 3.5 : 4.5,
+                ),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF0F172A),
+                  borderRadius: BorderRadius.circular(99),
+                  border: Border.all(
+                    color: const Color(0xFFFBBF24).withValues(alpha: 0.65),
+                  ),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      Icons.photo_camera_back_outlined,
+                      size: compact ? 11.5 : 13,
+                      color: const Color(0xFFFBBF24),
+                    ),
+                    const SizedBox(width: 4),
+                    Text(
+                      '📸 Reset to Real Photo Layout',
+                      style: TextStyle(
+                        fontSize: compact ? 9.8 : 10.8,
+                        fontWeight: FontWeight.w800,
+                        color: const Color(0xFFFDE68A),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _resetAllHousesToRealPhotoLayout() {
+    final defaults = SystemConfig.defaultThreeHouses().houses;
+    final defaultMap = {for (final d in defaults) d.id: d};
+    final current = widget.api.config.houses;
+    final updated = current.map((h) {
+      final defH = defaultMap[h.id];
+      final targetArch =
+          defH?.architecture ?? HouseArchitecture.defaultForHouse(h.id, h.order);
+      final tempHouse = h.copyWith(
+        architecture: targetArch,
+        controllers: h.controllers
+            .map((c) => c.copyWith(sectionSpans: const []))
+            .toList(),
+      );
+      final rebuiltCtrls = tempHouse.controllers.map((c) {
+        final spans = tempHouse.effectiveControllerSpans(c);
+        final wallTotals = <String, int>{};
+        for (final sp in spans) {
+          wallTotals[sp.wall] = (wallTotals[sp.wall] ?? 0) + sp.segments;
+        }
+        final zones = wallTotals.entries
+            .where((e) => e.value > 0)
+            .map((e) => <String, dynamic>{'wall': e.key, 'segments': e.value})
+            .toList();
+        return c.copyWith(sectionSpans: spans, wallZones: zones);
+      }).toList();
+      return tempHouse.copyWith(controllers: rebuiltCtrls);
+    }).toList();
+    widget.api.saveHouses(updated);
+    widget.api.patchAnimation({'zone_mode': 'front_street_sync'});
+    widget.api.setBanner(
+      '📸 Restored exact 3-house Craftsman photo layout & Street X-Lock alignment!',
+    );
+  }
+
+  static const List<({String id, String label})> _kSyncAlignmentModes = [
+    (id: 'front_street_sync', label: 'Street X-Lock (Upper+Lower Synced)'),
+    (id: 'all_segments', label: 'Continuous Strip'),
+    (id: 'perimeter_360', label: '360° Roof Orbit'),
+    (id: 'front_back_sync', label: 'Front→Back Wave'),
+    (id: 'front_only_quiet_sides', label: 'Quiet Sides'),
+  ];
+
+  Widget _buildSyncAlignmentSelectorBar({bool compact = false}) {
+    final currentZoneMode = widget.api.config.animation.zoneMode;
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Row(
+        children: [
+          Text(
+            '🔗 3-House Sync Alignment:',
+            style: TextStyle(
+              fontSize: compact ? 10 : 11,
+              fontWeight: FontWeight.w800,
+              color: const Color(0xFF00F5D4),
+            ),
+          ),
+          const SizedBox(width: 6),
+          for (final mode in _kSyncAlignmentModes)
+            Padding(
+              padding: const EdgeInsets.only(right: 5),
+              child: InkWell(
+                borderRadius: BorderRadius.circular(99),
+                onTap: () =>
+                    widget.api.patchAnimation({'zone_mode': mode.id}),
+                child: Container(
+                  padding: EdgeInsets.symmetric(
+                    horizontal: compact ? 7 : 9,
+                    vertical: compact ? 2.5 : 3.5,
+                  ),
+                  decoration: BoxDecoration(
+                    color: currentZoneMode == mode.id
+                        ? const Color(0xFF00F5D4).withValues(alpha: 0.22)
+                        : const Color(0xFF060B18),
+                    borderRadius: BorderRadius.circular(99),
+                    border: Border.all(
+                      color: currentZoneMode == mode.id
+                          ? const Color(0xFF00F5D4)
+                          : const Color(0xFF1E293B),
+                    ),
+                  ),
+                  child: Text(
+                    mode.label,
+                    style: TextStyle(
+                      fontSize: compact ? 9.5 : 10.5,
+                      fontWeight: FontWeight.w700,
+                      color: currentZoneMode == mode.id
+                          ? const Color(0xFF00F5D4)
+                          : const Color(0xFFCBD5E1),
+                    ),
+                  ),
+                ),
+              ),
+            ),
         ],
       ),
     );
@@ -965,7 +1112,9 @@ class _GoveeStudioHomeScreenState extends State<GoveeStudioHomeScreen>
               height: _stageViewMode == '2d' ? 82 : 112,
               compact: true,
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: 6),
+            _buildSyncAlignmentSelectorBar(compact: true),
+            const SizedBox(height: 6),
             _buildThumbTransportButtons(compact: true),
           ],
         ),
@@ -1041,7 +1190,9 @@ class _GoveeStudioHomeScreenState extends State<GoveeStudioHomeScreen>
               height: 142,
               compact: false,
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 8),
+            _buildSyncAlignmentSelectorBar(compact: false),
+            const SizedBox(height: 10),
             _buildThumbTransportButtons(compact: false),
             if (includeBurstsInline) ...[
               const SizedBox(height: 10),
@@ -4235,14 +4386,21 @@ class _HouseLightDesignerSheetState extends State<_HouseLightDesignerSheet> {
     final frontSecs = _workingArch.frontSections.isNotEmpty
         ? _workingArch.frontSections
         : _workingArch.sections;
-    if (frontSecs.isEmpty) return;
+    _distributeControllerAcrossSections(ctrl, frontSecs);
+  }
+
+  void _distributeControllerAcrossSections(
+    ControllerConfig ctrl,
+    List<ArchSection> targetSecs,
+  ) {
+    if (targetSecs.isEmpty) return;
     final spans = <SectionSpan>[];
     int rem = ctrl.segmentCount;
-    for (int i = 0; i < frontSecs.length; i++) {
-      final sec = frontSecs[i];
-      final cnt = i == frontSecs.length - 1
+    for (int i = 0; i < targetSecs.length; i++) {
+      final sec = targetSecs[i];
+      final cnt = i == targetSecs.length - 1
           ? rem
-          : (ctrl.segmentCount / frontSecs.length).round().clamp(1, rem);
+          : (ctrl.segmentCount / targetSecs.length).round().clamp(1, rem);
       rem -= cnt;
       if (cnt > 0) {
         spans.add(
@@ -4255,10 +4413,89 @@ class _HouseLightDesignerSheetState extends State<_HouseLightDesignerSheet> {
         );
       }
     }
+    final wallTotals = <String, int>{};
+    for (final sp in spans) {
+      wallTotals[sp.wall] = (wallTotals[sp.wall] ?? 0) + sp.segments;
+    }
+    final nextZones = wallTotals.entries
+        .where((e) => e.value > 0)
+        .map((e) => <String, dynamic>{'wall': e.key, 'segments': e.value})
+        .toList();
     setState(() {
       _workingControllers = _workingControllers
-          .map((c) => c.id == ctrl.id ? c.copyWith(sectionSpans: spans) : c)
+          .map((c) => c.id == ctrl.id
+              ? c.copyWith(sectionSpans: spans, wallZones: nextZones)
+              : c)
           .toList();
+    });
+  }
+
+  void _applyWiringRoutePreset(ControllerConfig ctrl, String presetKey) {
+    final allSecs = _workingArch.sections;
+    if (allSecs.isEmpty) return;
+    List<ArchSection> targets = const [];
+    if (presetKey == 'upper_lower_front') {
+      final upperF =
+          allSecs.where((s) => s.wall == 'front' && s.story == 2).toList();
+      final lowerF =
+          allSecs.where((s) => s.wall == 'front' && s.story == 1).toList();
+      targets = [...upperF, ...lowerF];
+    } else if (presetKey == 'upper_front_right') {
+      final upperF =
+          allSecs.where((s) => s.wall == 'front' && s.story == 2).toList();
+      final rightS = allSecs.where((s) => s.wall == 'right').toList();
+      targets = [...upperF, ...rightS];
+    } else if (presetKey == 'lower_front_left_back') {
+      final lowerF =
+          allSecs.where((s) => s.wall == 'front' && s.story == 1).toList();
+      final leftS = allSecs.where((s) => s.wall == 'left').toList();
+      final backS = allSecs.where((s) => s.wall == 'back').toList();
+      targets = [...lowerF, ...leftS, ...backS];
+    } else if (presetKey == 'full_360_perimeter') {
+      final frontS = allSecs.where((s) => s.wall == 'front').toList();
+      final rightS = allSecs.where((s) => s.wall == 'right').toList();
+      final backS = allSecs.where((s) => s.wall == 'back').toList();
+      final leftS = allSecs.where((s) => s.wall == 'left').toList();
+      targets = [...frontS, ...rightS, ...backS, ...leftS];
+    }
+    if (targets.isEmpty) {
+      targets = _workingArch.frontSections.isNotEmpty
+          ? _workingArch.frontSections
+          : allSecs;
+    }
+    _distributeControllerAcrossSections(ctrl, targets);
+  }
+
+  void _resetCurrentHouseToRealPhotoLayout() {
+    final photoArch = HouseArchitecture.defaultForHouse(
+      _selectedHouseId,
+      _currentHouse.order,
+    );
+    setState(() {
+      _workingArch = photoArch;
+      _selectedSectionId =
+          _workingArch.sections.isNotEmpty ? _workingArch.sections.first.id : null;
+      if (_selectedSectionId != null) {
+        _sectionLabelCtrl.text = _workingArch.sections.first.label;
+      }
+      final tempHouse = _currentHouse.copyWith(
+        architecture: _workingArch,
+        controllers: _workingControllers
+            .map((c) => c.copyWith(sectionSpans: const []))
+            .toList(),
+      );
+      _workingControllers = tempHouse.controllers.map((c) {
+        final spans = tempHouse.effectiveControllerSpans(c);
+        final wallTotals = <String, int>{};
+        for (final sp in spans) {
+          wallTotals[sp.wall] = (wallTotals[sp.wall] ?? 0) + sp.segments;
+        }
+        final zones = wallTotals.entries
+            .where((e) => e.value > 0)
+            .map((e) => <String, dynamic>{'wall': e.key, 'segments': e.value})
+            .toList();
+        return c.copyWith(sectionSpans: spans, wallZones: zones);
+      }).toList();
     });
   }
 
@@ -4373,6 +4610,22 @@ class _HouseLightDesignerSheetState extends State<_HouseLightDesignerSheet> {
                 ),
               ),
               const SizedBox(width: 6),
+              OutlinedButton.icon(
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: const Color(0xFFFBBF24),
+                  side: BorderSide(
+                    color: const Color(0xFFFBBF24).withValues(alpha: 0.65),
+                  ),
+                  visualDensity: VisualDensity.compact,
+                ),
+                onPressed: _resetCurrentHouseToRealPhotoLayout,
+                icon: const Icon(Icons.photo_camera_back_outlined, size: 15),
+                label: const Text(
+                  '📸 Reset to Real Photo Layout',
+                  style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800),
+                ),
+              ),
+              const SizedBox(width: 6),
               ElevatedButton.icon(
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFF00F5D4),
@@ -4391,6 +4644,55 @@ class _HouseLightDesignerSheetState extends State<_HouseLightDesignerSheet> {
                 icon: const Icon(Icons.close),
               ),
             ],
+          ),
+        ),
+
+        // 3-House Sync Alignment Selector Bar inside Designer Sheet
+        Padding(
+          padding: const EdgeInsets.fromLTRB(14, 0, 14, 6),
+          child: SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children: [
+                const Text(
+                  '🔗 3-House Sync Alignment:',
+                  style: TextStyle(
+                    fontSize: 10.5,
+                    fontWeight: FontWeight.w800,
+                    color: Color(0xFF00F5D4),
+                  ),
+                ),
+                const SizedBox(width: 6),
+                for (final mode in const [
+                  ('front_street_sync', 'Street X-Lock (Upper+Lower Synced)'),
+                  ('all_segments', 'Continuous Strip'),
+                  ('perimeter_360', '360° Roof Orbit'),
+                  ('front_back_sync', 'Front→Back Wave'),
+                  ('front_only_quiet_sides', 'Quiet Sides'),
+                ])
+                  Padding(
+                    padding: const EdgeInsets.only(right: 5),
+                    child: ChoiceChip(
+                      visualDensity: VisualDensity.compact,
+                      selected: widget.api.config.animation.zoneMode == mode.$1,
+                      selectedColor:
+                          const Color(0xFF00F5D4).withValues(alpha: 0.22),
+                      label: Text(
+                        mode.$2,
+                        style: const TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      onSelected: (_) {
+                        setState(() {
+                          widget.api.patchAnimation({'zone_mode': mode.$1});
+                        });
+                      },
+                    ),
+                  ),
+              ],
+            ),
           ),
         ),
 
@@ -5073,7 +5375,9 @@ class _HouseLightDesignerSheetState extends State<_HouseLightDesignerSheet> {
                           _updateSelectedSection(sec.copyWith(hasDoor: v)),
                     ),
                     for (final wStyle in [
-                      ('picture', '🪟 Picture Window'),
+                      ('picture', '🪟 Picture (4-Window)'),
+                      ('modern_grid', '🪟 Modern Grid (3-Win)'),
+                      ('double_hung', '🪟 Double-Hung'),
                       ('double', '🪟 Double Window'),
                       ('arched', '🏛️ Arched Window'),
                       ('none', 'No Window'),
@@ -5151,53 +5455,116 @@ class _HouseLightDesignerSheetState extends State<_HouseLightDesignerSheet> {
                   : const Color(0xFFFBBF24).withValues(alpha: 0.65),
             ),
           ),
-          child: Wrap(
-            alignment: WrapAlignment.spaceBetween,
-            crossAxisAlignment: WrapCrossAlignment.center,
-            spacing: 8,
-            runSpacing: 6,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                'Allocated: $allocatedTotal / ${ctrl.segmentCount} segments across sections',
+              Wrap(
+                alignment: WrapAlignment.spaceBetween,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                spacing: 8,
+                runSpacing: 6,
+                children: [
+                  Text(
+                    'Allocated: $allocatedTotal / ${ctrl.segmentCount} segments across sections',
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w800,
+                      color: allocatedTotal == ctrl.segmentCount
+                          ? const Color(0xFF00F5D4)
+                          : const Color(0xFFFBBF24),
+                    ),
+                  ),
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      OutlinedButton.icon(
+                        style: OutlinedButton.styleFrom(
+                          visualDensity: VisualDensity.compact,
+                        ),
+                        onPressed: _resetCurrentHouseToRealPhotoLayout,
+                        icon: const Icon(
+                          Icons.photo_camera_back_outlined,
+                          size: 14,
+                          color: Color(0xFFFBBF24),
+                        ),
+                        label: const Text(
+                          '📸 Photo Default Spans',
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w700,
+                            color: Color(0xFFFDE68A),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      OutlinedButton.icon(
+                        style: OutlinedButton.styleFrom(
+                          visualDensity: VisualDensity.compact,
+                        ),
+                        onPressed: () =>
+                            _autoBalanceControllerAcrossFrontSections(ctrl),
+                        icon: const Icon(Icons.auto_fix_high, size: 14),
+                        label: const Text(
+                          'Auto-Fit Front Sections',
+                          style: TextStyle(
+                              fontSize: 11, fontWeight: FontWeight.w700),
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      FilterChip(
+                        selected: ctrl.reversed,
+                        label: const Text('Reverse Strip Order',
+                            style: TextStyle(fontSize: 11)),
+                        onSelected: (rev) {
+                          setState(() {
+                            _workingControllers = _workingControllers
+                                .map((c) => c.id == ctrl.id
+                                    ? c.copyWith(reversed: rev)
+                                    : c)
+                                .toList();
+                          });
+                        },
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              const Text(
+                '⚡ 1-Tap Wiring Route Presets:',
                 style: TextStyle(
-                  fontSize: 12,
+                  fontSize: 11,
                   fontWeight: FontWeight.w800,
-                  color: allocatedTotal == ctrl.segmentCount
-                      ? const Color(0xFF00F5D4)
-                      : const Color(0xFFFBBF24),
+                  color: Color(0xFFC084FC),
                 ),
               ),
-              Row(
-                mainAxisSize: MainAxisSize.min,
+              const SizedBox(height: 5),
+              Wrap(
+                spacing: 6,
+                runSpacing: 6,
                 children: [
-                  OutlinedButton.icon(
-                    style: OutlinedButton.styleFrom(
+                  for (final route in const [
+                    ('upper_lower_front', 'Upper + Lower Front'),
+                    ('upper_front_right', 'Upper Front + Right Side'),
+                    ('lower_front_left_back', 'Lower Front + Left + Back'),
+                    ('full_360_perimeter', 'Full 360° Perimeter'),
+                  ])
+                    ActionChip(
                       visualDensity: VisualDensity.compact,
+                      backgroundColor: const Color(0xFF060B18),
+                      side: BorderSide(
+                        color: const Color(0xFFA855F7).withValues(alpha: 0.55),
+                      ),
+                      label: Text(
+                        route.$2,
+                        style: const TextStyle(
+                          fontSize: 10.5,
+                          fontWeight: FontWeight.w700,
+                          color: Color(0xFFE9D5FF),
+                        ),
+                      ),
+                      onPressed: () => _applyWiringRoutePreset(ctrl, route.$1),
                     ),
-                    onPressed: () =>
-                        _autoBalanceControllerAcrossFrontSections(ctrl),
-                    icon: const Icon(Icons.auto_fix_high, size: 14),
-                    label: const Text(
-                      'Auto-Fit Front Sections',
-                      style:
-                          TextStyle(fontSize: 11, fontWeight: FontWeight.w700),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  FilterChip(
-                    selected: ctrl.reversed,
-                    label: const Text('Reverse Strip Order',
-                        style: TextStyle(fontSize: 11)),
-                    onSelected: (rev) {
-                      setState(() {
-                        _workingControllers = _workingControllers
-                            .map((c) => c.id == ctrl.id
-                                ? c.copyWith(reversed: rev)
-                                : c)
-                            .toList();
-                      });
-                    },
-                  ),
                 ],
               ),
             ],
@@ -5205,7 +5572,7 @@ class _HouseLightDesignerSheetState extends State<_HouseLightDesignerSheet> {
         ),
         const SizedBox(height: 10),
 
-        // Per-Section Segment Allocation Rows
+        // Per-Section Segment Allocation Rows (with +/- steppers & LTR / RTL flip)
         for (final sec in _workingArch.sections)
           Padding(
             padding: const EdgeInsets.only(bottom: 8),
@@ -5236,7 +5603,7 @@ class _HouseLightDesignerSheetState extends State<_HouseLightDesignerSheet> {
                         children: [
                           Expanded(
                             child: Text(
-                              '${sec.isPitchedGable ? "🔺" : "⬛"} ${sec.label} (${sec.wall.toUpperCase()})',
+                              '${sec.isPitchedGable ? "🔺" : "⬛"} ${sec.label} (${sec.wall.toUpperCase()} • Story ${sec.story})',
                               style: const TextStyle(
                                 fontSize: 12,
                                 fontWeight: FontWeight.w800,
@@ -5244,6 +5611,7 @@ class _HouseLightDesignerSheetState extends State<_HouseLightDesignerSheet> {
                             ),
                           ),
                           InkWell(
+                            borderRadius: BorderRadius.circular(6),
                             onTap: () => _setControllerSegmentsForSection(
                               ctrl,
                               sec,
@@ -5263,8 +5631,8 @@ class _HouseLightDesignerSheetState extends State<_HouseLightDesignerSheet> {
                               ),
                               child: Text(
                                 dirOnSec == 'reverse'
-                                    ? '⇄ Reversed'
-                                    : '→ Normal (L→Peak→R)',
+                                    ? 'RTL ⇄ (Reversed)'
+                                    : 'LTR → (Normal)',
                                 style: const TextStyle(
                                   fontSize: 10,
                                   fontWeight: FontWeight.w700,
@@ -5273,13 +5641,71 @@ class _HouseLightDesignerSheetState extends State<_HouseLightDesignerSheet> {
                               ),
                             ),
                           ),
-                          const SizedBox(width: 8),
+                          const SizedBox(width: 6),
+                          InkWell(
+                            borderRadius: BorderRadius.circular(6),
+                            onTap: segsOnSec > 0
+                                ? () => _setControllerSegmentsForSection(
+                                      ctrl,
+                                      sec,
+                                      segsOnSec - 1,
+                                    )
+                                : null,
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 7, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF060B18),
+                                borderRadius: BorderRadius.circular(6),
+                                border: Border.all(
+                                    color: const Color(0xFF334155)),
+                              ),
+                              child: const Text(
+                                '−',
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w900,
+                                  color: Color(0xFFFBBF24),
+                                ),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 6),
                           Text(
                             '$segsOnSec segs',
                             style: const TextStyle(
                               fontSize: 12,
                               fontWeight: FontWeight.w800,
                               color: Color(0xFF00F5D4),
+                            ),
+                          ),
+                          const SizedBox(width: 6),
+                          InkWell(
+                            borderRadius: BorderRadius.circular(6),
+                            onTap: segsOnSec < ctrl.segmentCount
+                                ? () => _setControllerSegmentsForSection(
+                                      ctrl,
+                                      sec,
+                                      segsOnSec + 1,
+                                    )
+                                : null,
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 7, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF060B18),
+                                borderRadius: BorderRadius.circular(6),
+                                border: Border.all(
+                                    color: const Color(0xFF334155)),
+                              ),
+                              child: const Text(
+                                '+',
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w900,
+                                  color: Color(0xFF00F5D4),
+                                ),
+                              ),
                             ),
                           ),
                         ],

@@ -15,6 +15,130 @@
       "govee_api_key": "",
       "bridge_token": "",
       "notes": "2 Govee controllers across front eaves and garage (separate Wi-Fi - Cloud API or Neighbor Bridge)",
+      "architecture": {
+        "preset_style": "craftsman_multi_section",
+        "default_view_mode": "3d",
+        "camera_yaw": -28.0,
+        "camera_pitch": 21.0,
+        "camera_zoom": 1.0,
+        "siding_color": "#1e293b",
+        "trim_color": "#cbd5e1",
+        "roof_color": "#0f172a",
+        "sections": [
+          {
+            "id": "sec-upper-dormer",
+            "label": "Upper Left Steep Gable (3 Windows)",
+            "shape": "steep_gable",
+            "wall": "front",
+            "story": 2,
+            "x_start": 0.04,
+            "x_end": 0.58,
+            "eave_height": 0.6,
+            "peak_height": 0.95,
+            "peak_offset": 0.5,
+            "depth_offset": 0.04,
+            "has_garage": false,
+            "has_door": false,
+            "window_style": "modern_grid"
+          },
+          {
+            "id": "sec-upper-right-eave",
+            "label": "Upper Right Flat Eave (1 Window)",
+            "shape": "flat_eave",
+            "wall": "front",
+            "story": 2,
+            "x_start": 0.58,
+            "x_end": 0.96,
+            "eave_height": 0.6,
+            "peak_height": 0.6,
+            "peak_offset": 0.5,
+            "depth_offset": 0.0,
+            "has_garage": false,
+            "has_door": false,
+            "window_style": "double_hung"
+          },
+          {
+            "id": "sec-entry-gable",
+            "label": "Lower Left Entry Porch Eave",
+            "shape": "flat_eave",
+            "wall": "front",
+            "story": 1,
+            "x_start": 0.02,
+            "x_end": 0.28,
+            "eave_height": 0.38,
+            "peak_height": 0.38,
+            "peak_offset": 0.5,
+            "depth_offset": 0.14,
+            "has_garage": false,
+            "has_door": true,
+            "window_style": "none"
+          },
+          {
+            "id": "sec-garage-square",
+            "label": "Lower Right 2-Car Garage Flat Eave",
+            "shape": "flat_eave",
+            "wall": "front",
+            "story": 1,
+            "x_start": 0.28,
+            "x_end": 0.92,
+            "eave_height": 0.38,
+            "peak_height": 0.38,
+            "peak_offset": 0.5,
+            "depth_offset": 0.18,
+            "has_garage": true,
+            "has_door": false,
+            "window_style": "modern_grid"
+          },
+          {
+            "id": "sec-left-eave",
+            "label": "Left Side Eave",
+            "shape": "flat_eave",
+            "wall": "left",
+            "story": 2,
+            "x_start": 0.0,
+            "x_end": 1.0,
+            "eave_height": 0.58,
+            "peak_height": 0.58,
+            "peak_offset": 0.5,
+            "depth_offset": 0.0,
+            "has_garage": false,
+            "has_door": false,
+            "window_style": "modern_grid"
+          },
+          {
+            "id": "sec-right-eave",
+            "label": "Right Side Eave",
+            "shape": "flat_eave",
+            "wall": "right",
+            "story": 2,
+            "x_start": 0.0,
+            "x_end": 1.0,
+            "eave_height": 0.58,
+            "peak_height": 0.58,
+            "peak_offset": 0.5,
+            "depth_offset": 0.0,
+            "has_garage": false,
+            "has_door": false,
+            "window_style": "modern_grid"
+          },
+          {
+            "id": "sec-back-eave",
+            "label": "Rear Roofline Eave",
+            "shape": "hip_roof",
+            "wall": "back",
+            "story": 2,
+            "x_start": 0.0,
+            "x_end": 1.0,
+            "eave_height": 0.56,
+            "peak_height": 0.74,
+            "peak_offset": 0.5,
+            "depth_offset": 0.0,
+            "has_garage": false,
+            "has_door": false,
+            "window_style": "modern_grid"
+          }
+        ]
+      },
       "controllers": [
         {
           "id": "h1-ctrl-1",
@@ -26,7 +150,38 @@
           "enabled": true,
           "reversed": false,
           "protocol_mode": "auto",
-          "brightness_override": null
+          "brightness_override": null,
+          "wall_zones": [
+            {
+              "wall": "front",
+              "segments": 8
+            },
+            {
+              "wall": "right",
+              "segments": 4
+            }
+          ],
+          "section_spans": [
+            {
+              "section_id": "sec-upper-dormer",
+              "wall": "front",
+              "segments": 5,
+              "direction": "ltr"
+            },
+            {
+              "section_id": "sec-upper-right-eave",
+              "wall": "front",
+              "segments": 3,
+              "direction": "ltr"
+            },
+            {
+              "section_id": "sec-right-eave",
+              "wall": "right",
+              "segments": 4,
+              "direction": "ltr"
+            }
+          ],
+          "custom_nodes": []
         },
         {
           "id": "h1-ctrl-2",
@@ -38,7 +193,48 @@
           "enabled": true,
           "reversed": false,
           "protocol_mode": "auto",
-          "brightness_override": null
+          "brightness_override": null,
+          "wall_zones": [
+            {
+              "wall": "front",
+              "segments": 6
+            },
+            {
+              "wall": "left",
+              "segments": 3
+            },
+            {
+              "wall": "back",
+              "segments": 3
+            }
+          ],
+          "section_spans": [
+            {
+              "section_id": "sec-entry-gable",
+              "wall": "front",
+              "segments": 2,
+              "direction": "ltr"
+            },
+            {
+              "section_id": "sec-garage-square",
+              "wall": "front",
+              "segments": 4,
+              "direction": "ltr"
+            },
+            {
+              "section_id": "sec-left-eave",
+              "wall": "left",
+              "segments": 3,
+              "direction": "ltr"
+            },
+            {
+              "section_id": "sec-back-eave",
+              "wall": "back",
+              "segments": 3,
+              "direction": "ltr"
+            }
+          ],
+          "custom_nodes": []
         }
       ]
     },
@@ -52,6 +248,66 @@
       "govee_api_key": "",
       "bridge_token": "",
       "notes": "Single Govee outdoor controller on my local Wi-Fi (fewer segments, auto-compensated in middle position)",
+      "architecture": {
+        "preset_style": "a_frame_gable",
+        "default_view_mode": "3d",
+        "camera_yaw": -24.0,
+        "camera_pitch": 18.0,
+        "camera_zoom": 1.0,
+        "siding_color": "#1a2438",
+        "trim_color": "#e2e8f0",
+        "roof_color": "#0f172a",
+        "sections": [
+          {
+            "id": "sec-main-gable",
+            "label": "Upper 2nd-Story Full-Width Triangle Peak (4 Windows)",
+            "shape": "triangle_gable",
+            "wall": "front",
+            "story": 2,
+            "x_start": 0.05,
+            "x_end": 0.95,
+            "eave_height": 0.58,
+            "peak_height": 0.93,
+            "peak_offset": 0.5,
+            "depth_offset": 0.04,
+            "has_garage": false,
+            "has_door": false,
+            "window_style": "picture"
+          },
+          {
+            "id": "sec-lower-garage-eave",
+            "label": "Lower Left 2-Car Garage Flat Eave",
+            "shape": "flat_eave",
+            "wall": "front",
+            "story": 1,
+            "x_start": 0.05,
+            "x_end": 0.58,
+            "eave_height": 0.36,
+            "peak_height": 0.36,
+            "peak_offset": 0.5,
+            "depth_offset": 0.16,
+            "has_garage": true,
+            "has_door": false,
+            "window_style": "modern_grid"
+          },
+          {
+            "id": "sec-lower-porch-gable",
+            "label": "Lower Right Covered Porch Triangle Peak",
+            "shape": "triangle_gable",
+            "wall": "front",
+            "story": 1,
+            "x_start": 0.58,
+            "x_end": 0.96,
+            "eave_height": 0.36,
+            "peak_height": 0.53,
+            "peak_offset": 0.5,
+            "depth_offset": 0.22,
+            "has_garage": false,
+            "has_door": true,
+            "window_style": "double_hung"
+          }
+        ]
+      },
       "controllers": [
         {
           "id": "h2-ctrl-1",
@@ -63,7 +319,34 @@
           "enabled": true,
           "reversed": false,
           "protocol_mode": "auto",
-          "brightness_override": null
+          "brightness_override": null,
+          "wall_zones": [
+            {
+              "wall": "front",
+              "segments": 9
+            }
+          ],
+          "section_spans": [
+            {
+              "section_id": "sec-main-gable",
+              "wall": "front",
+              "segments": 5,
+              "direction": "ltr"
+            },
+            {
+              "section_id": "sec-lower-garage-eave",
+              "wall": "front",
+              "segments": 2,
+              "direction": "ltr"
+            },
+            {
+              "section_id": "sec-lower-porch-gable",
+              "wall": "front",
+              "segments": 2,
+              "direction": "ltr"
+            }
+          ],
+          "custom_nodes": []
         }
       ]
     },
@@ -77,6 +360,114 @@
       "govee_api_key": "",
       "bridge_token": "",
       "notes": "2 longer Govee controllers across two-story roofline (separate Wi-Fi - Cloud API or Neighbor Bridge)",
+      "architecture": {
+        "preset_style": "two_story_estate",
+        "default_view_mode": "3d",
+        "camera_yaw": -30.0,
+        "camera_pitch": 22.0,
+        "camera_zoom": 1.0,
+        "siding_color": "#172033",
+        "trim_color": "#cbd5e1",
+        "roof_color": "#0d1322",
+        "sections": [
+          {
+            "id": "sec-left-tower-gable",
+            "label": "Upper Left Recessed Dormer Nook",
+            "shape": "dormer_peak",
+            "wall": "front",
+            "story": 2,
+            "x_start": 0.06,
+            "x_end": 0.26,
+            "eave_height": 0.56,
+            "peak_height": 0.66,
+            "peak_offset": 0.5,
+            "depth_offset": -0.06,
+            "has_garage": false,
+            "has_door": false,
+            "window_style": "arched"
+          },
+          {
+            "id": "sec-center-flat-fascia",
+            "label": "Upper Right 3-Window Hip Fascia",
+            "shape": "flat_eave",
+            "wall": "front",
+            "story": 2,
+            "x_start": 0.24,
+            "x_end": 0.96,
+            "eave_height": 0.68,
+            "peak_height": 0.72,
+            "peak_offset": 0.5,
+            "depth_offset": 0.06,
+            "has_garage": false,
+            "has_door": false,
+            "window_style": "modern_grid"
+          },
+          {
+            "id": "sec-right-garage-gable",
+            "label": "Lower Full-Width Porch & Garage Flat Eave",
+            "shape": "flat_eave",
+            "wall": "front",
+            "story": 1,
+            "x_start": 0.04,
+            "x_end": 0.98,
+            "eave_height": 0.38,
+            "peak_height": 0.38,
+            "peak_offset": 0.5,
+            "depth_offset": 0.18,
+            "has_garage": true,
+            "has_door": true,
+            "window_style": "modern_grid"
+          },
+          {
+            "id": "sec-left-wing",
+            "label": "Left Side Upper & Lower Eaves",
+            "shape": "flat_eave",
+            "wall": "left",
+            "story": 2,
+            "x_start": 0.0,
+            "x_end": 1.0,
+            "eave_height": 0.58,
+            "peak_height": 0.58,
+            "peak_offset": 0.5,
+            "depth_offset": 0.0,
+            "has_garage": false,
+            "has_door": false,
+            "window_style": "modern_grid"
+          },
+          {
+            "id": "sec-right-wing",
+            "label": "Right Side Wing Eave",
+            "shape": "flat_eave",
+            "wall": "right",
+            "story": 2,
+            "x_start": 0.0,
+            "x_end": 1.0,
+            "eave_height": 0.58,
+            "peak_height": 0.58,
+            "peak_offset": 0.5,
+            "depth_offset": 0.0,
+            "has_garage": false,
+            "has_door": false,
+            "window_style": "modern_grid"
+          },
+          {
+            "id": "sec-back-wing",
+            "label": "Back Wing Flat Eave",
+            "shape": "flat_eave",
+            "wall": "back",
+            "story": 2,
+            "x_start": 0.0,
+            "x_end": 1.0,
+            "eave_height": 0.54,
+            "peak_height": 0.54,
+            "peak_offset": 0.5,
+            "depth_offset": 0.0,
+            "has_garage": false,
+            "has_door": false,
+            "window_style": "modern_grid"
+          }
+        ]
+      },
       "controllers": [
         {
           "id": "h3-ctrl-1",
@@ -88,7 +479,38 @@
           "enabled": true,
           "reversed": false,
           "protocol_mode": "auto",
-          "brightness_override": null
+          "brightness_override": null,
+          "wall_zones": [
+            {
+              "wall": "front",
+              "segments": 8
+            },
+            {
+              "wall": "right",
+              "segments": 7
+            }
+          ],
+          "section_spans": [
+            {
+              "section_id": "sec-left-tower-gable",
+              "wall": "front",
+              "segments": 2,
+              "direction": "ltr"
+            },
+            {
+              "section_id": "sec-center-flat-fascia",
+              "wall": "front",
+              "segments": 6,
+              "direction": "ltr"
+            },
+            {
+              "section_id": "sec-right-wing",
+              "wall": "right",
+              "segments": 7,
+              "direction": "ltr"
+            }
+          ],
+          "custom_nodes": []
         },
         {
           "id": "h3-ctrl-2",
@@ -100,7 +522,42 @@
           "enabled": true,
           "reversed": false,
           "protocol_mode": "auto",
-          "brightness_override": null
+          "brightness_override": null,
+          "wall_zones": [
+            {
+              "wall": "front",
+              "segments": 6
+            },
+            {
+              "wall": "left",
+              "segments": 5
+            },
+            {
+              "wall": "back",
+              "segments": 4
+            }
+          ],
+          "section_spans": [
+            {
+              "section_id": "sec-right-garage-gable",
+              "wall": "front",
+              "segments": 6,
+              "direction": "ltr"
+            },
+            {
+              "section_id": "sec-left-wing",
+              "wall": "left",
+              "segments": 5,
+              "direction": "ltr"
+            },
+            {
+              "section_id": "sec-back-wing",
+              "wall": "back",
+              "segments": 4,
+              "direction": "ltr"
+            }
+          ],
+          "custom_nodes": []
         }
       ]
     }

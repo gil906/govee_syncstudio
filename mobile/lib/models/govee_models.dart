@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
-const String kAppVersionName = '3.6.0';
-const int kAppVersionCode = 9;
+const String kAppVersionName = '3.7.0';
+const int kAppVersionCode = 10;
 
 const String kDefaultBackendUrl = String.fromEnvironment(
   'DEFAULT_BACKEND_URL',
@@ -242,17 +242,28 @@ class HouseArchitecture {
         'sections': sections.map((s) => s.toJson()).toList(),
       };
 
+  static const Map<String, HouseArchitecture> presets = kArchitecturePresets;
+
   /// Returns the default `HouseArchitecture` for a given `houseId` and `order`:
-  /// - `house-1` / order 1: `a_frame_gable` (Prominent Front A-Frame Triangle Gable Peak)
-  /// - `house-2` / order 2: `craftsman_multi_section` (Square Garage + Triangle Entry Gable + Upper Dormer)
-  /// - `house-3` / order >= 3: `two_story_estate` (Left Steep Gable + Center Flat Fascia + Right Garage Gable)
+  /// - `house-1` / order 1 (Left Neighbor): `craftsman_multi_section`
+  /// - `house-2` / order 2 (My House - Middle, Front Only): `a_frame_gable`
+  /// - `house-3` / order >= 3 (Right Neighbor): `two_story_estate`
   static HouseArchitecture defaultForHouse(String houseId, int order) {
     final cleanId = houseId.trim().toLowerCase();
-    if (cleanId == 'house-1' || order == 1) {
+    if (cleanId == 'house-2') {
       return kArchitecturePresets['a_frame_gable']!;
     }
-    if (cleanId == 'house-2' || order == 2) {
+    if (cleanId == 'house-1') {
       return kArchitecturePresets['craftsman_multi_section']!;
+    }
+    if (cleanId == 'house-3') {
+      return kArchitecturePresets['two_story_estate']!;
+    }
+    if (order == 1) {
+      return kArchitecturePresets['craftsman_multi_section']!;
+    }
+    if (order == 2) {
+      return kArchitecturePresets['a_frame_gable']!;
     }
     return kArchitecturePresets['two_story_estate']!;
   }
@@ -260,254 +271,270 @@ class HouseArchitecture {
 
 /// 5 built-in architectural house templates for 1-tap selection & full customization.
 const Map<String, HouseArchitecture> kArchitecturePresets = {
-  // 1. Prominent Front A-Frame Triangle Gable Peak (My House)
+  // 1. House 2 (Middle — MY HOUSE, Front Only): Upper 2nd-Story Full-Width Triangle Peak + Lower Garage Flat Eave + Lower Porch Triangle Peak
   'a_frame_gable': HouseArchitecture(
     presetStyle: 'a_frame_gable',
     defaultViewMode: '3d',
     cameraYaw: -26.0,
     cameraPitch: 20.0,
     cameraZoom: 1.0,
-    sidingColor: '#162544',
-    trimColor: '#38bdf8',
+    sidingColor: '#1a2438',
+    trimColor: '#e2e8f0',
     roofColor: '#0f172a',
     sections: [
       ArchSection(
-        id: 'sec-front-gable',
-        label: 'Front A-Frame Triangle Peak',
+        id: 'sec-main-gable',
+        label: 'Upper 2nd-Story Full-Width Triangle Peak (4 Windows)',
         shape: 'triangle_gable',
         wall: 'front',
-        story: 1,
-        xStart: 0.06,
-        xEnd: 0.94,
-        eaveHeight: 0.50,
-        peakHeight: 0.90,
+        story: 2,
+        xStart: 0.05,
+        xEnd: 0.95,
+        eaveHeight: 0.58,
+        peakHeight: 0.93,
         peakOffset: 0.50,
-        depthOffset: 0.08,
+        depthOffset: 0.04,
         hasGarage: false,
-        hasDoor: true,
+        hasDoor: false,
         windowStyle: 'picture',
       ),
       ArchSection(
-        id: 'sec-left-eave',
-        label: 'Left Side Eave',
+        id: 'sec-lower-garage-eave',
+        label: 'Lower Left 2-Car Garage Flat Eave',
         shape: 'flat_eave',
-        wall: 'left',
+        wall: 'front',
         story: 1,
-        xStart: 0.08,
-        xEnd: 0.92,
-        eaveHeight: 0.50,
-        peakHeight: 0.50,
-        depthOffset: 0.0,
-        windowStyle: 'standard',
+        xStart: 0.05,
+        xEnd: 0.58,
+        eaveHeight: 0.36,
+        peakHeight: 0.36,
+        peakOffset: 0.50,
+        depthOffset: 0.16,
+        hasGarage: true,
+        hasDoor: false,
+        windowStyle: 'modern_grid',
       ),
       ArchSection(
-        id: 'sec-right-eave',
-        label: 'Right Side Eave',
-        shape: 'flat_eave',
-        wall: 'right',
+        id: 'sec-lower-porch-gable',
+        label: 'Lower Right Covered Porch Triangle Peak',
+        shape: 'triangle_gable',
+        wall: 'front',
         story: 1,
-        xStart: 0.08,
-        xEnd: 0.92,
-        eaveHeight: 0.50,
-        peakHeight: 0.50,
-        depthOffset: 0.0,
-        windowStyle: 'standard',
+        xStart: 0.58,
+        xEnd: 0.96,
+        eaveHeight: 0.36,
+        peakHeight: 0.53,
+        peakOffset: 0.50,
+        depthOffset: 0.22,
+        hasGarage: false,
+        hasDoor: true,
+        windowStyle: 'double_hung',
       ),
     ],
   ),
 
-  // 2. Craftsman Multi-Section: Square Flat Garage + Triangle Entry Gable + 2nd-Story Dormer Peak
+  // 2. House 1 (Left Neighbor): Upper Left Steep Gable (3 Windows) + Upper Right Flat Eave (1 Window) + Lower Left Porch + Lower Right 2-Car Garage + Sides/Back
   'craftsman_multi_section': HouseArchitecture(
     presetStyle: 'craftsman_multi_section',
     defaultViewMode: '3d',
     cameraYaw: -26.0,
     cameraPitch: 20.0,
     cameraZoom: 1.0,
-    sidingColor: '#17233a',
-    trimColor: '#64748b',
-    roofColor: '#0c1324',
+    sidingColor: '#1e293b',
+    trimColor: '#cbd5e1',
+    roofColor: '#0f172a',
     sections: [
       ArchSection(
-        id: 'sec-garage-square',
-        label: 'Left Square Garage Eave',
+        id: 'sec-upper-dormer',
+        label: 'Upper Left Steep Gable (3 Windows)',
+        shape: 'steep_gable',
+        wall: 'front',
+        story: 2,
+        xStart: 0.04,
+        xEnd: 0.58,
+        eaveHeight: 0.60,
+        peakHeight: 0.95,
+        peakOffset: 0.50,
+        depthOffset: 0.04,
+        hasGarage: false,
+        hasDoor: false,
+        windowStyle: 'modern_grid',
+      ),
+      ArchSection(
+        id: 'sec-upper-right-eave',
+        label: 'Upper Right Flat Eave (1 Window)',
         shape: 'flat_eave',
         wall: 'front',
-        story: 1,
-        xStart: 0.04,
-        xEnd: 0.44,
-        eaveHeight: 0.48,
-        peakHeight: 0.48,
+        story: 2,
+        xStart: 0.58,
+        xEnd: 0.96,
+        eaveHeight: 0.60,
+        peakHeight: 0.60,
         peakOffset: 0.50,
-        depthOffset: 0.16,
-        hasGarage: true,
+        depthOffset: 0.0,
+        hasGarage: false,
         hasDoor: false,
-        windowStyle: 'none',
+        windowStyle: 'double_hung',
       ),
       ArchSection(
         id: 'sec-entry-gable',
-        label: 'Right Entry Triangle Gable',
-        shape: 'triangle_gable',
+        label: 'Lower Left Entry Porch Eave',
+        shape: 'flat_eave',
         wall: 'front',
         story: 1,
-        xStart: 0.44,
-        xEnd: 0.96,
-        eaveHeight: 0.52,
-        peakHeight: 0.84,
-        peakOffset: 0.52,
-        depthOffset: 0.06,
-        hasGarage: false,
+        xStart: 0.02,
+        xEnd: 0.28,
+        eaveHeight: 0.38,
+        peakHeight: 0.38,
+        peakOffset: 0.50,
+        depthOffset: 0.14,
         hasDoor: true,
-        windowStyle: 'picture',
+        hasGarage: false,
+        windowStyle: 'none',
       ),
       ArchSection(
-        id: 'sec-upper-dormer',
-        label: '2nd-Story Upper Dormer Peak',
-        shape: 'dormer_peak',
+        id: 'sec-garage-square',
+        label: 'Lower Right 2-Car Garage Flat Eave',
+        shape: 'flat_eave',
         wall: 'front',
-        story: 2,
-        xStart: 0.14,
-        xEnd: 0.68,
-        eaveHeight: 0.68,
-        peakHeight: 0.95,
+        story: 1,
+        xStart: 0.28,
+        xEnd: 0.92,
+        eaveHeight: 0.38,
+        peakHeight: 0.38,
         peakOffset: 0.50,
-        depthOffset: -0.06,
-        hasGarage: false,
+        depthOffset: 0.18,
+        hasGarage: true,
         hasDoor: false,
-        windowStyle: 'double',
+        windowStyle: 'modern_grid',
       ),
       ArchSection(
         id: 'sec-left-eave',
         label: 'Left Side Eave',
         shape: 'flat_eave',
         wall: 'left',
-        story: 1,
-        xStart: 0.06,
-        xEnd: 0.94,
-        eaveHeight: 0.50,
-        peakHeight: 0.50,
-        windowStyle: 'standard',
+        story: 2,
+        xStart: 0.0,
+        xEnd: 1.0,
+        eaveHeight: 0.58,
+        peakHeight: 0.58,
       ),
       ArchSection(
         id: 'sec-right-eave',
         label: 'Right Side Eave',
         shape: 'flat_eave',
         wall: 'right',
-        story: 1,
-        xStart: 0.06,
-        xEnd: 0.94,
-        eaveHeight: 0.52,
-        peakHeight: 0.52,
-        windowStyle: 'standard',
+        story: 2,
+        xStart: 0.0,
+        xEnd: 1.0,
+        eaveHeight: 0.58,
+        peakHeight: 0.58,
       ),
       ArchSection(
         id: 'sec-back-eave',
-        label: 'Back Hipped Roofline',
+        label: 'Rear Roofline Eave',
         shape: 'hip_roof',
         wall: 'back',
-        story: 1,
-        xStart: 0.06,
-        xEnd: 0.94,
-        eaveHeight: 0.50,
-        peakHeight: 0.76,
-        windowStyle: 'double',
+        story: 2,
+        xStart: 0.0,
+        xEnd: 1.0,
+        eaveHeight: 0.56,
+        peakHeight: 0.74,
       ),
     ],
   ),
 
-  // 3. Two-Story Estate: Left Steep Tower Gable + Center Flat Fascia + Right Garage Triangle Gable
+  // 3. House 3 (Right Neighbor): Upper Left Recessed Dormer Nook + Upper Right 3-Window Hip Fascia + Lower Full-Width Porch & Garage + Sides/Back
   'two_story_estate': HouseArchitecture(
     presetStyle: 'two_story_estate',
     defaultViewMode: '3d',
     cameraYaw: -26.0,
     cameraPitch: 20.0,
     cameraZoom: 1.0,
-    sidingColor: '#192236',
-    trimColor: '#94a3b8',
-    roofColor: '#0b1120',
+    sidingColor: '#172033',
+    trimColor: '#cbd5e1',
+    roofColor: '#0d1322',
     sections: [
       ArchSection(
         id: 'sec-left-tower-gable',
-        label: 'Left 2-Story Steep Tower Peak',
-        shape: 'steep_gable',
+        label: 'Upper Left Recessed Dormer Nook',
+        shape: 'dormer_peak',
         wall: 'front',
         story: 2,
-        xStart: 0.03,
-        xEnd: 0.38,
-        eaveHeight: 0.60,
-        peakHeight: 0.96,
+        xStart: 0.06,
+        xEnd: 0.26,
+        eaveHeight: 0.56,
+        peakHeight: 0.66,
         peakOffset: 0.50,
-        depthOffset: 0.14,
+        depthOffset: -0.06,
         hasGarage: false,
         hasDoor: false,
         windowStyle: 'arched',
       ),
       ArchSection(
         id: 'sec-center-flat-fascia',
-        label: 'Center 2-Story Flat Gallery',
+        label: 'Upper Right 3-Window Hip Fascia',
         shape: 'flat_eave',
         wall: 'front',
         story: 2,
-        xStart: 0.38,
-        xEnd: 0.68,
-        eaveHeight: 0.66,
-        peakHeight: 0.66,
+        xStart: 0.24,
+        xEnd: 0.96,
+        eaveHeight: 0.68,
+        peakHeight: 0.72,
         peakOffset: 0.50,
-        depthOffset: 0.04,
+        depthOffset: 0.06,
         hasGarage: false,
-        hasDoor: true,
-        windowStyle: 'double',
+        hasDoor: false,
+        windowStyle: 'modern_grid',
       ),
       ArchSection(
         id: 'sec-right-garage-gable',
-        label: 'Right Garage Triangle Gable',
-        shape: 'triangle_gable',
+        label: 'Lower Full-Width Porch & Garage Flat Eave',
+        shape: 'flat_eave',
         wall: 'front',
         story: 1,
-        xStart: 0.68,
-        xEnd: 0.97,
-        eaveHeight: 0.48,
-        peakHeight: 0.80,
+        xStart: 0.04,
+        xEnd: 0.98,
+        eaveHeight: 0.38,
+        peakHeight: 0.38,
         peakOffset: 0.50,
         depthOffset: 0.18,
         hasGarage: true,
-        hasDoor: false,
-        windowStyle: 'none',
+        hasDoor: true,
+        windowStyle: 'modern_grid',
       ),
       ArchSection(
         id: 'sec-left-wing',
-        label: 'Left Estate Wing',
+        label: 'Left Side Upper & Lower Eaves',
         shape: 'flat_eave',
         wall: 'left',
         story: 2,
-        xStart: 0.05,
-        xEnd: 0.95,
-        eaveHeight: 0.60,
-        peakHeight: 0.60,
-        windowStyle: 'standard',
+        xStart: 0.0,
+        xEnd: 1.0,
+        eaveHeight: 0.58,
+        peakHeight: 0.58,
       ),
       ArchSection(
         id: 'sec-right-wing',
-        label: 'Right Side Gable Wing',
-        shape: 'triangle_gable',
+        label: 'Right Side Wing Eave',
+        shape: 'flat_eave',
         wall: 'right',
-        story: 1,
-        xStart: 0.05,
-        xEnd: 0.95,
-        eaveHeight: 0.50,
-        peakHeight: 0.80,
-        windowStyle: 'standard',
+        story: 2,
+        xStart: 0.0,
+        xEnd: 1.0,
+        eaveHeight: 0.58,
+        peakHeight: 0.58,
       ),
       ArchSection(
         id: 'sec-back-wing',
-        label: 'Back Patio Eave',
+        label: 'Back Wing Flat Eave',
         shape: 'flat_eave',
         wall: 'back',
-        story: 1,
-        xStart: 0.05,
-        xEnd: 0.95,
+        story: 2,
+        xStart: 0.0,
+        xEnd: 1.0,
         eaveHeight: 0.54,
         peakHeight: 0.54,
-        windowStyle: 'picture',
       ),
     ],
   ),
@@ -660,20 +687,20 @@ const List<({String id, String title, String subtitle, String icon})>
     kArchitecturePresetMeta = [
   (
     id: 'a_frame_gable',
-    title: '🔺 My Triangle Gable',
-    subtitle: 'Full-width prominent A-frame triangle peak',
+    title: '🔺 House #2 (My House): 2nd-Story Gable + Garage + Porch Peak',
+    subtitle: '4-window upper triangle peak + 2-car garage eave + porch peak (Front Only)',
     icon: '🔺',
   ),
   (
     id: 'craftsman_multi_section',
-    title: '🏘️ Square Garage + Gable + Dormer',
-    subtitle: 'Flat garage eave + entry triangle peak + 2nd-story dormer',
+    title: '🏘️ House #1 (Left): Steep Gable + Upper Eave + Garage',
+    subtitle: '3-window upper steep gable + right eave + lower porch & 2-car garage',
     icon: '🏘️',
   ),
   (
     id: 'two_story_estate',
-    title: '🏰 2-Story Peaks + Flat Sections',
-    subtitle: 'Steep tower peak + flat gallery + garage triangle',
+    title: '🏰 House #3 (Right): Dormer Nook + 3-Window Fascia + Porch',
+    subtitle: 'Upper-left recessed dormer + 3-window hip fascia + full-width porch & garage',
     icon: '🏰',
   ),
   (
@@ -981,18 +1008,18 @@ class HouseConfig {
 
   /// Resolved 3D/2D architecture for this house.
   /// Uses explicit `_architecture` when set; otherwise selects the matching
-  /// architectural blueprint (Triangle Gable for My House / `house-1`,
-  /// Craftsman Multi-Section for Neighbor 1 / `house-2`, and Two-Story Estate for Neighbor 2 / `house-3`).
+  /// architectural blueprint (`craftsman_multi_section` for Neighbor 1 / `house-1`,
+  /// `a_frame_gable` for My House / `house-2`, and `two_story_estate` for Neighbor 2 / `house-3`).
   HouseArchitecture get architecture {
     if (_architecture != null && _architecture.sections.isNotEmpty) {
       return _architecture;
     }
     final lowerName = name.toLowerCase();
     if (lowerName.contains('my house')) {
-      return HouseArchitecture.defaultForHouse('house-1', 1);
+      return HouseArchitecture.defaultForHouse('house-2', 2);
     }
     if (lowerName.contains('neighbor 1')) {
-      return HouseArchitecture.defaultForHouse('house-2', 2);
+      return HouseArchitecture.defaultForHouse('house-1', 1);
     }
     if (lowerName.contains('neighbor 2')) {
       return HouseArchitecture.defaultForHouse('house-3', 3);
@@ -1013,12 +1040,104 @@ class HouseConfig {
       if (valid.isNotEmpty) return valid;
     }
 
+    final n = ctrl.segmentCount;
+    final dir = ctrl.reversed ? 'reverse' : 'forward';
+    final ctrlIdx = controllers.indexWhere((c) => c.id == ctrl.id);
+
+    List<SectionSpan> buildProportionalSpans(
+      List<({String id, String wall, int base})> recipe,
+    ) {
+      final filtered = recipe
+          .where((r) => validSectionIds.containsKey(r.id))
+          .toList();
+      if (filtered.isEmpty) return const [];
+      final baseSum = filtered.fold<int>(0, (acc, r) => acc + r.base);
+      if (baseSum == n) {
+        return filtered
+            .map((r) => SectionSpan(
+                  sectionId: r.id,
+                  wall: r.wall,
+                  segments: r.base,
+                  direction: dir,
+                ))
+            .toList();
+      }
+      final spans = <SectionSpan>[];
+      int remaining = n;
+      for (int i = 0; i < filtered.length; i++) {
+        final item = filtered[i];
+        final cnt = (i == filtered.length - 1)
+            ? remaining
+            : ((n * item.base) / baseSum).round().clamp(1, remaining);
+        remaining -= cnt;
+        if (cnt > 0) {
+          spans.add(
+            SectionSpan(
+              sectionId: item.id,
+              wall: item.wall,
+              segments: cnt,
+              direction: dir,
+            ),
+          );
+        }
+      }
+      return spans;
+    }
+
+    // Photo-accurate default spans for the 3 real houses:
+    if (arch.presetStyle == 'a_frame_gable' ||
+        validSectionIds.containsKey('sec-main-gable')) {
+      final recipeSpans = buildProportionalSpans(const [
+        (id: 'sec-main-gable', wall: 'front', base: 5),
+        (id: 'sec-lower-garage-eave', wall: 'front', base: 2),
+        (id: 'sec-lower-porch-gable', wall: 'front', base: 2),
+      ]);
+      if (recipeSpans.isNotEmpty) return recipeSpans;
+    }
+
+    if (arch.presetStyle == 'craftsman_multi_section' &&
+        validSectionIds.containsKey('sec-upper-dormer')) {
+      if (ctrl.id == 'h1-ctrl-2' || ctrlIdx >= 1) {
+        final recipeSpans = buildProportionalSpans(const [
+          (id: 'sec-entry-gable', wall: 'front', base: 2),
+          (id: 'sec-garage-square', wall: 'front', base: 4),
+          (id: 'sec-left-eave', wall: 'left', base: 3),
+          (id: 'sec-back-eave', wall: 'back', base: 3),
+        ]);
+        if (recipeSpans.isNotEmpty) return recipeSpans;
+      } else {
+        final recipeSpans = buildProportionalSpans(const [
+          (id: 'sec-upper-dormer', wall: 'front', base: 5),
+          (id: 'sec-upper-right-eave', wall: 'front', base: 3),
+          (id: 'sec-right-eave', wall: 'right', base: 4),
+        ]);
+        if (recipeSpans.isNotEmpty) return recipeSpans;
+      }
+    }
+
+    if (arch.presetStyle == 'two_story_estate' &&
+        validSectionIds.containsKey('sec-left-tower-gable')) {
+      if (ctrl.id == 'h3-ctrl-2' || ctrlIdx >= 1) {
+        final recipeSpans = buildProportionalSpans(const [
+          (id: 'sec-right-garage-gable', wall: 'front', base: 6),
+          (id: 'sec-left-wing', wall: 'left', base: 5),
+          (id: 'sec-back-wing', wall: 'back', base: 4),
+        ]);
+        if (recipeSpans.isNotEmpty) return recipeSpans;
+      } else {
+        final recipeSpans = buildProportionalSpans(const [
+          (id: 'sec-left-tower-gable', wall: 'front', base: 2),
+          (id: 'sec-center-flat-fascia', wall: 'front', base: 6),
+          (id: 'sec-right-wing', wall: 'right', base: 7),
+        ]);
+        if (recipeSpans.isNotEmpty) return recipeSpans;
+      }
+    }
+
     final frontSecs = arch.sections.where((s) => s.wall == 'front').toList();
     final allSecs = arch.sections.isNotEmpty
         ? arch.sections
         : HouseArchitecture.defaultForHouse(id, order).sections;
-    final n = ctrl.segmentCount;
-    final ctrlIdx = controllers.indexWhere((c) => c.id == ctrl.id);
 
     // Single controller or My House -> map onto front architectural sections
     if (isMyHouse || controllers.length <= 1) {
@@ -1029,7 +1148,7 @@ class HouseConfig {
             sectionId: targets.first.id,
             wall: targets.first.wall,
             segments: n,
-            direction: ctrl.reversed ? 'reverse' : 'forward',
+            direction: dir,
           ),
         ];
       }
@@ -1047,7 +1166,7 @@ class HouseConfig {
               sectionId: sec.id,
               wall: sec.wall,
               segments: cnt,
-              direction: ctrl.reversed ? 'reverse' : 'forward',
+              direction: dir,
             ),
           );
         }
@@ -1055,9 +1174,9 @@ class HouseConfig {
       return spans;
     }
 
-    // Multi-controller house: Controller 0 covers primary front sections, Controller 1+ covers upper/right/side sections
+    // Multi-controller house fallback
     if (ctrlIdx <= 0) {
-      final primaryFront = frontSecs.where((s) => s.story == 1).toList();
+      final primaryFront = frontSecs.where((s) => s.story == 2).toList();
       final targets = primaryFront.isNotEmpty
           ? primaryFront
           : (frontSecs.isNotEmpty ? frontSecs : [allSecs.first]);
@@ -1075,18 +1194,18 @@ class HouseConfig {
               sectionId: sec.id,
               wall: sec.wall,
               segments: cnt,
-              direction: ctrl.reversed ? 'reverse' : 'forward',
+              direction: dir,
             ),
           );
         }
       }
       return spans;
     } else {
-      final upperAndSides = arch.sections
-          .where((s) => s.story == 2 || s.wall != 'front')
+      final lowerAndSides = arch.sections
+          .where((s) => s.story == 1 || s.wall != 'front')
           .toList();
-      final targets = upperAndSides.isNotEmpty
-          ? upperAndSides
+      final targets = lowerAndSides.isNotEmpty
+          ? lowerAndSides
           : (frontSecs.isNotEmpty ? frontSecs : [allSecs.last]);
       final spans = <SectionSpan>[];
       int remaining = n;
@@ -1102,13 +1221,79 @@ class HouseConfig {
               sectionId: sec.id,
               wall: sec.wall,
               segments: cnt,
-              direction: ctrl.reversed ? 'reverse' : 'forward',
+              direction: dir,
             ),
           );
         }
       }
       return spans;
     }
+  }
+
+  /// Computes the ordered architectural metadata (`wall`, `sectionId`, `story`, `archX` in `0.0..1.0`)
+  /// for every segment on this house so Upper (`story == 2`) and Lower (`story == 1`) rooflines
+  /// can be horizontally X-locked during multi-house chases.
+  List<({String wall, String sectionId, int story, double archX})>
+      get allSegmentArchPositions {
+    final arch = architecture;
+    final secMap = {for (final s in arch.sections) s.id: s};
+    final activeCtrls = controllers.where((c) => c.enabled).toList();
+    final ctrls = activeCtrls.isNotEmpty
+        ? activeCtrls
+        : [
+            ControllerConfig(
+              id: '$id-ctrl-1',
+              name: 'Main Controller',
+              segmentCount: totalSegments,
+            ),
+          ];
+    final out = <({String wall, String sectionId, int story, double archX})>[];
+    for (final ctrl in ctrls) {
+      final spans = effectiveControllerSpans(ctrl);
+      int countForCtrl = 0;
+      for (final sp in spans) {
+        final sec = secMap[sp.sectionId];
+        final wall = sec?.wall ?? sp.wall;
+        final story = sec?.story ?? 1;
+        final x0 = (sec?.xStart ?? 0.05).clamp(0.0, 1.0);
+        final x1 = (sec?.xEnd ?? 0.95).clamp(0.0, 1.0);
+        final n = sp.segments;
+        for (int k = 0; k < n && countForCtrl < ctrl.segmentCount; k++) {
+          double u = n <= 1 ? 0.5 : (k + 0.5) / n;
+          if (sp.direction == 'reverse' || ctrl.reversed) {
+            u = 1.0 - u;
+          }
+          double archX;
+          if (wall == 'front') {
+            archX = (x0 + u * (x1 - x0)).clamp(0.0, 1.0);
+          } else if (wall == 'left') {
+            archX = (0.04 * (1.0 - u)).clamp(0.0, 1.0);
+          } else if (wall == 'right') {
+            archX = (0.96 + 0.04 * u).clamp(0.0, 1.0);
+          } else {
+            archX = (1.0 - u).clamp(0.0, 1.0);
+          }
+          out.add((
+            wall: wall,
+            sectionId: sp.sectionId,
+            story: story,
+            archX: archX,
+          ));
+          countForCtrl++;
+        }
+      }
+      while (countForCtrl < ctrl.segmentCount) {
+        final fallbackU = (countForCtrl + 0.5) / ctrl.segmentCount;
+        out.add((
+          wall: 'front',
+          sectionId: arch.sections.isNotEmpty ? arch.sections.first.id : 'sec-front',
+          story: 1,
+          archX: fallbackU.clamp(0.0, 1.0),
+        ));
+        countForCtrl++;
+      }
+    }
+    return out;
   }
 
   int get totalSegments {
@@ -1679,7 +1864,7 @@ class SystemConfig {
   }
 
   factory SystemConfig.defaultThreeHouses() {
-    return const SystemConfig(
+    return SystemConfig(
       houses: [
         HouseConfig(
           id: 'house-1',
@@ -1689,21 +1874,61 @@ class SystemConfig {
           timeWeight: 1.0,
           connectionType: 'govee_cloud',
           notes:
-              '2 Govee controllers across front eaves and garage (24 segments)',
-          controllers: [
+              '2 Govee controllers across upper steep gable + right eave + lower porch & 2-car garage + side/back eaves (24 segments)',
+          architecture: kArchitecturePresets['craftsman_multi_section'],
+          controllers: const [
             ControllerConfig(
               id: 'h1-ctrl-1',
-              name: 'Neighbor 1 - Left Eaves',
+              name: 'Neighbor 1 - Upper Roofline & Right Side',
               mac: 'AA:BB:CC:DD:EE:02',
               sku: 'H705A',
               segmentCount: 12,
+              sectionSpans: [
+                SectionSpan(
+                  sectionId: 'sec-upper-dormer',
+                  wall: 'front',
+                  segments: 5,
+                ),
+                SectionSpan(
+                  sectionId: 'sec-upper-right-eave',
+                  wall: 'front',
+                  segments: 3,
+                ),
+                SectionSpan(
+                  sectionId: 'sec-right-eave',
+                  wall: 'right',
+                  segments: 4,
+                ),
+              ],
             ),
             ControllerConfig(
               id: 'h1-ctrl-2',
-              name: 'Neighbor 1 - Right Garage',
+              name: 'Neighbor 1 - Lower Garage, Left & Back',
               mac: 'AA:BB:CC:DD:EE:03',
               sku: 'H705A',
               segmentCount: 12,
+              sectionSpans: [
+                SectionSpan(
+                  sectionId: 'sec-entry-gable',
+                  wall: 'front',
+                  segments: 2,
+                ),
+                SectionSpan(
+                  sectionId: 'sec-garage-square',
+                  wall: 'front',
+                  segments: 4,
+                ),
+                SectionSpan(
+                  sectionId: 'sec-left-eave',
+                  wall: 'left',
+                  segments: 3,
+                ),
+                SectionSpan(
+                  sectionId: 'sec-back-eave',
+                  wall: 'back',
+                  segments: 3,
+                ),
+              ],
             ),
           ],
         ),
@@ -1715,8 +1940,9 @@ class SystemConfig {
           timeWeight: 1.0,
           connectionType: 'local_lan',
           notes:
-              'My Govee Outdoor Lights H705E on 192.168.1.83 (9 segments, time-compensated in middle)',
-          controllers: [
+              'My Govee Outdoor Lights H705E on 192.168.1.83 (9 segments, Front Only: 5 upper gable + 2 garage eave + 2 porch peak)',
+          architecture: kArchitecturePresets['a_frame_gable'],
+          controllers: const [
             ControllerConfig(
               id: 'h2-ctrl-1',
               name: 'Govee Outdoor Lights 2 (H705E)',
@@ -1724,6 +1950,23 @@ class SystemConfig {
               mac: 'AA:BB:CC:DD:EE:FF:00:02',
               sku: 'H705E',
               segmentCount: 9,
+              sectionSpans: [
+                SectionSpan(
+                  sectionId: 'sec-main-gable',
+                  wall: 'front',
+                  segments: 5,
+                ),
+                SectionSpan(
+                  sectionId: 'sec-lower-garage-eave',
+                  wall: 'front',
+                  segments: 2,
+                ),
+                SectionSpan(
+                  sectionId: 'sec-lower-porch-gable',
+                  wall: 'front',
+                  segments: 2,
+                ),
+              ],
             ),
           ],
         ),
@@ -1734,21 +1977,57 @@ class SystemConfig {
           enabled: true,
           timeWeight: 1.0,
           connectionType: 'govee_cloud',
-          notes: '2 longer Govee H706A controllers across two-story roofline (30 segments)',
-          controllers: [
+          notes:
+              '2 longer Govee H706A controllers across upper dormer nook + 3-window fascia + lower porch/garage + sides/back (30 segments)',
+          architecture: kArchitecturePresets['two_story_estate'],
+          controllers: const [
             ControllerConfig(
               id: 'h3-ctrl-1',
-              name: 'Neighbor 2 - Upper Peak',
+              name: 'Neighbor 2 - Upper Fascia & Right Wing',
               mac: 'AA:BB:CC:DD:EE:04',
               sku: 'H706A',
               segmentCount: 15,
+              sectionSpans: [
+                SectionSpan(
+                  sectionId: 'sec-left-tower-gable',
+                  wall: 'front',
+                  segments: 2,
+                ),
+                SectionSpan(
+                  sectionId: 'sec-center-flat-fascia',
+                  wall: 'front',
+                  segments: 6,
+                ),
+                SectionSpan(
+                  sectionId: 'sec-right-wing',
+                  wall: 'right',
+                  segments: 7,
+                ),
+              ],
             ),
             ControllerConfig(
               id: 'h3-ctrl-2',
-              name: 'Neighbor 2 - Lower Porch',
+              name: 'Neighbor 2 - Lower Porch, Left & Back',
               mac: 'AA:BB:CC:DD:EE:05',
               sku: 'H706A',
               segmentCount: 15,
+              sectionSpans: [
+                SectionSpan(
+                  sectionId: 'sec-right-garage-gable',
+                  wall: 'front',
+                  segments: 6,
+                ),
+                SectionSpan(
+                  sectionId: 'sec-left-wing',
+                  wall: 'left',
+                  segments: 5,
+                ),
+                SectionSpan(
+                  sectionId: 'sec-back-wing',
+                  wall: 'back',
+                  segments: 4,
+                ),
+              ],
             ),
           ],
         ),

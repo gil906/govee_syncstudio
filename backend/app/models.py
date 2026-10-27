@@ -107,109 +107,93 @@ class HouseArchitecture(BaseModel):
 
 ARCHITECTURE_PRESETS: List[Dict[str, Any]] = [
     {
-        "id": "a_frame_gable",
-        "preset_style": "a_frame_gable",
-        "name": "My House: Front A-Frame Triangle Peak",
-        "label": "My House: Front A-Frame Triangle Peak",
-        "description": "Prominent triangular gable roofline across the front elevation with picture window and entry door.",
-        "default_view_mode": "3d",
-        "camera_yaw": -24.0,
-        "camera_pitch": 18.0,
-        "camera_zoom": 1.0,
-        "siding_color": "#1a2438",
-        "trim_color": "#334768",
-        "roof_color": "#111827",
-        "sections": [
-            {
-                "id": "sec-main-gable",
-                "label": "Front A-Frame Triangle Peak",
-                "shape": "triangle_gable",
-                "wall": "front",
-                "story": 1,
-                "x_start": 0.06,
-                "x_end": 0.94,
-                "eave_height": 0.50,
-                "peak_height": 0.90,
-                "peak_offset": 0.50,
-                "depth_offset": 0.08,
-                "has_garage": False,
-                "has_door": True,
-                "window_style": "picture",
-            }
-        ],
-    },
-    {
         "id": "craftsman_multi_section",
         "preset_style": "craftsman_multi_section",
-        "name": "Neighbor 1: Craftsman Garage Square + Double Gable + Sides",
-        "label": "Neighbor 1: Craftsman Garage Square + Double Gable + Sides",
-        "description": "Craftsman multi-section home with flat-eave garage box, front entry triangle gable, upper dormer peak, and side/rear eaves.",
+        "name": "Neighbor 1 (Left House): 2-Story Left Steep Gable + Right Eave + Lower Porch & Garage + Sides/Back",
+        "label": "Neighbor 1 (Left House): 2-Story Left Steep Gable + Right Eave + Lower Porch & Garage + Sides/Back",
+        "description": "Two-story Pacific Northwest Craftsman with upper-left steep gable over 3 windows, upper-right flat eave, lower left porch eave, lower right 2-car garage eave, and side/rear perimeter runs.",
         "default_view_mode": "3d",
         "camera_yaw": -28.0,
         "camera_pitch": 21.0,
         "camera_zoom": 1.0,
         "siding_color": "#1e293b",
-        "trim_color": "#3b5278",
+        "trim_color": "#cbd5e1",
         "roof_color": "#0f172a",
         "sections": [
             {
-                "id": "sec-garage-square",
-                "label": "Garage Square Flat Eave",
-                "shape": "flat_eave",
+                "id": "sec-upper-dormer",
+                "label": "Upper Left Steep Gable (3 Windows)",
+                "shape": "steep_gable",
                 "wall": "front",
-                "story": 1,
+                "story": 2,
                 "x_start": 0.04,
-                "x_end": 0.44,
-                "eave_height": 0.48,
-                "peak_height": 0.48,
+                "x_end": 0.58,
+                "eave_height": 0.60,
+                "peak_height": 0.95,
                 "peak_offset": 0.50,
-                "depth_offset": 0.16,
-                "has_garage": True,
+                "depth_offset": 0.04,
+                "has_garage": False,
                 "has_door": False,
                 "window_style": "modern_grid",
             },
             {
-                "id": "sec-entry-gable",
-                "label": "Front Entry Gable",
-                "shape": "triangle_gable",
+                "id": "sec-upper-right-eave",
+                "label": "Upper Right Flat Eave (1 Window)",
+                "shape": "flat_eave",
                 "wall": "front",
-                "story": 1,
-                "x_start": 0.44,
+                "story": 2,
+                "x_start": 0.58,
                 "x_end": 0.96,
-                "eave_height": 0.52,
-                "peak_height": 0.84,
-                "peak_offset": 0.52,
-                "depth_offset": 0.06,
+                "eave_height": 0.60,
+                "peak_height": 0.60,
+                "peak_offset": 0.50,
+                "depth_offset": 0.0,
                 "has_garage": False,
-                "has_door": True,
+                "has_door": False,
                 "window_style": "double_hung",
             },
             {
-                "id": "sec-upper-dormer",
-                "label": "Upper Story Dormer Peak",
-                "shape": "dormer_peak",
+                "id": "sec-entry-gable",
+                "label": "Lower Left Entry Porch Eave",
+                "shape": "flat_eave",
                 "wall": "front",
-                "story": 2,
-                "x_start": 0.14,
-                "x_end": 0.68,
-                "eave_height": 0.68,
-                "peak_height": 0.95,
+                "story": 1,
+                "x_start": 0.02,
+                "x_end": 0.28,
+                "eave_height": 0.38,
+                "peak_height": 0.38,
                 "peak_offset": 0.50,
-                "depth_offset": -0.06,
+                "depth_offset": 0.14,
                 "has_garage": False,
+                "has_door": True,
+                "window_style": "none",
+            },
+            {
+                "id": "sec-garage-square",
+                "label": "Lower Right 2-Car Garage Flat Eave",
+                "shape": "flat_eave",
+                "wall": "front",
+                "story": 1,
+                "x_start": 0.28,
+                "x_end": 0.92,
+                "eave_height": 0.38,
+                "peak_height": 0.38,
+                "peak_offset": 0.50,
+                "depth_offset": 0.18,
+                "has_garage": True,
                 "has_door": False,
-                "window_style": "arched",
+                "window_style": "modern_grid",
             },
             {
                 "id": "sec-left-eave",
                 "label": "Left Side Eave",
                 "shape": "flat_eave",
                 "wall": "left",
-                "story": 1,
+                "story": 2,
                 "x_start": 0.0,
                 "x_end": 1.0,
-                "eave_height": 0.50,
-                "peak_height": 0.50,
+                "eave_height": 0.58,
+                "peak_height": 0.58,
                 "peak_offset": 0.50,
                 "depth_offset": 0.0,
                 "has_garage": False,
@@ -221,11 +205,11 @@ ARCHITECTURE_PRESETS: List[Dict[str, Any]] = [
                 "label": "Right Side Eave",
                 "shape": "flat_eave",
                 "wall": "right",
-                "story": 1,
+                "story": 2,
                 "x_start": 0.0,
                 "x_end": 1.0,
-                "eave_height": 0.52,
-                "peak_height": 0.52,
+                "eave_height": 0.58,
+                "peak_height": 0.58,
                 "peak_offset": 0.50,
                 "depth_offset": 0.0,
                 "has_garage": False,
@@ -234,14 +218,14 @@ ARCHITECTURE_PRESETS: List[Dict[str, Any]] = [
             },
             {
                 "id": "sec-back-eave",
-                "label": "Rear Hip Roof Eave",
+                "label": "Rear Roofline Eave",
                 "shape": "hip_roof",
                 "wall": "back",
-                "story": 1,
+                "story": 2,
                 "x_start": 0.0,
                 "x_end": 1.0,
-                "eave_height": 0.50,
-                "peak_height": 0.72,
+                "eave_height": 0.56,
+                "peak_height": 0.74,
                 "peak_offset": 0.50,
                 "depth_offset": 0.0,
                 "has_garage": False,
@@ -251,77 +235,141 @@ ARCHITECTURE_PRESETS: List[Dict[str, Any]] = [
         ],
     },
     {
+        "id": "a_frame_gable",
+        "preset_style": "a_frame_gable",
+        "name": "My House (Middle): 2-Story Full-Width Triangle Peak + Lower Garage Eave & Porch Peak (Front Only)",
+        "label": "My House (Middle): 2-Story Full-Width Triangle Peak + Lower Garage Eave & Porch Peak (Front Only)",
+        "description": "Two-story Craftsman with full-width upper triangle gable peak over 4 windows, lower left 2-car garage flat eave, and lower right covered porch peak (Front-only lighting).",
+        "default_view_mode": "3d",
+        "camera_yaw": -24.0,
+        "camera_pitch": 18.0,
+        "camera_zoom": 1.0,
+        "siding_color": "#1a2438",
+        "trim_color": "#e2e8f0",
+        "roof_color": "#0f172a",
+        "sections": [
+            {
+                "id": "sec-main-gable",
+                "label": "Upper 2nd-Story Full-Width Triangle Peak (4 Windows)",
+                "shape": "triangle_gable",
+                "wall": "front",
+                "story": 2,
+                "x_start": 0.05,
+                "x_end": 0.95,
+                "eave_height": 0.58,
+                "peak_height": 0.93,
+                "peak_offset": 0.50,
+                "depth_offset": 0.04,
+                "has_garage": False,
+                "has_door": False,
+                "window_style": "picture",
+            },
+            {
+                "id": "sec-lower-garage-eave",
+                "label": "Lower Left 2-Car Garage Flat Eave",
+                "shape": "flat_eave",
+                "wall": "front",
+                "story": 1,
+                "x_start": 0.05,
+                "x_end": 0.58,
+                "eave_height": 0.36,
+                "peak_height": 0.36,
+                "peak_offset": 0.50,
+                "depth_offset": 0.16,
+                "has_garage": True,
+                "has_door": False,
+                "window_style": "modern_grid",
+            },
+            {
+                "id": "sec-lower-porch-gable",
+                "label": "Lower Right Covered Porch Triangle Peak",
+                "shape": "triangle_gable",
+                "wall": "front",
+                "story": 1,
+                "x_start": 0.58,
+                "x_end": 0.96,
+                "eave_height": 0.36,
+                "peak_height": 0.53,
+                "peak_offset": 0.50,
+                "depth_offset": 0.22,
+                "has_garage": False,
+                "has_door": True,
+                "window_style": "double_hung",
+            },
+        ],
+    },
+    {
         "id": "two_story_estate",
         "preset_style": "two_story_estate",
-        "name": "Neighbor 2: 2-Story Compound Peaks + Flat Fascia + All Sides",
-        "label": "Neighbor 2: 2-Story Compound Peaks + Flat Fascia + All Sides",
-        "description": "Two-story estate with steep left tower gable, center flat fascia, right garage gable, and full perimeter wings.",
+        "name": "Neighbor 2 (Right House): 2-Story Recessed Nook + 3-Window Hip Fascia + Full Lower Eave + Sides/Back",
+        "label": "Neighbor 2 (Right House): 2-Story Recessed Nook + 3-Window Hip Fascia + Full Lower Eave + Sides/Back",
+        "description": "Two-story Craftsman with recessed upper-left dormer nook, wide upper-right 3-window hip fascia, full-width lower porch & garage eave, and side/rear perimeter wings.",
         "default_view_mode": "3d",
         "camera_yaw": -30.0,
         "camera_pitch": 22.0,
         "camera_zoom": 1.0,
         "siding_color": "#172033",
-        "trim_color": "#385076",
+        "trim_color": "#cbd5e1",
         "roof_color": "#0d1322",
         "sections": [
             {
                 "id": "sec-left-tower-gable",
-                "label": "Left 2-Story Tower Steep Gable",
-                "shape": "steep_gable",
+                "label": "Upper Left Recessed Dormer Nook",
+                "shape": "dormer_peak",
                 "wall": "front",
                 "story": 2,
-                "x_start": 0.03,
-                "x_end": 0.38,
-                "eave_height": 0.60,
-                "peak_height": 0.96,
+                "x_start": 0.06,
+                "x_end": 0.26,
+                "eave_height": 0.56,
+                "peak_height": 0.66,
                 "peak_offset": 0.50,
-                "depth_offset": 0.14,
+                "depth_offset": -0.06,
                 "has_garage": False,
                 "has_door": False,
                 "window_style": "arched",
             },
             {
                 "id": "sec-center-flat-fascia",
-                "label": "Center 2-Story Flat Fascia",
+                "label": "Upper Right 3-Window Hip Fascia",
                 "shape": "flat_eave",
                 "wall": "front",
                 "story": 2,
-                "x_start": 0.38,
-                "x_end": 0.68,
-                "eave_height": 0.66,
-                "peak_height": 0.66,
+                "x_start": 0.24,
+                "x_end": 0.96,
+                "eave_height": 0.68,
+                "peak_height": 0.72,
                 "peak_offset": 0.50,
-                "depth_offset": 0.0,
+                "depth_offset": 0.06,
                 "has_garage": False,
-                "has_door": True,
-                "window_style": "modern_grid",
-            },
-            {
-                "id": "sec-right-garage-gable",
-                "label": "Right Garage Gable",
-                "shape": "triangle_gable",
-                "wall": "front",
-                "story": 1,
-                "x_start": 0.68,
-                "x_end": 0.97,
-                "eave_height": 0.48,
-                "peak_height": 0.80,
-                "peak_offset": 0.50,
-                "depth_offset": 0.18,
-                "has_garage": True,
                 "has_door": False,
                 "window_style": "modern_grid",
             },
             {
+                "id": "sec-right-garage-gable",
+                "label": "Lower Full-Width Porch & Garage Flat Eave",
+                "shape": "flat_eave",
+                "wall": "front",
+                "story": 1,
+                "x_start": 0.04,
+                "x_end": 0.98,
+                "eave_height": 0.38,
+                "peak_height": 0.38,
+                "peak_offset": 0.50,
+                "depth_offset": 0.18,
+                "has_garage": True,
+                "has_door": True,
+                "window_style": "modern_grid",
+            },
+            {
                 "id": "sec-left-wing",
-                "label": "Left Side Wing Eave",
+                "label": "Left Side Upper & Lower Eaves",
                 "shape": "flat_eave",
                 "wall": "left",
-                "story": 1,
+                "story": 2,
                 "x_start": 0.0,
                 "x_end": 1.0,
-                "eave_height": 0.56,
-                "peak_height": 0.56,
+                "eave_height": 0.58,
+                "peak_height": 0.58,
                 "peak_offset": 0.50,
                 "depth_offset": 0.0,
                 "has_garage": False,
@@ -330,14 +378,14 @@ ARCHITECTURE_PRESETS: List[Dict[str, Any]] = [
             },
             {
                 "id": "sec-right-wing",
-                "label": "Right Side Wing Gable",
-                "shape": "triangle_gable",
+                "label": "Right Side Wing Eave",
+                "shape": "flat_eave",
                 "wall": "right",
-                "story": 1,
+                "story": 2,
                 "x_start": 0.0,
                 "x_end": 1.0,
-                "eave_height": 0.48,
-                "peak_height": 0.76,
+                "eave_height": 0.58,
+                "peak_height": 0.58,
                 "peak_offset": 0.50,
                 "depth_offset": 0.0,
                 "has_garage": False,
@@ -349,7 +397,7 @@ ARCHITECTURE_PRESETS: List[Dict[str, Any]] = [
                 "label": "Back Wing Flat Eave",
                 "shape": "flat_eave",
                 "wall": "back",
-                "story": 1,
+                "story": 2,
                 "x_start": 0.0,
                 "x_end": 1.0,
                 "eave_height": 0.54,
@@ -548,15 +596,15 @@ def default_house_architecture(house_id: str, order: int = 1) -> HouseArchitectu
     if hid in preset_by_id:
         chosen = preset_by_id[hid]
     elif hid == "house-1":
-        chosen = preset_by_id["a_frame_gable"]
-    elif hid == "house-2":
         chosen = preset_by_id["craftsman_multi_section"]
+    elif hid == "house-2":
+        chosen = preset_by_id["a_frame_gable"]
     elif hid == "house-3":
         chosen = preset_by_id["two_story_estate"]
     elif order == 1:
-        chosen = preset_by_id["a_frame_gable"]
-    elif order == 2:
         chosen = preset_by_id["craftsman_multi_section"]
+    elif order == 2:
+        chosen = preset_by_id["a_frame_gable"]
     else:
         chosen = preset_by_id["two_story_estate"]
 
@@ -567,10 +615,97 @@ def default_house_architecture(house_id: str, order: int = 1) -> HouseArchitectu
         camera_pitch=float(chosen.get("camera_pitch", 20.0)),
         camera_zoom=float(chosen.get("camera_zoom", 1.0)),
         siding_color=str(chosen.get("siding_color", "#1a2438")),
-        trim_color=str(chosen.get("trim_color", "#334768")),
-        roof_color=str(chosen.get("roof_color", "#111827")),
+        trim_color=str(chosen.get("trim_color", "#cbd5e1")),
+        roof_color=str(chosen.get("roof_color", "#0f172a")),
         sections=[ArchSection.model_validate(s) for s in chosen["sections"]],
     )
+
+
+def _scale_template_spans(template: List[Dict[str, Any]], segment_count: int) -> List[Dict[str, Any]]:
+    target = max(1, int(segment_count))
+    if not template:
+        return [{"section_id": "sec-main-gable", "wall": "front", "segments": target, "direction": "ltr"}]
+    base_total = sum(max(1, int(sp.get("segments", 1))) for sp in template)
+    if base_total == target:
+        return [dict(sp) for sp in template]
+
+    scaled: List[Dict[str, Any]] = []
+    for sp in template:
+        raw_cnt = max(1, round(int(sp.get("segments", 1)) * target / max(1, base_total)))
+        scaled.append({**sp, "segments": raw_cnt})
+    diff = target - sum(sp["segments"] for sp in scaled)
+    if diff != 0 and scaled:
+        scaled[-1]["segments"] = max(1, scaled[-1]["segments"] + diff)
+    return scaled
+
+
+def default_controller_section_spans(
+    house_id: str,
+    ctrl_id: str,
+    ctrl_index: int,
+    segment_count: int,
+    sections: List[ArchSection],
+) -> List[Dict[str, Any]]:
+    """
+    Build realistic 2-story roofline section_spans for a controller based on the house's
+    real-world architecture (`house-1` Left Neighbor, `house-2` My House Front-Only,
+    `house-3` Right Neighbor).
+    """
+    hid = (house_id or "").strip().lower()
+    cid = (ctrl_id or "").strip().lower()
+    sec_ids = {s.id for s in (sections or [])}
+
+    is_house_1 = hid == "house-1" or "sec-upper-right-eave" in sec_ids
+    is_house_2 = hid == "house-2" or "sec-lower-porch-gable" in sec_ids
+    is_house_3 = hid == "house-3" or "sec-left-tower-gable" in sec_ids
+
+    if is_house_1:
+        if ctrl_index == 0 or cid.endswith("-1"):
+            template = [
+                {"section_id": "sec-upper-dormer", "wall": "front", "segments": 5, "direction": "ltr"},
+                {"section_id": "sec-upper-right-eave", "wall": "front", "segments": 3, "direction": "ltr"},
+                {"section_id": "sec-right-eave", "wall": "right", "segments": 4, "direction": "ltr"},
+            ]
+        else:
+            template = [
+                {"section_id": "sec-entry-gable", "wall": "front", "segments": 2, "direction": "ltr"},
+                {"section_id": "sec-garage-square", "wall": "front", "segments": 4, "direction": "ltr"},
+                {"section_id": "sec-left-eave", "wall": "left", "segments": 3, "direction": "ltr"},
+                {"section_id": "sec-back-eave", "wall": "back", "segments": 3, "direction": "ltr"},
+            ]
+        return _scale_template_spans(template, segment_count)
+
+    if is_house_2:
+        template = [
+            {"section_id": "sec-main-gable", "wall": "front", "segments": 5, "direction": "ltr"},
+            {"section_id": "sec-lower-garage-eave", "wall": "front", "segments": 2, "direction": "ltr"},
+            {"section_id": "sec-lower-porch-gable", "wall": "front", "segments": 2, "direction": "ltr"},
+        ]
+        return _scale_template_spans(template, segment_count)
+
+    if is_house_3:
+        if ctrl_index == 0 or cid.endswith("-1"):
+            template = [
+                {"section_id": "sec-left-tower-gable", "wall": "front", "segments": 2, "direction": "ltr"},
+                {"section_id": "sec-center-flat-fascia", "wall": "front", "segments": 6, "direction": "ltr"},
+                {"section_id": "sec-right-wing", "wall": "right", "segments": 7, "direction": "ltr"},
+            ]
+        else:
+            template = [
+                {"section_id": "sec-right-garage-gable", "wall": "front", "segments": 6, "direction": "ltr"},
+                {"section_id": "sec-left-wing", "wall": "left", "segments": 5, "direction": "ltr"},
+                {"section_id": "sec-back-wing", "wall": "back", "segments": 4, "direction": "ltr"},
+            ]
+        return _scale_template_spans(template, segment_count)
+
+    if sections:
+        template = [
+            {"section_id": s.id, "wall": s.wall, "segments": max(1, segment_count // len(sections)), "direction": "ltr"}
+            for s in sections
+        ]
+        return _scale_template_spans(template, segment_count)
+
+    return [{"section_id": "sec-main-gable", "wall": "front", "segments": max(1, segment_count), "direction": "ltr"}]
 
 
 def evaluate_arch_section_point(
@@ -879,6 +1014,31 @@ class HouseConfig(BaseModel):
                     self.architecture.sections = default_arch.sections
             else:
                 self.architecture = default_arch
+
+        house_secs = self.architecture.sections if self.architecture else []
+        for c_idx, ctrl in enumerate(self.controllers):
+            if not ctrl.section_spans and not ctrl.wall_zones:
+                ctrl.section_spans = default_controller_section_spans(
+                    self.id,
+                    ctrl.id,
+                    c_idx,
+                    ctrl.segment_count,
+                    house_secs,
+                )
+            if not ctrl.wall_zones and ctrl.section_spans:
+                zones: List[Dict[str, Any]] = []
+                for sp in ctrl.section_spans:
+                    if not isinstance(sp, dict):
+                        continue
+                    w = str(sp.get("wall", "front")).strip().lower()
+                    cnt = max(0, int(sp.get("segments", 0) or 0))
+                    if cnt <= 0:
+                        continue
+                    if zones and zones[-1]["wall"] == w:
+                        zones[-1]["segments"] += cnt
+                    else:
+                        zones.append({"wall": w, "segments": cnt})
+                ctrl.wall_zones = zones
         return self
 
     @property

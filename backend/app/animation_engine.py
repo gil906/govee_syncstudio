@@ -356,9 +356,15 @@ def build_virtual_strip_map(config: SystemConfig) -> List[VirtualSegmentSlot]:
         back_total = sum(1 for _, _, _, w, _, _ in house_seg_items if w == "back")
 
         for house_seg_cursor, (c_idx, ctrl, phys_seg_idx, w_label, sec_id, sec_t) in enumerate(house_seg_items):
+            if ctrl.custom_nodes and len(ctrl.custom_nodes) >= 2 and not ctrl.section_spans:
+                ctrl_u = 0.5 if ctrl.segment_count <= 1 else (phys_seg_idx / (ctrl.segment_count - 1))
+                arch_x, arch_y, arch_z = _interpolate_custom_nodes(ctrl.custom_nodes, ctrl_u)
+            else:
+                arch_x, arch_y, arch_z = evaluate_arch_section_point(sec_by_id.get(sec_id), sec_t, w_label)
+
             if zone_mode in ("front_street_sync", "front_only_quiet_sides") and front_total > 0:
                 if w_label == "front":
-                    house_local_pos = (front_seen + 0.5) / max(1, front_total)
+                    house_local_pos = max(0.02, min(0.98, (arch_x - 0.02) / 0.96))
                     house_local_width = 1.0 / max(1, front_total)
                     front_seen += 1
                 elif w_label == "left":
@@ -416,12 +422,6 @@ def build_virtual_strip_map(config: SystemConfig) -> List[VirtualSegmentSlot]:
             else:
                 norm_pos = (global_idx + 0.5) / max(1, total_segments_all)
                 norm_width = 1.0 / max(1, total_segments_all)
-
-            if ctrl.custom_nodes and len(ctrl.custom_nodes) >= 2 and not ctrl.section_spans:
-                ctrl_u = 0.5 if ctrl.segment_count <= 1 else (phys_seg_idx / (ctrl.segment_count - 1))
-                arch_x, arch_y, arch_z = _interpolate_custom_nodes(ctrl.custom_nodes, ctrl_u)
-            else:
-                arch_x, arch_y, arch_z = evaluate_arch_section_point(sec_by_id.get(sec_id), sec_t, w_label)
 
             slots.append(
                 VirtualSegmentSlot(

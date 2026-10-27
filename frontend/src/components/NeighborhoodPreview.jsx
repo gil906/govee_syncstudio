@@ -36,6 +36,34 @@ const QUICK_BURST_CHIPS = [
   },
 ];
 
+const THREE_HOUSE_SYNC_MODES = [
+  {
+    id: 'front_street_sync',
+    label: 'Street X-Lock (Upper+Lower Synced)',
+    desc: 'Locks Upper 2nd-story & Lower 1st-story front rooflines to horizontal street X coordinate across all 3 houses',
+  },
+  {
+    id: 'all_segments',
+    label: 'Continuous Strip',
+    desc: 'Flows sequentially across every segment of House 1 → House 2 → House 3',
+  },
+  {
+    id: 'perimeter_360',
+    label: '360° Roof Orbit',
+    desc: 'Orbits clockwise around Front → Right → Back → Left rooflines',
+  },
+  {
+    id: 'depth_front_to_back',
+    label: 'Front→Back Depth',
+    desc: 'Sweeps from stepped-forward front porch/garage eaves back to rear rooflines',
+  },
+  {
+    id: 'front_only_quiet_sides',
+    label: 'Front Bright / Quiet Sides',
+    desc: 'Full dynamic motion on street-facing Upper & Lower front rooflines with soft ambient sides/back',
+  },
+];
+
 export function formatOrdinal(n) {
   const s = ['th', 'st', 'nd', 'rd'];
   const v = n % 100;
@@ -69,6 +97,8 @@ export default function NeighborhoodPreview({
   const [showInlineDesigner, setShowInlineDesigner] = useState(false);
   const [designerHouseId, setDesignerHouseId] = useState(null);
   const [selectedPuck, setSelectedPuck] = useState(null);
+  const [optimisticZoneMode, setOptimisticZoneMode] = useState(null);
+  const [syncModeSaving, setSyncModeSaving] = useState(false);
 
   const segments = liveState?.segments || [];
   const houses = [...(config?.houses || [])].sort((a, b) => (a.order || 1) - (b.order || 1));
@@ -79,6 +109,37 @@ export default function NeighborhoodPreview({
     liveState?.blackout_on_stop ?? config?.animation?.blackout_on_stop ?? false;
   const fps = liveState?.measured_fps ?? config?.animation?.fps ?? 25;
   const driftMs = liveState?.clock_drift_ms ?? 0.08;
+  const activeZoneMode =
+    optimisticZoneMode ||
+    liveState?.zone_mode ||
+    config?.animation?.zone_mode ||
+    'front_street_sync';
+
+  const handleSelectZoneMode = async (modeId) => {
+    setOptimisticZoneMode(modeId);
+    setSyncModeSaving(true);
+    try {
+      const doReq = apiFetch || fetch;
+      await doReq('/api/animation', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ zone_mode: modeId }),
+      });
+      if (onSaveConfig && config) {
+        onSaveConfig({
+          ...config,
+          animation: {
+            ...(config.animation || {}),
+            zone_mode: modeId,
+          },
+        });
+      }
+    } catch (e) {
+      // keep optimistic mode in UI
+    } finally {
+      setSyncModeSaving(false);
+    }
+  };
 
   const viewModes = [
     { id: '3d_all', label: `🧊 3D Street (${enabledHouses.length || targetHouses.length} Houses)` },
@@ -175,12 +236,45 @@ export default function NeighborhoodPreview({
         })}
       </div>
 
+      {/* 🔗 3-House Sync Alignment Selector Pill Bar */}
+      <div className="bg-[#060b18]/90 border border-[#1e293b] rounded-xl px-2.5 py-2 flex flex-wrap items-center justify-between gap-2">
+        <div className="flex items-center gap-1.5 text-[11px] font-extrabold text-cyan-300 shrink-0">
+          <span>🔗 3-House Sync Alignment:</span>
+          {syncModeSaving && (
+            <span className="text-[10px] font-mono text-amber-300 animate-pulse">
+              Syncing...
+            </span>
+          )}
+        </div>
+        <div className="flex flex-wrap items-center gap-1.5">
+          {THREE_HOUSE_SYNC_MODES.map((m) => {
+            const isSel = activeZoneMode === m.id;
+            return (
+              <button
+                key={m.id}
+                type="button"
+                title={m.desc}
+                onClick={() => handleSelectZoneMode(m.id)}
+                className={`px-2.5 py-1 rounded-lg text-[11px] font-bold border transition ${
+                  isSel
+                    ? 'bg-[#00f5d4]/20 text-[#00f5d4] border-[#00f5d4] shadow-sm shadow-[#00f5d4]/20'
+                    : 'bg-[#0c1324] text-slate-300 border-[#1e293b] hover:text-white hover:border-slate-600'
+                }`}
+              >
+                {m.label}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
       {/* True Multi-Section 3D & 2D Architectural Renderer */}
       <ArchitecturalViewportCanvas
         houses={houses}
         liveSegments={segments}
         animation={{
           ...(config?.animation || {}),
+          zone_mode: activeZoneMode,
           running: isRunning,
           blackout_on_stop: blackoutOnStop,
         }}
@@ -193,7 +287,7 @@ export default function NeighborhoodPreview({
           }
         }}
         onOpenDesigner={() => handleOpenDesignerClick()}
-        height={240}
+        height={265}
       />
 
       {/* Quick Selected Puck Banner (if user clicked an LED puck in the 3D/2D preview) */}

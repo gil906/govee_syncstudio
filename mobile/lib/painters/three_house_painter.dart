@@ -51,6 +51,7 @@ List<Color> computeHouseSegmentColors({
 }) {
   final segColors = <Color>[];
   final segWalls = house.allSegmentWalls;
+  final segArchPositions = house.allSegmentArchPositions;
   for (int s = 0; s < segCount; s++) {
     if (!house.enabled || !animation.running) {
       segColors.add(const Color(0xFF1E293B));
@@ -65,13 +66,44 @@ List<Color> computeHouseSegmentColors({
     }
 
     final localPos = (s + 0.5) / math.max(1, segCount);
+    final archInfo = s < segArchPositions.length ? segArchPositions[s] : null;
+    final wName = archInfo?.wall ?? (s < segWalls.length ? segWalls[s] : 'front');
+
+    // Determine effective horizontal position within the house [0.0..1.0].
+    // In 'front_street_sync' (Street X-Lock) or 'front_back_sync', segments on the
+    // front (and back) wall use their horizontal `archX` coordinate so Upper (story 2)
+    // and Lower (story 1) rooflines stay locked in horizontal unison!
+    double effectiveLocalPos = localPos;
+    if (animation.zoneMode == 'front_street_sync' && archInfo != null) {
+      effectiveLocalPos = archInfo.archX;
+    } else if (animation.zoneMode == 'front_back_sync' && archInfo != null) {
+      if (wName == 'front' || wName == 'back') {
+        effectiveLocalPos = archInfo.archX;
+      } else {
+        effectiveLocalPos = 0.5;
+      }
+    } else if (animation.zoneMode == 'perimeter_360' && archInfo != null) {
+      // Continuous 360° roof orbit around front -> right -> back -> left
+      if (wName == 'front') {
+        effectiveLocalPos = archInfo.archX * 0.40;
+      } else if (wName == 'right') {
+        effectiveLocalPos = 0.40 + (archInfo.archX - 0.96).clamp(0.0, 0.04) * 5.0;
+      } else if (wName == 'back') {
+        effectiveLocalPos = 0.60 + (1.0 - archInfo.archX) * 0.20;
+      } else {
+        effectiveLocalPos = 0.80 + (1.0 - (archInfo.archX / 0.04).clamp(0.0, 1.0)) * 0.20;
+      }
+    }
+
     double normX;
     if (animation.mappingMode == 'parallel_zones') {
-      normX = localPos;
-    } else if (animation.mappingMode == 'virtual_strip' && totalAllSegs > 0) {
+      normX = effectiveLocalPos;
+    } else if (animation.mappingMode == 'virtual_strip' &&
+        totalAllSegs > 0 &&
+        animation.zoneMode != 'front_street_sync') {
       normX = (globalSegCursor + s + 0.5) / totalAllSegs;
     } else {
-      normX = houseStartNorm + localPos * houseSpanNorm;
+      normX = houseStartNorm + effectiveLocalPos * houseSpanNorm;
     }
 
     Color col = evaluateEffectAtPoint(
@@ -80,7 +112,6 @@ List<Color> computeHouseSegmentColors({
       elapsedSec: elapsedSec,
       anim: animation,
     );
-    final wName = s < segWalls.length ? segWalls[s] : 'front';
     if (animation.zoneMode == 'front_only_quiet_sides' && wName != 'front') {
       col = Color.fromARGB(
         (col.a * 255.0).round(),
@@ -277,12 +308,39 @@ class ThreeHouseScenePainter extends CustomPainter {
       final frontSecs = arch.sections.where((s) => s.wall == 'front').toList();
       final renderSecs = frontSecs.isNotEmpty
           ? (List<ArchSection>.from(frontSecs)
-            ..sort((a, b) => a.depthOffset.compareTo(b.depthOffset)))
+            ..sort((a, b) {
+              if (a.story != b.story) return b.story.compareTo(a.story);
+              return a.depthOffset.compareTo(b.depthOffset);
+            }))
           : HouseArchitecture.defaultForHouse(house.id, house.order)
               .frontSections;
 
       final sectionPolylines = <String, List<Offset>>{};
       final sectionBaseY = <String, double>{};
+
+      // Populate side/rear eave polylines in 2D so side/back segments render along side/back eaves
+      for (final sideSec in arch.sections.where((s) => s.wall != 'front')) {
+        final eaveY = groundY - sideSec.eaveHeight.clamp(0.25, 0.92) * usableHeight;
+        final peakY = groundY -
+            math.max(sideSec.eaveHeight, sideSec.peakHeight).clamp(0.25, 0.98) *
+                usableHeight;
+        if (sideSec.wall == 'left') {
+          sectionPolylines[sideSec.id] = [
+            Offset(left + 2.5, eaveY),
+            Offset(left + 2.5, groundY - 0.38 * usableHeight),
+          ];
+        } else if (sideSec.wall == 'right') {
+          sectionPolylines[sideSec.id] = [
+            Offset(right - 2.5, eaveY),
+            Offset(right - 2.5, groundY - 0.38 * usableHeight),
+          ];
+        } else if (sideSec.wall == 'back') {
+          sectionPolylines[sideSec.id] = [
+            Offset(left + houseW * 0.16, peakY),
+            Offset(right - houseW * 0.16, peakY),
+          ];
+        }
+      }
 
       for (final sec in renderSecs) {
         final sx0 = left + sec.xStart.clamp(0.0, 0.98) * houseW;
@@ -365,96 +423,268 @@ class ThreeHouseScenePainter extends CustomPainter {
                     : trimCol.withValues(alpha: 0.65)),
         );
 
-        // Architectural details (Garage, Entry Door, Windows)
-        if (!compact && sw > 18) {
+        // Architectural details matching the 4 uploaded Craftsman house photos:
+        if (!compact && sw > 16) {
           final secH = math.max(12.0, sBottomY - sEaveY);
-          if (sec.hasGarage && sec.story == 1) {
-            final gw = sw * 0.68;
-            final gh = secH * 0.68;
-            final gx = sx0 + (sw - gw) * 0.5;
-            final gy = sBottomY - gh;
-            final gRect = RRect.fromRectAndRadius(
-              Rect.fromLTWH(gx, gy, gw, gh),
-              const Radius.circular(3),
-            );
-            canvas.drawRRect(
-              gRect,
-              Paint()..color = const Color(0xFF0B1325),
-            );
-            canvas.drawRRect(
-              gRect,
-              Paint()
-                ..style = PaintingStyle.stroke
-                ..strokeWidth = 1.0
-                ..color = trimCol.withValues(alpha: 0.7),
-            );
-            for (int r = 1; r <= 3; r++) {
-              final py = gy + (gh / 4) * r;
-              canvas.drawLine(
-                Offset(gx + 2, py),
-                Offset(gx + gw - 2, py),
-                Paint()
-                  ..color = trimCol.withValues(alpha: 0.4)
-                  ..strokeWidth = 0.8,
+
+          if (sec.story == 2) {
+            // Vertical gable vent right under apex on pitched 2nd-story gables
+            if (sec.isPitchedGable && (sEaveY - sPeakY) > 10) {
+              final ventH = math.min(9.0, (sEaveY - sPeakY) * 0.36);
+              final ventW = math.min(4.2, sw * 0.06);
+              final ventY = sPeakY + (sEaveY - sPeakY) * 0.30;
+              canvas.drawRRect(
+                RRect.fromRectAndRadius(
+                  Rect.fromCenter(
+                    center: Offset(sApexX, ventY),
+                    width: ventW,
+                    height: ventH,
+                  ),
+                  const Radius.circular(1.5),
+                ),
+                Paint()..color = trimCol.withValues(alpha: 0.80),
               );
             }
+
+            // Determine exact window count on story == 2:
+            // - sec-main-gable (House 2, My House): 4 vertical rectangular windows
+            // - sec-upper-dormer (House 1) or sec-center-flat-fascia (House 3): 3 vertical windows
+            // - sec-upper-right-eave / sec-left-tower-gable: 1 window
+            if (sec.windowStyle != 'none') {
+              int winCount = 1;
+              if (sec.id == 'sec-main-gable' ||
+                  sec.label.contains('4 Windows') ||
+                  (sec.windowStyle == 'picture' && sw > houseW * 0.65)) {
+                winCount = 4;
+              } else if (sec.id == 'sec-upper-dormer' ||
+                  sec.id == 'sec-center-flat-fascia' ||
+                  sec.label.contains('3 Windows') ||
+                  sec.label.contains('3-Window')) {
+                winCount = 3;
+              }
+
+              final winFill = Paint()
+                ..color = const Color(0xFFFDE68A)
+                    .withValues(alpha: animation.running ? 0.25 : 0.12);
+              final winStroke = Paint()
+                ..style = PaintingStyle.stroke
+                ..strokeWidth = 1.0
+                ..color = trimCol.withValues(alpha: 0.85);
+
+              final totalPadX = sw * (winCount >= 3 ? 0.12 : 0.26);
+              final usableWinSpan = math.max(10.0, sw - totalPadX * 2);
+              final gapW = winCount > 1 ? usableWinSpan * 0.08 : 0.0;
+              final singleW = math.min(
+                18.0,
+                (usableWinSpan - gapW * (winCount - 1)) / winCount,
+              );
+              final winH = (secH * 0.56).clamp(8.0, 22.0);
+              final winY = sEaveY + (secH - winH) * 0.45;
+              final rowStartX = sx0 +
+                  (sw - (singleW * winCount + gapW * (winCount - 1))) * 0.5;
+
+              for (int wi = 0; wi < winCount; wi++) {
+                final wx = rowStartX + wi * (singleW + gapW);
+                final wRect = Rect.fromLTWH(wx, winY, singleW, winH);
+                final topRad = sec.windowStyle == 'arched'
+                    ? Radius.circular(singleW * 0.48)
+                    : const Radius.circular(2.0);
+                final rrect = RRect.fromRectAndCorners(
+                  wRect,
+                  topLeft: topRad,
+                  topRight: topRad,
+                  bottomLeft: const Radius.circular(1.5),
+                  bottomRight: const Radius.circular(1.5),
+                );
+                canvas.drawRRect(rrect, winFill);
+                canvas.drawRRect(rrect, winStroke);
+                // Vertical & horizontal Craftsman window mullions
+                canvas.drawLine(
+                  Offset(wx + singleW * 0.5, winY + 1),
+                  Offset(wx + singleW * 0.5, winY + winH - 1),
+                  Paint()
+                    ..color = trimCol.withValues(alpha: 0.55)
+                    ..strokeWidth = 0.7,
+                );
+                canvas.drawLine(
+                  Offset(wx + 1, winY + winH * 0.42),
+                  Offset(wx + singleW - 1, winY + winH * 0.42),
+                  Paint()
+                    ..color = trimCol.withValues(alpha: 0.55)
+                    ..strokeWidth = 0.7,
+                );
+              }
+            }
           } else {
-            if (sec.hasDoor && sec.story == 1) {
-              final dw = math.min(sw * 0.22, 16.0);
-              final dh = secH * 0.58;
-              final dx = sx0 + sw * 0.22;
+            // Story == 1: Garage bays (with 4 top window panes + stone-veneer pillars + carriage sconces)
+            // and/or Covered Entry Porch (with white Craftsman columns on stone pedestals)
+            final bothPorchAndGarage = sec.hasGarage && sec.hasDoor;
+            final porchRightX = bothPorchAndGarage ? sx0 + sw * 0.34 : sx1;
+            final garageLeftX = bothPorchAndGarage ? sx0 + sw * 0.34 : sx0;
+
+            if (sec.hasDoor) {
+              final pSpanW = math.max(12.0, porchRightX - sx0);
+              final dw = math.min(pSpanW * 0.36, 15.0);
+              final dh = secH * 0.68;
+              final dx = sx0 + (pSpanW - dw) * 0.42;
               final dy = sBottomY - dh;
               canvas.drawRRect(
                 RRect.fromRectAndRadius(
                   Rect.fromLTWH(dx, dy, dw, dh),
-                  const Radius.circular(2.5),
+                  const Radius.circular(2.0),
                 ),
                 Paint()..color = const Color(0xFF1E293B),
               );
-              canvas.drawCircle(
-                Offset(dx + dw * 0.5, dy + dh * 0.28),
-                2.2,
-                Paint()
-                  ..color = const Color(0xFFFBBF24).withValues(alpha: 0.85),
-              );
-            }
-            if (sec.windowStyle != 'none') {
-              final winW = math.min(sw * 0.30, 24.0);
-              final winH = secH * 0.34;
-              final winX = sec.hasDoor
-                  ? sx0 + sw * 0.55
-                  : sx0 + (sw - winW) * 0.5;
-              final winY = sEaveY + secH * 0.22;
-              final wRect = Rect.fromLTWH(winX, winY, winW, winH);
-              final winFill = Paint()
-                ..color = const Color(0xFFFDE68A)
-                    .withValues(alpha: animation.running ? 0.22 : 0.10);
-              final radius = sec.windowStyle == 'arched'
-                  ? Radius.circular(winW * 0.45)
-                  : const Radius.circular(3);
               canvas.drawRRect(
-                RRect.fromRectAndCorners(
-                  wRect,
-                  topLeft: radius,
-                  topRight: radius,
-                  bottomLeft: const Radius.circular(2),
-                  bottomRight: const Radius.circular(2),
-                ),
-                winFill,
-              );
-              canvas.drawRRect(
-                RRect.fromRectAndCorners(
-                  wRect,
-                  topLeft: radius,
-                  topRight: radius,
-                  bottomLeft: const Radius.circular(2),
-                  bottomRight: const Radius.circular(2),
+                RRect.fromRectAndRadius(
+                  Rect.fromLTWH(dx, dy, dw, dh),
+                  const Radius.circular(2.0),
                 ),
                 Paint()
                   ..style = PaintingStyle.stroke
                   ..strokeWidth = 0.9
                   ..color = trimCol.withValues(alpha: 0.75),
               );
+              // Warm glass pane in door + glowing porch sconce
+              canvas.drawRect(
+                Rect.fromLTWH(dx + dw * 0.22, dy + dh * 0.12, dw * 0.56, dh * 0.28),
+                Paint()
+                  ..color = const Color(0xFFFDE68A).withValues(alpha: 0.55),
+              );
+              canvas.drawCircle(
+                Offset(dx - 3.5, dy + dh * 0.28),
+                2.2,
+                Paint()
+                  ..color = const Color(0xFFFBBF24).withValues(alpha: 0.90),
+              );
+
+              // White Craftsman porch column(s) on stone-veneer pedestals
+              final colPositions = <double>[
+                sx0 + 3.5,
+                if (!bothPorchAndGarage) porchRightX - 3.5,
+              ];
+              for (final cxPos in colPositions) {
+                final pedH = secH * 0.34;
+                final colH = secH - pedH;
+                // White tapered upper column
+                canvas.drawRect(
+                  Rect.fromLTWH(cxPos - 1.8, sEaveY, 3.6, colH),
+                  Paint()..color = const Color(0xFFE2E8F0),
+                );
+                // Stone-veneer pedestal base
+                final pedRect = Rect.fromLTWH(
+                  cxPos - 3.0,
+                  sBottomY - pedH,
+                  6.0,
+                  pedH,
+                );
+                canvas.drawRRect(
+                  RRect.fromRectAndRadius(pedRect, const Radius.circular(1.5)),
+                  Paint()..color = const Color(0xFF475569),
+                );
+                canvas.drawRRect(
+                  RRect.fromRectAndRadius(pedRect, const Radius.circular(1.5)),
+                  Paint()
+                    ..style = PaintingStyle.stroke
+                    ..strokeWidth = 0.7
+                    ..color = trimCol.withValues(alpha: 0.75),
+                );
+              }
+            }
+
+            if (sec.hasGarage) {
+              final gSpanW = math.max(18.0, sx1 - garageLeftX);
+              final gw = gSpanW * 0.76;
+              final gh = secH * 0.74;
+              final gx = garageLeftX + (gSpanW - gw) * 0.5;
+              final gy = sBottomY - gh;
+
+              // Stone-veneer side pillars flanking the garage door + warm carriage sconces
+              final pillarW = math.max(3.5, (gSpanW - gw) * 0.42);
+              final pillarH = gh * 0.72;
+              for (final px in [gx - pillarW - 0.5, gx + gw + 0.5]) {
+                final pRect = Rect.fromLTWH(
+                  px,
+                  sBottomY - pillarH,
+                  pillarW,
+                  pillarH,
+                );
+                canvas.drawRect(
+                  pRect,
+                  Paint()..color = const Color(0xFF334155),
+                );
+                // Warm carriage sconce above stone pillar
+                final sconceCenter = Offset(
+                  px + pillarW * 0.5,
+                  gy + gh * 0.22,
+                );
+                canvas.drawCircle(
+                  sconceCenter,
+                  4.2,
+                  Paint()
+                    ..color = const Color(0xFFFBBF24).withValues(alpha: 0.28)
+                    ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3.0),
+                );
+                canvas.drawCircle(
+                  sconceCenter,
+                  1.7,
+                  Paint()..color = const Color(0xFFFEF08A),
+                );
+              }
+
+              // 2-car paneled garage door
+              final gRect = RRect.fromRectAndRadius(
+                Rect.fromLTWH(gx, gy, gw, gh),
+                const Radius.circular(2.5),
+              );
+              canvas.drawRRect(
+                gRect,
+                Paint()..color = const Color(0xFF1E293B),
+              );
+              canvas.drawRRect(
+                gRect,
+                Paint()
+                  ..style = PaintingStyle.stroke
+                  ..strokeWidth = 1.1
+                  ..color = trimCol.withValues(alpha: 0.85),
+              );
+              // Horizontal panel dividers + center bay seam
+              for (int r = 1; r <= 3; r++) {
+                final py = gy + (gh / 4.0) * r;
+                canvas.drawLine(
+                  Offset(gx + 1.5, py),
+                  Offset(gx + gw - 1.5, py),
+                  Paint()
+                    ..color = trimCol.withValues(alpha: 0.45)
+                    ..strokeWidth = 0.75,
+                );
+              }
+              canvas.drawLine(
+                Offset(gx + gw * 0.5, gy + gh * 0.25),
+                Offset(gx + gw * 0.5, gy + gh - 1),
+                Paint()
+                  ..color = trimCol.withValues(alpha: 0.38)
+                  ..strokeWidth = 0.75,
+              );
+              // 4 top glass window panes across the top row of the 2-car garage door
+              final paneRowH = gh * 0.16;
+              final paneY = gy + gh * 0.05;
+              final paneMargin = gw * 0.06;
+              final paneUsable = gw - paneMargin * 2;
+              final paneGap = paneUsable * 0.05;
+              final paneW = (paneUsable - paneGap * 3) / 4.0;
+              for (int pi = 0; pi < 4; pi++) {
+                final paneX = gx + paneMargin + pi * (paneW + paneGap);
+                canvas.drawRRect(
+                  RRect.fromRectAndRadius(
+                    Rect.fromLTWH(paneX, paneY, paneW, paneRowH),
+                    const Radius.circular(1.0),
+                  ),
+                  Paint()
+                    ..color = const Color(0xFFBAE6FD)
+                        .withValues(alpha: animation.running ? 0.38 : 0.20),
+                );
+              }
             }
           }
         }
@@ -498,6 +728,26 @@ class ThreeHouseScenePainter extends CustomPainter {
               Paint()..color = const Color(0xFFFBBF24),
             );
           }
+        }
+      }
+
+      // Driveway path bollard lights along the left foreground of House 2 (My House)
+      if (isMiddleMe && !compact) {
+        for (int bi = 0; bi < 4; bi++) {
+          final bx = left + houseW * (0.04 + bi * 0.055);
+          final by = groundY + 1.5 + (bi % 2) * 1.2;
+          canvas.drawCircle(
+            Offset(bx, by),
+            4.0,
+            Paint()
+              ..color = const Color(0xFFFEF08A).withValues(alpha: 0.30)
+              ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3.0),
+          );
+          canvas.drawCircle(
+            Offset(bx, by),
+            1.6,
+            Paint()..color = const Color(0xFFFEF9C3),
+          );
         }
       }
 
@@ -759,6 +1009,8 @@ class ThreeHouseScenePreview extends StatelessWidget {
   }
 }
 
+typedef ThreeHouse3DPainter = Isometric3DHousePainter;
+
 /// True Multi-Section 3D Architectural House & Roofline LED Painter.
 /// Extrudes every `ArchSection` (`triangle_gable`, `steep_gable`, `flat_eave`,
 /// `dormer_peak`, `hip_roof`, `shed_slope`) in 3D space with `cameraYaw`, `cameraPitch`,
@@ -950,6 +1202,9 @@ class Isometric3DHousePainter extends CustomPainter {
               .frontSections;
 
       volumesToDraw.sort((a, b) {
+        if (cosY >= 0 && a.story != b.story) {
+          return b.story.compareTo(a.story); // story 2 first, story 1 in front
+        }
         final za = 0.16 + a.depthOffset;
         final zb = 0.16 + b.depthOffset;
         final xa = ((a.xStart + a.xEnd) * 0.5) - 0.5;
@@ -992,7 +1247,7 @@ class Isometric3DHousePainter extends CustomPainter {
         final x0 = sec.xStart.clamp(0.0, 0.98) - 0.5;
         final x1 = sec.xEnd.clamp(0.02, 1.0) - 0.5;
         final xApex = x0 + (x1 - x0) * sec.peakOffset.clamp(0.15, 0.85);
-        final yBottom = sec.story == 2 ? 0.34 : 0.0;
+        final yBottom = sec.story == 2 ? 0.36 : 0.0;
         final yEave = sec.eaveHeight.clamp(0.22, 0.95);
         final yPeak = math.max(yEave, sec.peakHeight.clamp(0.22, 1.0));
         final zFront = (0.18 + sec.depthOffset).clamp(-0.25, 0.42);
@@ -1220,107 +1475,305 @@ class Isometric3DHousePainter extends CustomPainter {
                     : trimCol.withValues(alpha: 0.70)),
         );
 
-        // 4. Draw 3D Architectural Garage, Entry Door, and Windows on the front face
+        // 4. Draw 3D Architectural Details matching the 4 uploaded Craftsman photos:
+        //    - Upper (story == 2): 4 vertical windows + apex gable vent on House 2; 3 vertical windows on House 1 & 3
+        //    - Lower (story == 1): 2-car paneled garage doors with 4 top glass window panes + stone-veneer pillars + warm carriage sconces
+        //    - Lower (story == 1): White Craftsman porch columns on stone-veneer pedestals + recessed entry door
         final secWidth3D = x1 - x0;
         final secHeight3D = yEave - yBottom;
-        if (secWidth3D > 0.14 && secHeight3D > 0.12) {
-          if (sec.hasGarage && sec.story == 1) {
-            final gx0 = x0 + secWidth3D * 0.14;
-            final gx1 = x1 - secWidth3D * 0.14;
-            final gyTop = yBottom + secHeight3D * 0.72;
-            final gBL = project3D(gx0, yBottom, zFront + 0.005);
-            final gBR = project3D(gx1, yBottom, zFront + 0.005);
-            final gTR = project3D(gx1, gyTop, zFront + 0.005);
-            final gTL = project3D(gx0, gyTop, zFront + 0.005);
-            final gPath = Path()
-              ..moveTo(gBL.dx, gBL.dy)
-              ..lineTo(gTL.dx, gTL.dy)
-              ..lineTo(gTR.dx, gTR.dy)
-              ..lineTo(gBR.dx, gBR.dy)
+        if (secWidth3D > 0.12 && secHeight3D > 0.10) {
+          void draw3DQuad(
+            double qx0,
+            double qx1,
+            double qy0,
+            double qy1,
+            double qz,
+            Paint fill, [
+            Paint? stroke,
+          ]) {
+            final pBL = project3D(qx0, qy0, qz);
+            final pBR = project3D(qx1, qy0, qz);
+            final pTR = project3D(qx1, qy1, qz);
+            final pTL = project3D(qx0, qy1, qz);
+            final path = Path()
+              ..moveTo(pBL.dx, pBL.dy)
+              ..lineTo(pTL.dx, pTL.dy)
+              ..lineTo(pTR.dx, pTR.dy)
+              ..lineTo(pBR.dx, pBR.dy)
               ..close();
-            canvas.drawPath(
-              gPath,
-              Paint()..color = const Color(0xFF080E1C),
-            );
-            canvas.drawPath(
-              gPath,
-              Paint()
-                ..style = PaintingStyle.stroke
-                ..strokeWidth = 1.0
-                ..color = trimCol.withValues(alpha: 0.75),
-            );
-            // Horizontal garage panel lines
-            for (int r = 1; r <= 3; r++) {
-              final py = yBottom + (gyTop - yBottom) * (r / 4.0);
-              final pL = project3D(gx0 + 0.01, py, zFront + 0.006);
-              final pR = project3D(gx1 - 0.01, py, zFront + 0.006);
-              canvas.drawLine(
-                pL,
-                pR,
-                Paint()
-                  ..color = trimCol.withValues(alpha: 0.42)
-                  ..strokeWidth = 0.8,
+            canvas.drawPath(path, fill);
+            if (stroke != null) {
+              canvas.drawPath(path, stroke);
+            }
+          }
+
+          if (sec.story == 2) {
+            // Vertical gable vent right under apex on pitched 2nd-story gables
+            if (sec.isPitchedGable && (yPeak - yEave) > 0.12) {
+              final vHalfW = math.min(0.018, secWidth3D * 0.03);
+              final vy1 = yPeak - (yPeak - yEave) * 0.24;
+              final vy0 = vy1 - (yPeak - yEave) * 0.34;
+              draw3DQuad(
+                xApex - vHalfW,
+                xApex + vHalfW,
+                vy0,
+                vy1,
+                zFront + 0.005,
+                Paint()..color = trimCol.withValues(alpha: 0.85),
               );
             }
-          } else {
-            if (sec.hasDoor && sec.story == 1) {
-              final dx0 = x0 + secWidth3D * 0.18;
-              final dx1 = dx0 + math.min(secWidth3D * 0.20, 0.12);
-              final dyTop = yBottom + secHeight3D * 0.62;
-              final dBL = project3D(dx0, yBottom, zFront + 0.005);
-              final dBR = project3D(dx1, yBottom, zFront + 0.005);
-              final dTR = project3D(dx1, dyTop, zFront + 0.005);
-              final dTL = project3D(dx0, dyTop, zFront + 0.005);
-              final dPath = Path()
-                ..moveTo(dBL.dx, dBL.dy)
-                ..lineTo(dTL.dx, dTL.dy)
-                ..lineTo(dTR.dx, dTR.dy)
-                ..lineTo(dBR.dx, dBR.dy)
-                ..close();
-              canvas.drawPath(
-                dPath,
-                Paint()..color = const Color(0xFF1E293B),
+
+            if (sec.windowStyle != 'none') {
+              int winCount = 1;
+              if (sec.id == 'sec-main-gable' ||
+                  sec.label.contains('4 Windows') ||
+                  (sec.windowStyle == 'picture' && secWidth3D > 0.65)) {
+                winCount = 4;
+              } else if (sec.id == 'sec-upper-dormer' ||
+                  sec.id == 'sec-center-flat-fascia' ||
+                  sec.label.contains('3 Windows') ||
+                  sec.label.contains('3-Window')) {
+                winCount = 3;
+              }
+
+              final winFill = Paint()
+                ..color = const Color(0xFFFDE68A)
+                    .withValues(alpha: animation.running ? 0.26 : 0.12);
+              final winStroke = Paint()
+                ..style = PaintingStyle.stroke
+                ..strokeWidth = 0.95
+                ..color = trimCol.withValues(alpha: 0.85);
+              final mullionPaint = Paint()
+                ..color = trimCol.withValues(alpha: 0.55)
+                ..strokeWidth = 0.7;
+
+              final pad3D = secWidth3D * (winCount >= 3 ? 0.12 : 0.26);
+              final usableSpan = math.max(0.08, secWidth3D - pad3D * 2);
+              final gap3D = winCount > 1 ? usableSpan * 0.08 : 0.0;
+              final singleW = math.min(
+                0.11,
+                (usableSpan - gap3D * (winCount - 1)) / winCount,
               );
-              canvas.drawPath(
-                dPath,
+              final wy0 = yBottom + secHeight3D * 0.24;
+              final wy1 = yBottom + secHeight3D * 0.80;
+              final rowStart = x0 +
+                  (secWidth3D - (singleW * winCount + gap3D * (winCount - 1))) *
+                      0.5;
+
+              for (int wi = 0; wi < winCount; wi++) {
+                final wx0 = rowStart + wi * (singleW + gap3D);
+                final wx1 = wx0 + singleW;
+                draw3DQuad(
+                  wx0,
+                  wx1,
+                  wy0,
+                  wy1,
+                  zFront + 0.005,
+                  winFill,
+                  winStroke,
+                );
+                // Vertical & horizontal Craftsman window mullions
+                final mX = (wx0 + wx1) * 0.5;
+                final mY = wy0 + (wy1 - wy0) * 0.55;
+                canvas.drawLine(
+                  project3D(mX, wy0 + 0.01, zFront + 0.006),
+                  project3D(mX, wy1 - 0.01, zFront + 0.006),
+                  mullionPaint,
+                );
+                canvas.drawLine(
+                  project3D(wx0 + 0.008, mY, zFront + 0.006),
+                  project3D(wx1 - 0.008, mY, zFront + 0.006),
+                  mullionPaint,
+                );
+              }
+            }
+          } else {
+            // Story == 1: Garage bays (with 4 top window panes + stone-veneer pillars + carriage sconces)
+            // and/or Covered Entry Porch (with white Craftsman columns on stone pedestals)
+            final bothPorchAndGarage = sec.hasGarage && sec.hasDoor;
+            final porchRightX =
+                bothPorchAndGarage ? x0 + secWidth3D * 0.34 : x1;
+            final garageLeftX =
+                bothPorchAndGarage ? x0 + secWidth3D * 0.34 : x0;
+
+            if (sec.hasDoor) {
+              final pSpan = math.max(0.10, porchRightX - x0);
+              final dw = math.min(pSpan * 0.38, 0.11);
+              final dx0 = x0 + (pSpan - dw) * 0.42;
+              final dx1 = dx0 + dw;
+              final dyTop = yBottom + secHeight3D * 0.72;
+              draw3DQuad(
+                dx0,
+                dx1,
+                yBottom,
+                dyTop,
+                zFront + 0.005,
+                Paint()..color = const Color(0xFF1E293B),
                 Paint()
                   ..style = PaintingStyle.stroke
                   ..strokeWidth = 0.9
-                  ..color = const Color(0xFFFBBF24).withValues(alpha: 0.65),
+                  ..color = trimCol.withValues(alpha: 0.80),
               );
-            }
-            if (sec.windowStyle != 'none') {
-              final wx0 = sec.hasDoor
-                  ? x0 + secWidth3D * 0.48
-                  : x0 + secWidth3D * 0.28;
-              final wx1 = sec.hasDoor
-                  ? x1 - secWidth3D * 0.16
-                  : x1 - secWidth3D * 0.28;
-              final wy0 = yBottom + secHeight3D * 0.34;
-              final wy1 = yBottom + secHeight3D * 0.72;
-              if (wx1 > wx0 + 0.04) {
-                final wBL = project3D(wx0, wy0, zFront + 0.005);
-                final wBR = project3D(wx1, wy0, zFront + 0.005);
-                final wTR = project3D(wx1, wy1, zFront + 0.005);
-                final wTL = project3D(wx0, wy1, zFront + 0.005);
-                final wPath = Path()
-                  ..moveTo(wBL.dx, wBL.dy)
-                  ..lineTo(wTL.dx, wTL.dy)
-                  ..lineTo(wTR.dx, wTR.dy)
-                  ..lineTo(wBR.dx, wBR.dy)
-                  ..close();
-                canvas.drawPath(
-                  wPath,
-                  Paint()
-                    ..color = const Color(0xFFFDE68A)
-                        .withValues(alpha: animation.running ? 0.24 : 0.10),
+              // Warm door glass insert + glowing porch sconce
+              draw3DQuad(
+                dx0 + dw * 0.22,
+                dx1 - dw * 0.22,
+                yBottom + (dyTop - yBottom) * 0.55,
+                dyTop - (dyTop - yBottom) * 0.12,
+                zFront + 0.006,
+                Paint()
+                  ..color = const Color(0xFFFDE68A).withValues(alpha: 0.55),
+              );
+              final sconcePt = project3D(
+                dx0 - 0.025,
+                yBottom + secHeight3D * 0.55,
+                zFront + 0.008,
+              );
+              canvas.drawCircle(
+                sconcePt,
+                singleZoom ? 4.2 : 3.0,
+                Paint()
+                  ..color = const Color(0xFFFBBF24).withValues(alpha: 0.32)
+                  ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3.2),
+              );
+              canvas.drawCircle(
+                sconcePt,
+                singleZoom ? 1.8 : 1.4,
+                Paint()..color = const Color(0xFFFEF08A),
+              );
+
+              // White Craftsman porch columns on stone-veneer pedestals
+              final colXs = <double>[
+                x0 + 0.028,
+                if (!bothPorchAndGarage) porchRightX - 0.028,
+              ];
+              final pedTopY = yBottom + secHeight3D * 0.36;
+              for (final cx3D in colXs) {
+                // Upper tapered white column
+                draw3DQuad(
+                  cx3D - 0.014,
+                  cx3D + 0.014,
+                  pedTopY,
+                  yEave,
+                  zFront + 0.012,
+                  Paint()..color = const Color(0xFFE2E8F0),
                 );
-                canvas.drawPath(
-                  wPath,
+                // Lower stone-veneer pedestal
+                draw3DQuad(
+                  cx3D - 0.024,
+                  cx3D + 0.024,
+                  yBottom,
+                  pedTopY,
+                  zFront + 0.014,
+                  Paint()..color = const Color(0xFF475569),
                   Paint()
                     ..style = PaintingStyle.stroke
-                    ..strokeWidth = 0.9
-                    ..color = trimCol.withValues(alpha: 0.8),
+                    ..strokeWidth = 0.75
+                    ..color = trimCol.withValues(alpha: 0.75),
+                );
+              }
+            }
+
+            if (sec.hasGarage) {
+              final gSpan = math.max(0.14, x1 - garageLeftX);
+              final gw = gSpan * 0.76;
+              final gx0 = garageLeftX + (gSpan - gw) * 0.5;
+              final gx1 = gx0 + gw;
+              final gyTop = yBottom + secHeight3D * 0.76;
+
+              // Stone-veneer side pillars flanking the garage + warm carriage sconces
+              final pilW = math.max(0.026, (gSpan - gw) * 0.42);
+              final pilTopY = yBottom + (gyTop - yBottom) * 0.72;
+              for (final px0 in [gx0 - pilW - 0.004, gx1 + 0.004]) {
+                draw3DQuad(
+                  px0,
+                  px0 + pilW,
+                  yBottom,
+                  pilTopY,
+                  zFront + 0.008,
+                  Paint()..color = const Color(0xFF334155),
+                  Paint()
+                    ..style = PaintingStyle.stroke
+                    ..strokeWidth = 0.7
+                    ..color = trimCol.withValues(alpha: 0.65),
+                );
+                final sconcePt = project3D(
+                  px0 + pilW * 0.5,
+                  gyTop * 0.82,
+                  zFront + 0.012,
+                );
+                canvas.drawCircle(
+                  sconcePt,
+                  singleZoom ? 4.5 : 3.2,
+                  Paint()
+                    ..color = const Color(0xFFFBBF24).withValues(alpha: 0.34)
+                    ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3.5),
+                );
+                canvas.drawCircle(
+                  sconcePt,
+                  singleZoom ? 1.8 : 1.4,
+                  Paint()..color = const Color(0xFFFEF08A),
+                );
+              }
+
+              // 2-car paneled garage door
+              draw3DQuad(
+                gx0,
+                gx1,
+                yBottom,
+                gyTop,
+                zFront + 0.005,
+                Paint()..color = const Color(0xFF1E293B),
+                Paint()
+                  ..style = PaintingStyle.stroke
+                  ..strokeWidth = 1.0
+                  ..color = trimCol.withValues(alpha: 0.85),
+              );
+              // Horizontal panel lines + center bay seam
+              for (int r = 1; r <= 3; r++) {
+                final py = yBottom + (gyTop - yBottom) * (r / 4.0);
+                final pL = project3D(gx0 + 0.008, py, zFront + 0.006);
+                final pR = project3D(gx1 - 0.008, py, zFront + 0.006);
+                canvas.drawLine(
+                  pL,
+                  pR,
+                  Paint()
+                    ..color = trimCol.withValues(alpha: 0.45)
+                    ..strokeWidth = 0.8,
+                );
+              }
+              final midBayX = (gx0 + gx1) * 0.5;
+              canvas.drawLine(
+                project3D(midBayX, yBottom + 0.01, zFront + 0.006),
+                project3D(
+                  midBayX,
+                  yBottom + (gyTop - yBottom) * 0.75,
+                  zFront + 0.006,
+                ),
+                Paint()
+                  ..color = trimCol.withValues(alpha: 0.38)
+                  ..strokeWidth = 0.75,
+              );
+
+              // 4 top glass window panes across the top row of the 2-car garage door
+              final paneY0 = yBottom + (gyTop - yBottom) * 0.79;
+              final paneY1 = yBottom + (gyTop - yBottom) * 0.94;
+              final paneMargin = gw * 0.06;
+              final paneUsable = gw - paneMargin * 2;
+              final paneGap = paneUsable * 0.05;
+              final paneW = (paneUsable - paneGap * 3) / 4.0;
+              final paneFill = Paint()
+                ..color = const Color(0xFFBAE6FD)
+                    .withValues(alpha: animation.running ? 0.38 : 0.20);
+              for (int pi = 0; pi < 4; pi++) {
+                final px0 = gx0 + paneMargin + pi * (paneW + paneGap);
+                draw3DQuad(
+                  px0,
+                  px0 + paneW,
+                  paneY0,
+                  paneY1,
+                  zFront + 0.007,
+                  paneFill,
                 );
               }
             }
@@ -1344,6 +1797,35 @@ class Isometric3DHousePainter extends CustomPainter {
               ..color = isSelectedSec
                   ? const Color(0xFFFBBF24)
                   : trimCol,
+          );
+        }
+      }
+
+      // Driveway path bollard lights along the left foreground driveway of House 2 (My House)
+      if (isMe) {
+        for (int bi = 0; bi < 4; bi++) {
+          final bx = -0.44 + bi * 0.035;
+          final bz = 0.26 + bi * 0.045;
+          final bTop = project3D(bx, 0.035, bz);
+          final bBase = project3D(bx, 0.0, bz);
+          canvas.drawLine(
+            bBase,
+            bTop,
+            Paint()
+              ..color = const Color(0xFF94A3B8)
+              ..strokeWidth = singleZoom ? 2.0 : 1.4,
+          );
+          canvas.drawCircle(
+            bTop,
+            singleZoom ? 4.8 : 3.5,
+            Paint()
+              ..color = const Color(0xFFFEF08A).withValues(alpha: 0.32)
+              ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3.2),
+          );
+          canvas.drawCircle(
+            bTop,
+            singleZoom ? 1.9 : 1.4,
+            Paint()..color = const Color(0xFFFEF9C3),
           );
         }
       }

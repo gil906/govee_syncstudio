@@ -1082,14 +1082,15 @@ def test_representative_controller_color_animates_across_all_71_presets(tmp_path
 def test_house_architecture_presets_api_and_3d_roofline_geometry(tmp_path: Path) -> None:
     """
     Verify:
-    - Default architectures for House 1 (a_frame_gable triangle peak), House 2 (craftsman_multi_section),
-      and House 3 (two_story_estate).
+    - Default architectures for House 1 (craftsman_multi_section — Neighbor 1 Left House),
+      House 2 (a_frame_gable — My House Middle, Front-Only 2-story peak + garage eave + porch peak),
+      and House 3 (two_story_estate — Neighbor 2 Right House).
     - GET /api/architecture/presets returns all 5 templates.
     - PATCH /api/houses/house-1/architecture updates sections (triangle gable + flat eave + dormer),
       camera angles, default_view_mode, and controller section_spans / custom_nodes.
     - PATCH /api/controllers/{controller_id}/zones syncs wall_zones from section_spans.
     - build_virtual_strip_map and render_frame_at populate section_id, arch_x, arch_y, arch_z with
-      peak elevation at the middle of a triangle_gable.
+      peak elevation at the middle of a triangle_gable and horizontal alignment in front_street_sync.
     """
     store = ConfigStore(data_dir=str(tmp_path))
     cfg = store.get()
@@ -1100,15 +1101,23 @@ def test_house_architecture_presets_api_and_3d_roofline_geometry(tmp_path: Path)
     h3 = houses_by_id["house-3"]
 
     assert h1.architecture is not None
-    assert h1.architecture.preset_style == "a_frame_gable"
-    assert any(s.id == "sec-main-gable" and s.shape == "triangle_gable" for s in h1.architecture.sections)
+    assert h1.architecture.preset_style == "craftsman_multi_section"
+    h1_sec_ids = {s.id for s in h1.architecture.sections}
+    assert {
+        "sec-upper-dormer",
+        "sec-upper-right-eave",
+        "sec-entry-gable",
+        "sec-garage-square",
+        "sec-left-eave",
+        "sec-right-eave",
+        "sec-back-eave",
+    }.issubset(h1_sec_ids)
 
     assert h2.architecture is not None
-    assert h2.architecture.preset_style == "craftsman_multi_section"
+    assert h2.architecture.preset_style == "a_frame_gable"
     h2_sec_ids = {s.id for s in h2.architecture.sections}
-    assert {"sec-garage-square", "sec-entry-gable", "sec-upper-dormer", "sec-left-eave", "sec-right-eave", "sec-back-eave"}.issubset(
-        h2_sec_ids
-    )
+    assert h2_sec_ids == {"sec-main-gable", "sec-lower-garage-eave", "sec-lower-porch-gable"}
+    assert all(s.wall == "front" for s in h2.architecture.sections)
 
     assert h3.architecture is not None
     assert h3.architecture.preset_style == "two_story_estate"
@@ -1122,16 +1131,26 @@ def test_house_architecture_presets_api_and_3d_roofline_geometry(tmp_path: Path)
         "sec-back-wing",
     }.issubset(h3_sec_ids)
 
-    # Check build_virtual_strip_map populates section_id, arch_x, arch_y, arch_z with peak at middle of triangle_gable
+    # Check build_virtual_strip_map populates section_id, arch_x, arch_y, arch_z with peak at middle of sec-main-gable on House 2
     slots = build_virtual_strip_map(cfg)
-    h1_slots = [s for s in slots if s.house.id == "house-1"]
-    assert len(h1_slots) > 2
-    assert all(s.section_id == "sec-main-gable" for s in h1_slots)
-    mid_idx = len(h1_slots) // 2
-    assert h1_slots[mid_idx].arch_y > h1_slots[0].arch_y + 0.25
-    assert h1_slots[mid_idx].arch_y > h1_slots[-1].arch_y + 0.25
-    assert abs(h1_slots[mid_idx].arch_x - 0.50) < 0.08
-    assert h1_slots[0].arch_x < h1_slots[mid_idx].arch_x < h1_slots[-1].arch_x
+    h2_gable_slots = [s for s in slots if s.house.id == "house-2" and s.section_id == "sec-main-gable"]
+    assert len(h2_gable_slots) == 5
+    mid_idx = len(h2_gable_slots) // 2
+    assert h2_gable_slots[mid_idx].arch_y > h2_gable_slots[0].arch_y + 0.25
+    assert h2_gable_slots[mid_idx].arch_y > h2_gable_slots[-1].arch_y + 0.25
+    assert abs(h2_gable_slots[mid_idx].arch_x - 0.50) < 0.08
+    assert h2_gable_slots[0].arch_x < h2_gable_slots[mid_idx].arch_x < h2_gable_slots[-1].arch_x
+
+    # Check front_street_sync horizontally aligns Upper (story=2) and Lower (story=1) front sections by arch_x
+    cfg.animation.zone_mode = "front_street_sync"
+    sync_slots = build_virtual_strip_map(cfg)
+    for hid in ("house-1", "house-2", "house-3"):
+        front_slots = [s for s in sync_slots if s.house.id == hid and s.wall == "front"]
+        assert len(front_slots) > 0
+        for s in front_slots:
+            expected_local = max(0.02, min(0.98, (s.arch_x - 0.02) / 0.96))
+            assert abs(s.house_local_pos - expected_local) < 1e-6
+    cfg.animation.zone_mode = "all_segments"
 
     from backend.app.main import app
 
