@@ -2510,7 +2510,7 @@ class MasterAnimationEngine:
         bg_scaled = scale_rgb(bg_raw, anim.background_dim)
 
         intensity_scale = max(0.01, min(1.0, anim.intensity / 100.0))
-        sub_offsets = (-0.36, -0.18, 0.0, 0.18, 0.36) if anim.supersample else (0.0,)
+        sub_offsets = (0.0,)
 
         rendered_points: List[SegmentRenderPoint] = []
         controller_segments: Dict[Tuple[str, str], List[Tuple[int, RGBTuple]]] = {}

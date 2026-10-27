@@ -204,33 +204,38 @@ def compute_representative_controller_color(segment_colors: List[RGBTuple]) -> R
     mid_rgb = segment_colors[mid]
     mid_energy = energies[mid]
 
-    # Localized bright pulse over a dark background
-    if min_brightness < 45 and max_brightness > min_brightness + 50:
-        if mid_energy >= max(45, int(max_brightness * 0.55)):
-            return mid_rgb
-        best_idx, best_rgb = max(
-            enumerate(segment_colors),
-            key=lambda item: (max(item[1]), item[1][0] + item[1][1] + item[1][2], -abs(item[0] - mid)),
-        )
-        max_dist = max(1, mid, n - 1 - mid)
-        dist = abs(best_idx - mid)
-        scale = 1.0 - 0.25 * (dist / max_dist)
-        return (
-            max(0, min(255, round(best_rgb[0] * scale))),
-            max(0, min(255, round(best_rgb[1] * scale))),
-            max(0, min(255, round(best_rgb[2] * scale))),
-        )
-
-    # 2-color block wipe transition across the controller (e.g. color_wipe)
+    # 2-color uniform block wipe transition across the controller (e.g. color_wipe where both colors are lit)
     first_c, last_c = segment_colors[0], segment_colors[-1]
-    if first_c != last_c and (segment_colors[1] == first_c or segment_colors[-2] == last_c):
+    unique_colors = set(segment_colors)
+    if (
+        min_brightness > 20
+        and len(unique_colors) == 2
+        and first_c != last_c
+        and (segment_colors[1] == first_c or segment_colors[-2] == last_c)
+    ):
         avg_r = round(sum(c[0] for c in segment_colors) / n)
         avg_g = round(sum(c[1] for c in segment_colors) / n)
         avg_b = round(sum(c[2] for c in segment_colors) / n)
         return (avg_r, avg_g, avg_b)
 
-    # Continuous multi-color scene -> return pure center focal segment color
-    return mid_rgb
+    # If the center focal segment is lit, return its pure color directly so the controller
+    # cycles through every color of the wave/chase/marquee as it passes across the house.
+    if mid_energy >= 22:
+        return mid_rgb
+
+    # Sparse pulse over a dark background where the center segment is currently dark
+    best_idx, best_rgb = max(
+        enumerate(segment_colors),
+        key=lambda item: (max(item[1]), item[1][0] + item[1][1] + item[1][2], -abs(item[0] - mid)),
+    )
+    max_dist = max(1, mid, n - 1 - mid)
+    dist = abs(best_idx - mid)
+    scale = 1.0 - 0.25 * (dist / max_dist)
+    return (
+        max(0, min(255, round(best_rgb[0] * scale))),
+        max(0, min(255, round(best_rgb[1] * scale))),
+        max(0, min(255, round(best_rgb[2] * scale))),
+    )
 
 
 def group_segments_by_color(
@@ -669,59 +674,90 @@ class GoveeProtocolDriver:
         )
         self.packet_logs.appendleft(entry)
 
-    # Built-in Govee OpenAPI v2 Dynamic Scene catalog (from POST /router/api/v1/device/scenes on H705E / H805D)
+    # Explicit 1-to-1 mapping of all 71 Studio Presets to 71 UNIQUE Govee Hardware Dynamic Scenes
+    # (verified from POST /router/api/v1/device/scenes across both H705E and H805D)
+    PRESET_TO_GOVEE_SCENE: Dict[str, Dict[str, Any]] = {
+        # --- 28 Halloween Presets (each mapped to a distinct Govee hardware scene) ---
+        "halloween_haunted_chase": {"name": "Halloween", "id": 10764, "paramId": 17969},
+        "halloween_witch_cauldron": {"name": "Halloween B", "id": 10765, "paramId": 17970},
+        "halloween_blood_meteor": {"name": "Halloween D", "id": 10767, "paramId": 17972},
+        "halloween_pumpkin_marquee": {"name": "Halloween C", "id": 10766, "paramId": 17971},
+        "halloween_poltergeist_portal": {"name": "Thunderstorm", "id": 14158, "paramId": 22806},
+        "halloween_zombie_outbreak": {"name": "Halloween V2", "id": 14491, "paramId": 23302},
+        "halloween_frankenstein_lab": {"name": "Flash", "id": 23504, "paramId": 34012},
+        "halloween_headless_horseman": {"name": "Meteor", "id": 14161, "paramId": 22809},
+        "halloween_beetlejuice_sandworm": {"name": "Karst Cave", "id": 10747, "paramId": 17952},
+        "halloween_hellfire_brimstone": {"name": "Fire", "id": 10753, "paramId": 17958},
+        "halloween_phantom_ghost_train": {"name": "Mysterious", "id": 10813, "paramId": 18018},
+        "halloween_shadow_possession": {"name": "Nebula", "id": 10740, "paramId": 17945},
+        "halloween_black_widow_lair": {"name": "Night", "id": 10795, "paramId": 18000},
+        "halloween_haunted_heartbeat": {"name": "Profound", "id": 10811, "paramId": 18016},
+        "halloween_candy_corn_parade": {"name": "Fall", "id": 10757, "paramId": 17962},
+        "halloween_pharaoh_curse": {"name": "Sunset Glow", "id": 10739, "paramId": 17944},
+        "halloween_rainbow1_spooky_prism": {"name": "Rainbow", "id": 10744, "paramId": 17949},
+        "halloween_rainbow2_monster_blocks": {"name": "Stacking", "id": 10806, "paramId": 18011},
+        "halloween_rainbow1_hocus_pocus": {"name": "Dreamlike", "id": 10815, "paramId": 18020},
+        "halloween_rainbow2_candy_corn_blocks": {"name": "Cornfield", "id": 10749, "paramId": 17954},
+        "halloween_rainbow1_ectoplasm_wave": {"name": "Forest", "id": 10745, "paramId": 17950},
+        "halloween_rainbow2_dracula_castle": {"name": "Sunset", "id": 10738, "paramId": 17943},
+        "halloween_rainbow1_pumpkin_spice": {"name": "Rustling leaves", "id": 10750, "paramId": 17955},
+        "halloween_rainbow2_goblin_parade": {"name": "Spin", "id": 10799, "paramId": 18004},
+        "halloween_rainbow1_witches_brew": {"name": "Twilight", "id": 10794, "paramId": 17999},
+        "halloween_rainbow2_skeleton_rave": {"name": "Dancing", "id": 10800, "paramId": 18005},
+        "halloween_rainbow1_full_spectrum": {"name": "Gradient", "id": 10807, "paramId": 18012},
+        "halloween_rainbow2_warlock_crystal": {"name": "Milky Way", "id": 14159, "paramId": 22807},
+        # --- 28 Christmas Presets (each mapped to a distinct Govee hardware scene) ---
+        "xmas_sleigh_ride": {"name": "Sled", "id": 10763, "paramId": 17968},
+        "xmas_candy_cane": {"name": "Candy Cane", "id": 14165, "paramId": 22813},
+        "xmas_frozen_aurora": {"name": "Winter Wonderland", "id": 10787, "paramId": 17992},
+        "xmas_nutcracker_marquee": {"name": "Christmas", "id": 10760, "paramId": 17965},
+        "xmas_rudolph_dash": {"name": "Delivering Gifts", "id": 14492, "paramId": 23303},
+        "xmas_north_pole_beacon": {"name": "Christmas Tree", "id": 10761, "paramId": 17966},
+        "xmas_grinch_heist": {"name": "Leprechaun", "id": 10788, "paramId": 17993},
+        "xmas_polar_express": {"name": "Winter", "id": 10758, "paramId": 17963},
+        "xmas_gingerbread_village": {"name": "Christmas Gift", "id": 10762, "paramId": 17967},
+        "xmas_arctic_blizzard": {"name": "Downpour", "id": 10759, "paramId": 17964},
+        "xmas_yule_log_hearth": {"name": "Warm", "id": 10816, "paramId": 18021},
+        "xmas_elf_workshop_ribbon": {"name": "Children's Day", "id": 14169, "paramId": 22817},
+        "xmas_star_of_bethlehem": {"name": "Christmas Eve", "id": 14166, "paramId": 22814},
+        "xmas_sugar_plum_fairy": {"name": "Dreamland", "id": 10818, "paramId": 18023},
+        "xmas_mistletoe_harmony": {"name": "Christmas Wreath", "id": 14167, "paramId": 22815},
+        "xmas_rainbow1_classic_C9": {"name": "Christmas Bell", "id": 14164, "paramId": 22812},
+        "xmas_rainbow2_c9_blocks": {"name": "Colorful", "id": 10803, "paramId": 18008},
+        "xmas_rainbow1_peppermint_silk": {"name": "Candy", "id": 10798, "paramId": 18003},
+        "xmas_rainbow2_candy_shoppe": {"name": "Amusement", "id": 14172, "paramId": 22820},
+        "xmas_rainbow1_arctic_aurora": {"name": "Aurora", "id": 10746, "paramId": 17951},
+        "xmas_rainbow2_glacier_blocks": {"name": "Lake", "id": 14162, "paramId": 22810},
+        "xmas_rainbow1_royal_nativity": {"name": "Star", "id": 10742, "paramId": 17947},
+        "xmas_rainbow2_toy_soldier": {"name": "Swing", "id": 10802, "paramId": 18007},
+        "xmas_rainbow1_pastel_macaron": {"name": "Cherry blossoms", "id": 10754, "paramId": 17959},
+        "xmas_rainbow2_jingle_bell_rock": {"name": "Music Show", "id": 14171, "paramId": 22819},
+        "xmas_rainbow1_full_spectrum": {"name": "Flower Parade", "id": 14174, "paramId": 22822},
+        "xmas_rainbow2_wreath_and_holly": {"name": "Saint Patrick's Day", "id": 10783, "paramId": 17988},
+        "xmas_frost_vs_flame": {"name": "ZDP Duo", "id": 23508, "paramId": 34016},
+        # --- 4 Diwali Presets ---
+        "diwali_golden_diya": {"name": "Candlelight", "id": 10782, "paramId": 17987},
+        "diwali_rangoli_wave": {"name": "Flower Field", "id": 10751, "paramId": 17956},
+        "diwali_firecracker_sparkle": {"name": "Hooray", "id": 14175, "paramId": 22823},
+        "diwali_aarti_flame": {"name": "Sunrise", "id": 10737, "paramId": 17942},
+        # --- 3 Center-Out Presets ---
+        "center_supernova": {"name": "Universe", "id": 10743, "paramId": 17948},
+        "center_golden_ripple": {"name": "Morning", "id": 10792, "paramId": 17997},
+        "center_serpent_clash": {"name": "ZDP Trio", "id": 23509, "paramId": 34017},
+        # --- 4 Cyber & Party Presets ---
+        "cyber_chase": {"name": "Flow", "id": 10804, "paramId": 18009},
+        "dual_comet_pingpong": {"name": "Active", "id": 10819, "paramId": 18024},
+        "seamless_rainbow": {"name": "Enthusiastic", "id": 10812, "paramId": 18017},
+        "harmonic_pulse": {"name": "Fluctuate", "id": 10805, "paramId": 18010},
+        # --- 4 Celebrations Presets ---
+        "seahawks_gameday": {"name": "Game Day", "id": 10785, "paramId": 17990},
+        "july4_fireworks": {"name": "Fireworks", "id": 10781, "paramId": 17986},
+        "holiday_marquee": {"name": "Carnival", "id": 10776, "paramId": 17981},
+        "hearth_fire": {"name": "Firefly", "id": 10752, "paramId": 17957},
+    }
+
     DEFAULT_GOVEE_SCENES: Dict[str, Dict[str, Any]] = {
-        "rainbow": {"name": "Rainbow", "id": 10744, "paramId": 17949},
-        "flow": {"name": "Flow", "id": 10804, "paramId": 18009},
-        "gradient": {"name": "Gradient", "id": 10807, "paramId": 18012},
-        "colorful": {"name": "Colorful", "id": 10803, "paramId": 18008},
-        "stacking": {"name": "Stacking", "id": 10806, "paramId": 18011},
-        "spin": {"name": "Spin", "id": 10799, "paramId": 18004},
-        "fluctuate": {"name": "Fluctuate", "id": 10805, "paramId": 18010},
-        "meteor": {"name": "Meteor", "id": 14161, "paramId": 22809},
-        "fire": {"name": "Fire", "id": 10753, "paramId": 17958},
-        "firefly": {"name": "Firefly", "id": 10752, "paramId": 17957},
-        "aurora": {"name": "Aurora", "id": 10746, "paramId": 17951},
-        "wave": {"name": "Wave", "id": 10748, "paramId": 17953},
-        "thunderstorm": {"name": "Thunderstorm", "id": 14158, "paramId": 22806},
-        "candlelight": {"name": "Candlelight", "id": 10782, "paramId": 17987},
-        "fireworks": {"name": "Fireworks", "id": 10781, "paramId": 17986},
-        "dance party": {"name": "Dance Party", "id": 10778, "paramId": 17983},
-        "party": {"name": "Party", "id": 10779, "paramId": 17984},
-        "carnival": {"name": "Carnival", "id": 10776, "paramId": 17981},
-        "confetti": {"name": "Confetti", "id": 14173, "paramId": 22821},
-        "new years": {"name": "New Years", "id": 10774, "paramId": 17979},
-        "game day": {"name": "Game Day", "id": 10785, "paramId": 17990},
-        "birthday": {"name": "Birthday", "id": 10773, "paramId": 17978},
-        "hooray": {"name": "Hooray", "id": 14175, "paramId": 22823},
-        "music show": {"name": "Music Show", "id": 14171, "paramId": 22819},
-        "flash": {"name": "Flash", "id": 23504, "paramId": 34012},
-        "halloween": {"name": "Halloween", "id": 10764, "paramId": 17969},
-        "halloween b": {"name": "Halloween B", "id": 10765, "paramId": 17970},
-        "halloween c": {"name": "Halloween C", "id": 10766, "paramId": 17971},
-        "halloween d": {"name": "Halloween D", "id": 10767, "paramId": 17972},
-        "halloween v2": {"name": "Halloween", "id": 14491, "paramId": 23302},
-        "mysterious": {"name": "Mysterious", "id": 10813, "paramId": 18018},
-        "karst cave": {"name": "Karst Cave", "id": 10747, "paramId": 17952},
-        "nebula": {"name": "Nebula", "id": 10740, "paramId": 17945},
-        "universe": {"name": "Universe", "id": 10743, "paramId": 17948},
-        "moonlight": {"name": "Moonlight", "id": 10741, "paramId": 17946},
-        "star": {"name": "Star", "id": 10742, "paramId": 17947},
-        "christmas": {"name": "Christmas", "id": 10760, "paramId": 17965},
-        "christmas tree": {"name": "Christmas Tree", "id": 10761, "paramId": 17966},
-        "christmas gift": {"name": "Christmas Gift", "id": 10762, "paramId": 17967},
-        "christmas bell": {"name": "Christmas Bell", "id": 14164, "paramId": 22812},
-        "candy cane": {"name": "Candy Cane", "id": 14165, "paramId": 22813},
-        "christmas eve": {"name": "Christmas Eve", "id": 14166, "paramId": 22814},
-        "christmas wreath": {"name": "Christmas Wreath", "id": 14167, "paramId": 22815},
-        "sled": {"name": "Sled", "id": 10763, "paramId": 17968},
-        "winter wonderland": {"name": "Winter Wonderland", "id": 10787, "paramId": 17992},
-        "delivering gifts": {"name": "Delivering Gifts", "id": 14492, "paramId": 23303},
-        "winter": {"name": "Winter", "id": 10758, "paramId": 17963},
-        "candy": {"name": "Candy", "id": 10798, "paramId": 18003},
-        "dreamlike": {"name": "Dreamlike", "id": 10815, "paramId": 18020},
-        "enthusiastic": {"name": "Enthusiastic", "id": 10812, "paramId": 18017},
-        "active": {"name": "Active", "id": 10819, "paramId": 18024},
+        v["name"].lower(): v for v in PRESET_TO_GOVEE_SCENE.values()
     }
 
     def resolve_govee_light_scene(
@@ -732,115 +768,31 @@ class GoveeProtocolDriver:
         mac: str = "",
     ) -> Dict[str, Any]:
         """
-        Map any Studio preset ID or effect to an official Govee hardware `lightScene`
+        Map any Studio preset ID or effect to its unique official Govee hardware `lightScene`
         (`devices.capabilities.dynamic_scene`, `instance: "lightScene"`, `value: {"id", "paramId"}`).
         """
-        pid = (preset_id or "").lower()
+        pid = (preset_id or "").strip().lower()
+        if pid in self.PRESET_TO_GOVEE_SCENE:
+            return dict(self.PRESET_TO_GOVEE_SCENE[pid])
+
         eff = (effect or "").lower()
-        cat = (category or "").lower()
-        cached = self.device_scenes_cache.get((mac or "").upper(), {})
-
-        def _pick(key: str) -> Dict[str, Any]:
-            k = key.lower()
-            if k in cached:
-                return cached[k]
-            return self.DEFAULT_GOVEE_SCENES.get(k, self.DEFAULT_GOVEE_SCENES["rainbow"])
-
-        if "rainbow2" in pid or eff == "govee_rainbow2":
-            return _pick("flow")
-        if "rainbow" in pid or "prism" in pid or eff in ("govee_rainbow1", "rainbow_wave"):
-            return _pick("rainbow")
-
-        if "halloween" in pid or "halloween" in cat or any(
-            w in pid
-            for w in (
-                "witch", "ghost", "vampire", "zombie", "pumpkin", "haunt", "spooky", "reaper",
-                "crypt", "cauldron", "werewolf", "banshee", "poltergeist", "ectoplasm", "skeleton",
-                "spider", "frankenstein", "toxic", "hellfire", "dracula", "voodoo", "scarecrow",
-                "gargoyle", "mummy", "warlock", "coven",
-            )
-        ):
-            if any(w in pid for w in ("thunder", "storm", "lightning", "poltergeist")):
-                return _pick("thunderstorm")
-            if any(w in pid for w in ("hellfire", "inferno", "ember", "brimstone", "pyre")):
-                return _pick("fire")
-            if any(w in pid for w in ("witch", "cauldron", "coven", "warlock", "voodoo", "hocus")):
-                return _pick("halloween b")
-            if any(w in pid for w in ("ghost", "phantom", "banshee", "ectoplasm", "fog", "specter", "wraith")):
-                return _pick("halloween c")
-            if any(w in pid for w in ("vampire", "blood", "dracula", "reaper", "crimson", "fang", "chainsaw")):
-                return _pick("halloween d")
-            if any(w in pid for w in ("zombie", "toxic", "slime", "frankenstein", "ooze", "biohazard", "acid")):
-                return _pick("halloween v2")
-            if any(w in pid for w in ("spider", "cat", "skeleton", "mummy", "gargoyle", "crypt")):
-                return _pick("mysterious")
-            return _pick("halloween")
-
-        if "christmas" in pid or "xmas" in pid or "christmas" in cat or any(
-            w in pid
-            for w in (
-                "santa", "reindeer", "rudolph", "candy_cane", "peppermint", "gingerbread",
-                "nutcracker", "mistletoe", "holly", "wreath", "icicle", "blizzard", "frost",
-                "snow", "bethlehem", "nativity", "yule", "elf", "elves", "kringle", "grinch",
-                "polar", "stocking", "jingle",
-            )
-        ):
-            if any(w in pid for w in ("candy", "peppermint", "gingerbread", "sugar")):
-                return _pick("candy cane")
-            if any(w in pid for w in ("tree", "pine", "evergreen", "spruce", "forest")):
-                return _pick("christmas tree")
-            if any(w in pid for w in ("gift", "present", "workshop", "toy", "elf", "elves")):
-                return _pick("christmas gift")
-            if any(w in pid for w in ("deliver", "stocking", "chimney", "kringle")):
-                return _pick("delivering gifts")
-            if any(w in pid for w in ("bell", "jingle", "carol", "choir", "gold", "angel")):
-                return _pick("christmas bell")
-            if any(w in pid for w in ("eve", "silent", "bethlehem", "midnight", "nativity", "star")):
-                return _pick("christmas eve")
-            if any(w in pid for w in ("wreath", "mistletoe", "holly", "hearth", "garland")):
-                return _pick("christmas wreath")
-            if any(w in pid for w in ("santa", "sleigh", "sled", "reindeer", "rudolph", "dash")):
-                return _pick("sled")
-            if any(w in pid for w in ("icicle", "blizzard", "frost", "snow", "frozen", "polar", "winter", "glacier")):
-                return _pick("winter wonderland")
-            if "aurora" in pid:
-                return _pick("aurora")
-            return _pick("christmas")
-
-        if "diwali" in pid or "diwali" in cat:
-            if "diya" in pid or "candle" in pid or "lamp" in pid:
-                return _pick("candlelight")
-            if "rangoli" in pid:
-                return _pick("colorful")
-            if "lantern" in pid or "spark" in pid or "patakha" in pid:
-                return _pick("fireworks")
-            return _pick("firefly")
-
-        if "firework" in pid or "july" in pid:
-            return _pick("fireworks")
-        if "new_year" in pid or "countdown" in pid:
-            return _pick("new years")
-        if "gameday" in pid or "touchdown" in pid or "sport" in pid:
-            return _pick("game day")
-        if "birthday" in pid or "confetti" in pid:
-            return _pick("confetti")
-        if "party" in pid or "strobe" in pid or "disco" in pid or "rave" in pid:
-            return _pick("dance party")
-        if "aurora" in pid:
-            return _pick("aurora")
-        if "fire" in pid or "flame" in pid or "ember" in pid or eff == "fire_sparkle":
-            return _pick("fire")
-        if "meteor" in pid or "comet" in pid or "shockwave" in pid or eff == "comet":
-            return _pick("meteor")
-        if "supernova" in pid or "galaxy" in pid or "cosmic" in pid:
-            return _pick("universe")
-        if "stack" in pid or eff == "stacking_blocks":
-            return _pick("stacking")
-        if "wipe" in pid or eff == "color_wipe":
-            return _pick("gradient")
-        if "breath" in pid or "pulse" in pid or eff == "breathing":
-            return _pick("fluctuate")
-        return _pick("flow")
+        if eff == "govee_rainbow1" or eff == "rainbow_wave":
+            return {"name": "Rainbow", "id": 10744, "paramId": 17949}
+        if eff == "govee_rainbow2":
+            return {"name": "Flow", "id": 10804, "paramId": 18009}
+        if eff == "halloween_spooky":
+            return {"name": "Halloween", "id": 10764, "paramId": 17969}
+        if eff == "christmas_magic":
+            return {"name": "Christmas", "id": 10760, "paramId": 17965}
+        if eff == "diwali_festival":
+            return {"name": "Candlelight", "id": 10782, "paramId": 17987}
+        if eff == "lightning_storm":
+            return {"name": "Thunderstorm", "id": 14158, "paramId": 22806}
+        if eff == "comet_meteor":
+            return {"name": "Meteor", "id": 14161, "paramId": 22809}
+        if eff == "fire_sparkle":
+            return {"name": "Fire", "id": 10753, "paramId": 17958}
+        return {"name": "Rainbow", "id": 10744, "paramId": 17949}
 
     async def fetch_device_scenes(self, api_key: str, sku: str, mac: str) -> Dict[str, Dict[str, Any]]:
         """
@@ -874,11 +826,13 @@ class GoveeProtocolDriver:
                             nm = " ".join(str(opt.get("name", "")).split()).strip()
                             val = opt.get("value", {})
                             if nm and isinstance(val, dict) and "id" in val and "paramId" in val:
-                                scenes_map[nm.lower()] = {
-                                    "name": nm,
-                                    "id": val["id"],
-                                    "paramId": val["paramId"],
-                                }
+                                key_l = nm.lower()
+                                if key_l not in scenes_map:
+                                    scenes_map[key_l] = {
+                                        "name": nm,
+                                        "id": val["id"],
+                                        "paramId": val["paramId"],
+                                    }
                 if scenes_map:
                     self.device_scenes_cache[clean_mac] = scenes_map
         except Exception as exc:
@@ -900,18 +854,32 @@ class GoveeProtocolDriver:
         verbose_logging: bool = True,
     ) -> Dict[str, Any]:
         """
-        Send official Govee OpenAPI v2 `powerSwitch: 1` + `devices.capabilities.dynamic_scene`
+        Send official Govee OpenAPI v2 `devices.capabilities.dynamic_scene`
         (`instance: "lightScene"`, `value: {"id": ..., "paramId": ...}`) to a controller.
+        Pre-registers `_active_cloud_scene[ctrl.id]` before awaiting HTTP so the 25 FPS loop
+        never overwrites the hardware scene with a static `colorwc`/`colorRgb` packet.
         """
         clean_key = (effective_api_key or "").strip()
         if not clean_key or not ctrl.mac or ctrl.mac.upper().startswith("AA:BB:CC:DD:EE:"):
             return {"ok": False, "reason": "missing_api_key_or_mac"}
 
         t0 = time.perf_counter()
-        if ctrl.mac.upper() not in self.device_scenes_cache:
-            await self.fetch_device_scenes(clean_key, ctrl.sku, ctrl.mac)
-
         scene_info = self.resolve_govee_light_scene(preset_id, effect=effect, category=category, mac=ctrl.mac)
+        now_mono = time.monotonic()
+
+        # Pre-register active cloud scene IMMEDIATELY before any await so 25 FPS loop never sends colorwc
+        self._active_cloud_scene[ctrl.id] = {
+            "preset_id": preset_id,
+            "effect": effect,
+            "category": category,
+            "scene_name": scene_info["name"],
+            "id": scene_info["id"],
+            "paramId": scene_info["paramId"],
+            "applied": True,
+            "last_attempt": now_mono,
+        }
+        self._cloud_last_call[ctrl.id] = now_mono
+
         headers = {"Govee-API-Key": clean_key, "Content-Type": "application/json"}
         target_label = f"cloud:{ctrl.mac[-8:]}" if not ctrl.ip else ctrl.ip
 
@@ -923,26 +891,6 @@ class GoveeProtocolDriver:
 
         dev_meta = self.discovered_devices.get(ctrl.mac.upper())
         try:
-            if ctrl.ip:
-                self._send_udp_json(ctrl.ip, self.control_port, {"msg": {"cmd": "turn", "data": {"value": 1}}})
-            await client.post(
-                f"{self.CLOUD_BASE_URL}/device/control",
-                headers=headers,
-                json={
-                    "requestId": str(uuid.uuid4()),
-                    "payload": {
-                        "sku": ctrl.sku or "H705E",
-                        "device": ctrl.mac,
-                        "capability": {
-                            "type": "devices.capabilities.on_off",
-                            "instance": "powerSwitch",
-                            "value": 1,
-                        },
-                    },
-                },
-            )
-            self.stats["cloud_requests_sent"] += 1
-
             scene_resp = await client.post(
                 f"{self.CLOUD_BASE_URL}/device/control",
                 headers=headers,
@@ -955,8 +903,8 @@ class GoveeProtocolDriver:
                             "type": "devices.capabilities.dynamic_scene",
                             "instance": "lightScene",
                             "value": {
-                                "id": scene_info["id"],
                                 "paramId": scene_info["paramId"],
+                                "id": scene_info["id"],
                             },
                         },
                     },
@@ -980,18 +928,10 @@ class GoveeProtocolDriver:
             else:
                 err_msg = f"HTTP {scene_resp.status_code}"
 
-            now_mono = time.monotonic()
-            self._cloud_last_call[ctrl.id] = now_mono
-            self._active_cloud_scene[ctrl.id] = {
-                "preset_id": preset_id,
-                "effect": effect,
-                "category": category,
-                "scene_name": scene_info["name"],
-                "id": scene_info["id"],
-                "paramId": scene_info["paramId"],
-                "applied": ok,
-                "last_attempt": now_mono,
-            }
+            now_done = time.monotonic()
+            self._cloud_last_call[ctrl.id] = now_done
+            self._active_cloud_scene[ctrl.id]["applied"] = ok
+            self._active_cloud_scene[ctrl.id]["last_attempt"] = now_done
 
             if ok:
                 self._cloud_powered_on.add(ctrl.id)
@@ -1016,7 +956,7 @@ class GoveeProtocolDriver:
                 self.stats["send_errors"] += 1
                 self._cloud_last_error[ctrl.id] = err_msg or "Failed to apply scene"
                 if is_offline:
-                    self._cloud_offline_until[ctrl.id] = now_mono + 15.0
+                    self._cloud_offline_until[ctrl.id] = now_done + 15.0
                     self._cloud_powered_on.discard(ctrl.id)
                     if dev_meta is not None:
                         dev_meta.online = False
@@ -1041,6 +981,8 @@ class GoveeProtocolDriver:
         except Exception as exc:
             self.stats["send_errors"] += 1
             self._cloud_last_error[ctrl.id] = str(exc)
+            if ctrl.id in self._active_cloud_scene:
+                self._active_cloud_scene[ctrl.id]["applied"] = False
             return {"ok": False, "offline": False, "error": str(exc), "scene": scene_info}
         finally:
             if own_client:
