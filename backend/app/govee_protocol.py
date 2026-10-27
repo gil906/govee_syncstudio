@@ -242,11 +242,16 @@ def group_segments_by_color(
     segment_colors: List[RGBTuple], quantize_step: int = 8, max_groups: int = 4
 ) -> List[Tuple[RGBTuple, List[int]]]:
     """
-    Group segment indices that share identical (or quantized) RGB values so we can minimize
-    `ptReal` or Cloud `segmentedColorRgb` packets per controller frame.
+    Partition all segment indices `0..N-1` into at most `max_groups` vivid color groups so
+    100% of segments on the controller are covered by `<= max_groups` `segmentedColorRgb` or
+    `ptReal` commands (never leaving orphaned segments behind when smooth gradients produce
+    >max_groups distinct RGB values).
     """
+    if not segment_colors:
+        return []
+
     buckets: Dict[RGBTuple, List[int]] = {}
-    actual_sums: Dict[RGBTuple, List[int]] = {}
+    peak_rgb: Dict[RGBTuple, RGBTuple] = {}
 
     for idx, (r, g, b) in enumerate(segment_colors):
         key = (
@@ -255,23 +260,56 @@ def group_segments_by_color(
             (b // quantize_step) * quantize_step,
         )
         buckets.setdefault(key, []).append(idx)
-        if key not in actual_sums:
-            actual_sums[key] = [r, g, b, 1]
-        else:
-            actual_sums[key][0] += r
-            actual_sums[key][1] += g
-            actual_sums[key][2] += b
-            actual_sums[key][3] += 1
+        prev_peak = peak_rgb.get(key)
+        if prev_peak is None or (max(r, g, b), r + g + b) > (max(prev_peak), sum(prev_peak)):
+            peak_rgb[key] = (r, g, b)
 
-    grouped: List[Tuple[RGBTuple, List[int]]] = []
-    for key, indices in buckets.items():
-        sr, sg, sb, cnt = actual_sums[key]
-        avg_rgb = (round(sr / cnt), round(sg / cnt), round(sb / cnt))
-        grouped.append((avg_rgb, indices))
-
-    # Prioritize brightest / largest segment groups
+    grouped: List[Tuple[RGBTuple, List[int]]] = [
+        (peak_rgb[key], indices) for key, indices in buckets.items()
+    ]
     grouped.sort(key=lambda item: (max(item[0]), len(item[1])), reverse=True)
-    return grouped[:max_groups]
+
+    if len(grouped) <= max_groups:
+        return grouped
+
+    # Select `max_groups` maximally color-distinct seed colors so all palette colors are preserved
+    seeds: List[RGBTuple] = [grouped[0][0]]
+    remaining_candidates = [g[0] for g in grouped[1:]]
+    while len(seeds) < max_groups and remaining_candidates:
+        best_cand = max(
+            remaining_candidates,
+            key=lambda c: min(
+                (c[0] - s[0]) ** 2 + (c[1] - s[1]) ** 2 + (c[2] - s[2]) ** 2
+                for s in seeds
+            ),
+        )
+        seeds.append(best_cand)
+        remaining_candidates.remove(best_cand)
+
+    # Assign EVERY segment 0..N-1 to its nearest seed color so 100% of the strip updates
+    clusters: List[List[int]] = [[] for _ in seeds]
+    cluster_peaks: List[RGBTuple] = list(seeds)
+    for idx, (r, g, b) in enumerate(segment_colors):
+        best_si = min(
+            range(len(seeds)),
+            key=lambda si: (
+                (r - seeds[si][0]) ** 2
+                + (g - seeds[si][1]) ** 2
+                + (b - seeds[si][2]) ** 2
+            ),
+        )
+        clusters[best_si].append(idx)
+        cp = cluster_peaks[best_si]
+        if (max(r, g, b), r + g + b) > (max(cp), sum(cp)):
+            cluster_peaks[best_si] = (r, g, b)
+
+    merged_groups: List[Tuple[RGBTuple, List[int]]] = [
+        (cluster_peaks[si], clusters[si])
+        for si in range(len(seeds))
+        if clusters[si]
+    ]
+    merged_groups.sort(key=lambda item: (max(item[0]), len(item[1])), reverse=True)
+    return merged_groups
 
 
 class GoveeUDPListenerProtocol(asyncio.DatagramProtocol):
@@ -852,33 +890,45 @@ class GoveeProtocolDriver:
         category: str = "",
         brightness: int = 100,
         verbose_logging: bool = True,
+        primary_hex: str = "#00f5d4",
+        secondary_hex: str = "#7b2cbf",
+        accent_hex: str = "#ff007f",
     ) -> Dict[str, Any]:
         """
-        Send official Govee OpenAPI v2 `devices.capabilities.dynamic_scene`
-        (`instance: "lightScene"`, `value: {"id": ..., "paramId": ...}`) to a controller.
-        Pre-registers `_active_cloud_scene[ctrl.id]` before awaiting HTTP so the 25 FPS loop
-        never overwrites the hardware scene with a static `colorwc`/`colorRgb` packet.
+        Immediately paint all `0..N-1` segments on the physical Govee strip using
+        `gradientToggle` + 3-group `segmentedColorRgb` with the scene's EXACT `primary_color`,
+        `secondary_color`, and `accent_color` from the app preview, then let the live frame
+        engine rotate those exact segment colors across the strip (never sending a mismatched
+        built-in Govee scene or overwriting segments with 1-color `colorwc`).
         """
         clean_key = (effective_api_key or "").strip()
         if not clean_key or not ctrl.mac or ctrl.mac.upper().startswith("AA:BB:CC:DD:EE:"):
             return {"ok": False, "reason": "missing_api_key_or_mac"}
 
-        t0 = time.perf_counter()
-        scene_info = self.resolve_govee_light_scene(preset_id, effect=effect, category=category, mac=ctrl.mac)
-        now_mono = time.monotonic()
+        # Clear any static lock so the continuous multi-segment chaser animates the strip
+        self._active_cloud_scene.pop(ctrl.id, None)
 
-        # Pre-register active cloud scene IMMEDIATELY before any await so 25 FPS loop never sends colorwc
-        self._active_cloud_scene[ctrl.id] = {
-            "preset_id": preset_id,
-            "effect": effect,
-            "category": category,
-            "scene_name": scene_info["name"],
-            "id": scene_info["id"],
-            "paramId": scene_info["paramId"],
-            "applied": True,
-            "last_attempt": now_mono,
-        }
-        self._cloud_last_call[ctrl.id] = now_mono
+        def _hex_to_scaled_int(h: str, scale: float) -> Tuple[RGBTuple, int]:
+            s = (h or "#00f5d4").strip().lstrip("#")
+            if len(s) != 6:
+                s = "00f5d4"
+            try:
+                r = max(0, min(255, round(int(s[0:2], 16) * scale)))
+                g = max(0, min(255, round(int(s[2:4], 16) * scale)))
+                b = max(0, min(255, round(int(s[4:6], 16) * scale)))
+            except ValueError:
+                r, g, b = 0, 245, 212
+            return (r, g, b), (r << 16) | (g << 8) | b
+
+        bri_scale = max(0.05, min(1.0, brightness / 100.0))
+        p_rgb, p_int = _hex_to_scaled_int(primary_hex, bri_scale)
+        s_rgb, s_int = _hex_to_scaled_int(secondary_hex, bri_scale)
+        a_rgb, a_int = _hex_to_scaled_int(accent_hex, bri_scale)
+
+        t0 = time.perf_counter()
+        n_segs = max(3, int(ctrl.segment_count or 9))
+        eff_lower = (effect or "").lower()
+        use_gradient = 1 if eff_lower in ("govee_rainbow1", "rainbow_wave", "breathing_pulse", "color_wipe") else 0
 
         headers = {"Govee-API-Key": clean_key, "Content-Type": "application/json"}
         target_label = f"cloud:{ctrl.mac[-8:]}" if not ctrl.ip else ctrl.ip
@@ -891,7 +941,8 @@ class GoveeProtocolDriver:
 
         dev_meta = self.discovered_devices.get(ctrl.mac.upper())
         try:
-            scene_resp = await client.post(
+            # 1. Set gradientToggle (1 = smooth gradient blend, 0 = crisp multi-segment blocks)
+            grad_resp = await client.post(
                 f"{self.CLOUD_BASE_URL}/device/control",
                 headers=headers,
                 json={
@@ -900,24 +951,21 @@ class GoveeProtocolDriver:
                         "sku": ctrl.sku or "H705E",
                         "device": ctrl.mac,
                         "capability": {
-                            "type": "devices.capabilities.dynamic_scene",
-                            "instance": "lightScene",
-                            "value": {
-                                "paramId": scene_info["paramId"],
-                                "id": scene_info["id"],
-                            },
+                            "type": "devices.capabilities.toggle",
+                            "instance": "gradientToggle",
+                            "value": use_gradient,
                         },
                     },
                 },
             )
             self.stats["cloud_requests_sent"] += 1
 
-            ok = scene_resp.status_code == 200
+            ok = grad_resp.status_code == 200
             err_msg = ""
             is_offline = False
             if ok:
                 try:
-                    rj = scene_resp.json()
+                    rj = grad_resp.json()
                     cap_state = rj.get("capability", {}).get("state", {}) if isinstance(rj.get("capability"), dict) else {}
                     err_msg = str(cap_state.get("errorMsg") or rj.get("msg") or "")
                     if rj.get("code", 200) not in (200, "200") or cap_state.get("status") == "failure":
@@ -926,14 +974,44 @@ class GoveeProtocolDriver:
                 except Exception:
                     pass
             else:
-                err_msg = f"HTTP {scene_resp.status_code}"
+                err_msg = f"HTTP {grad_resp.status_code}"
+
+            if not is_offline:
+                # 2. Immediately paint all N segments with the scene's 3 exact colors (Lead, Mid, Tail)
+                palette_groups = [
+                    (p_rgb, p_int, [i for i in range(n_segs) if i % 3 == 0]),
+                    (s_rgb, s_int, [i for i in range(n_segs) if i % 3 == 1]),
+                    (a_rgb, a_int, [i for i in range(n_segs) if i % 3 == 2]),
+                ]
+                for grp_rgb, grp_int, grp_idxs in palette_groups:
+                    if not grp_idxs:
+                        continue
+                    seg_resp = await client.post(
+                        f"{self.CLOUD_BASE_URL}/device/control",
+                        headers=headers,
+                        json={
+                            "requestId": str(uuid.uuid4()),
+                            "payload": {
+                                "sku": ctrl.sku or "H705E",
+                                "device": ctrl.mac,
+                                "capability": {
+                                    "type": "devices.capabilities.segment_color_setting",
+                                    "instance": "segmentedColorRgb",
+                                    "value": {
+                                        "segment": grp_idxs,
+                                        "rgb": grp_int,
+                                    },
+                                },
+                            },
+                        },
+                    )
+                    self.stats["cloud_requests_sent"] += 1
+                    ok = ok or (seg_resp.status_code == 200)
 
             now_done = time.monotonic()
             self._cloud_last_call[ctrl.id] = now_done
-            self._active_cloud_scene[ctrl.id]["applied"] = ok
-            self._active_cloud_scene[ctrl.id]["last_attempt"] = now_done
 
-            if ok:
+            if ok and not is_offline:
                 self._cloud_powered_on.add(ctrl.id)
                 self._cloud_offline_until.pop(ctrl.id, None)
                 self._cloud_last_error.pop(ctrl.id, None)
@@ -943,10 +1021,10 @@ class GoveeProtocolDriver:
                 self._record_log(
                     house,
                     ctrl,
-                    "CLOUD-SCENE",
-                    "lightScene",
-                    f"scene='{scene_info['name']}' (id={scene_info['id']}, paramId={scene_info['paramId']}) -> OK",
-                    (0, 245, 212),
+                    "CLOUD-PALETTE",
+                    "segmentedColorRgb",
+                    f"preset='{preset_id}' colors=[{primary_hex},{secondary_hex},{accent_hex}] grad={use_gradient} -> OK",
+                    p_rgb,
                     (time.perf_counter() - t0) * 1000.0,
                     True,
                     True,
@@ -963,9 +1041,9 @@ class GoveeProtocolDriver:
                 self._record_log(
                     house,
                     ctrl,
-                    "CLOUD-SCENE",
-                    "offline" if is_offline else "lightSceneError",
-                    f"scene='{scene_info['name']}' -> {err_msg}",
+                    "CLOUD-PALETTE",
+                    "offline" if is_offline else "segmentedError",
+                    f"preset='{preset_id}' -> {err_msg}",
                     (255, 80, 80),
                     (time.perf_counter() - t0) * 1000.0,
                     False,
@@ -973,17 +1051,15 @@ class GoveeProtocolDriver:
                     target_override=target_label,
                 )
             return {
-                "ok": ok,
+                "ok": ok and not is_offline,
                 "offline": is_offline,
-                "error": err_msg if not ok else "",
-                "scene": scene_info,
+                "error": err_msg if (not ok or is_offline) else "",
+                "colors": [primary_hex, secondary_hex, accent_hex],
             }
         except Exception as exc:
             self.stats["send_errors"] += 1
             self._cloud_last_error[ctrl.id] = str(exc)
-            if ctrl.id in self._active_cloud_scene:
-                self._active_cloud_scene[ctrl.id]["applied"] = False
-            return {"ok": False, "offline": False, "error": str(exc), "scene": scene_info}
+            return {"ok": False, "offline": False, "error": str(exc)}
         finally:
             if own_client:
                 await client.aclose()
@@ -996,11 +1072,16 @@ class GoveeProtocolDriver:
         category: str = "",
     ) -> List[Dict[str, Any]]:
         """
-        Trigger Govee hardware `lightScene` (`devices.capabilities.dynamic_scene`) across all
-        enabled houses & controllers that have a Govee Cloud API key configured.
+        Immediately paint the active scene's exact 3-color palette (`primary_color`, `secondary_color`,
+        `accent_color`) across all segments of all enabled Cloud controllers via `segmentedColorRgb` +
+        `gradientToggle`, then allow the live animation engine to rotate those exact colors across segments.
         """
+        self._active_cloud_scene.clear()
         tasks = []
         meta = []
+        p_hex = getattr(config.animation, "primary_color", "#00f5d4")
+        s_hex = getattr(config.animation, "secondary_color", "#7b2cbf")
+        a_hex = getattr(config.animation, "accent_color", "#ff007f")
         for house in config.houses:
             if not house.enabled:
                 continue
@@ -1024,6 +1105,9 @@ class GoveeProtocolDriver:
                             category=category,
                             brightness=eff_bri,
                             verbose_logging=config.verbose_packet_logging,
+                            primary_hex=p_hex,
+                            secondary_hex=s_hex,
+                            accent_hex=a_hex,
                         )
                     )
                     meta.append((house.id, ctrl.id, ctrl.name))
@@ -1431,9 +1515,26 @@ class GoveeProtocolDriver:
             if ok:
                 return
 
-        # 3. Method A: Explicit Govee Cloud OpenAPI (for neighbors on separate Wi-Fi without an active bridge)
-        if conn_type == "govee_cloud" or mode == ProtocolMode.CLOUD_API or (not ctrl.ip and effective_api_key):
+        # 3. Method A: Explicit Govee Cloud OpenAPI or multi-segment RGBIC controller with Cloud API key
+        # NOTE: For RGBIC controllers with a Cloud API key (e.g. H705E / H805D) in AUTO mode, use multi-segment
+        # `segmentedColorRgb` rather than 1-color `LAN-UDP colorwc` (which flattens all segments to a single color).
+        dev_meta_chk = self.discovered_devices.get((ctrl.mac or "").upper())
+        has_cloud_seg = bool(
+            effective_api_key
+            and ctrl.mac
+            and not ctrl.mac.upper().startswith("AA:BB:CC:DD:EE:")
+            and (dev_meta_chk is None or dev_meta_chk.supports_segment_rgb)
+            and mode in (ProtocolMode.AUTO, ProtocolMode.CLOUD_API)
+        )
+        if conn_type == "govee_cloud" or mode == ProtocolMode.CLOUD_API or (not ctrl.ip and effective_api_key) or has_cloud_seg:
             if effective_api_key and ctrl.mac:
+                if prev_bri != effective_brightness and ctrl.ip and lan_enabled:
+                    self._send_udp_json(
+                        ctrl.ip,
+                        self.control_port,
+                        {"msg": {"cmd": "brightness", "data": {"value": int(effective_brightness)}}},
+                    )
+                    self._last_sent_brightness[ctrl.id] = effective_brightness
                 await self._send_cloud_control(
                     house=house,
                     ctrl=ctrl,

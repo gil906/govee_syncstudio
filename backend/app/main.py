@@ -623,6 +623,17 @@ async def patch_animation(patch: Dict[str, Any]) -> AnimationConfig:
         await driver.blackout_all_controllers(saved, turn_off=True)
     elif not was_running and saved.animation.running:
         await driver.power_on_all_controllers(saved)
+    if saved.animation.running and (
+        "primary_color" in patch
+        or "secondary_color" in patch
+        or "accent_color" in patch
+        or "effect" in patch
+    ):
+        await driver.apply_cloud_scene_to_all(
+            saved,
+            preset_id=active_id or "custom",
+            effect=str(saved.animation.effect.value if hasattr(saved.animation.effect, "value") else saved.animation.effect),
+        )
     await engine.broadcast_snapshot(saved)
     return saved.animation
 
@@ -899,6 +910,15 @@ async def customize_preset(preset_id: str, patch: Dict[str, Any] = Body(...)) ->
         driver._last_sent_rgb.clear()
 
     saved = store.save(cfg)
+    if saved.animation.running and (
+        "primary_color" in patch or "secondary_color" in patch or "accent_color" in patch
+    ):
+        await driver.apply_cloud_scene_to_all(
+            saved,
+            preset_id=preset_id,
+            effect=str(saved.animation.effect.value if hasattr(saved.animation.effect, "value") else saved.animation.effect),
+            category=str(preset.get("category", "")),
+        )
     await engine.broadcast_snapshot(saved)
     enriched = next((p for p in _build_enriched_presets(saved) if p["id"] == preset_id), None)
     return {
