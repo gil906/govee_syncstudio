@@ -99,6 +99,7 @@ class _GoveeStudioHomeScreenState extends State<GoveeStudioHomeScreen>
 
   static const List<Map<String, String>> _categories = [
     {'id': 'All', 'label': '✨ All Scenes'},
+    {'id': 'Multi-House', 'label': '🏘️ Multi-House'},
     {'id': 'Halloween', 'label': '🎃 Halloween'},
     {'id': 'Christmas', 'label': '🎄 Christmas'},
     {'id': 'Diwali', 'label': '🪔 Diwali'},
@@ -146,6 +147,19 @@ class _GoveeStudioHomeScreenState extends State<GoveeStudioHomeScreen>
   }
 
   List<PresetScene> get _filteredPresets {
+    if (_selectedCategory == 'Multi-House') {
+      final mhList = widget.api.presets
+          .where((p) => p.isMultiHouse || p.sceneSource == 'multi_house')
+          .toList();
+      if (_selectedSubcategory == 'all') return mhList;
+      return mhList.where((p) {
+        final hTag = p.holidayTag.toLowerCase();
+        final cat = p.category.toLowerCase();
+        final sub = _selectedSubcategory.toLowerCase();
+        return hTag == sub || cat == sub || p.name.toLowerCase().contains(sub);
+      }).toList();
+    }
+
     final byCat = _selectedCategory == 'All'
         ? widget.api.presets
         : widget.api.presets
@@ -154,6 +168,11 @@ class _GoveeStudioHomeScreenState extends State<GoveeStudioHomeScreen>
             .toList();
     if (_selectedSubcategory == 'all') {
       return byCat;
+    }
+    if (_selectedSubcategory == 'multi_house') {
+      return byCat
+          .where((p) => p.isMultiHouse || p.sceneSource == 'multi_house')
+          .toList();
     }
     return byCat
         .where((p) => p.sceneSource == _selectedSubcategory)
@@ -1532,8 +1551,10 @@ class _GoveeStudioHomeScreenState extends State<GoveeStudioHomeScreen>
                               : const Color(0xFFCBD5E1),
                         ),
                       ),
-                      onSelected: (_) =>
-                          setState(() => _selectedCategory = id),
+                      onSelected: (_) => setState(() {
+                        _selectedCategory = id;
+                        _selectedSubcategory = 'all';
+                      }),
                     ),
                   );
                 }).toList(),
@@ -1544,12 +1565,23 @@ class _GoveeStudioHomeScreenState extends State<GoveeStudioHomeScreen>
               scrollDirection: Axis.horizontal,
               child: Row(
                 children: [
-                  for (final sub in [
-                    ('all', 'All Types'),
-                    ('official', '🏷️ Official Govee'),
-                    ('ai_custom', '🤖 AI & Custom'),
-                    ('diy', '🛠️ My Govee DIY'),
-                  ])
+                  for (final sub in (_selectedCategory == 'Multi-House'
+                      ? const [
+                          ('all', 'All Multi-House'),
+                          ('Halloween', '🎃 Halloween'),
+                          ('Christmas', '🎄 Christmas'),
+                          ('Diwali', '🪔 Diwali'),
+                          ("New Year's Eve", "🎆 New Year's Eve"),
+                          ('Center-Out (My House)', '💥 Center-Out'),
+                          ('Celebrations', '🏈 Celebrations'),
+                        ]
+                      : const [
+                          ('all', 'All Types'),
+                          ('multi_house', '🏘️ Multi-House'),
+                          ('official', '🏷️ Official Govee'),
+                          ('ai_custom', '🤖 AI & Custom'),
+                          ('diy', '🛠️ My Govee DIY'),
+                        ]))
                     Padding(
                       padding: const EdgeInsets.only(right: 6),
                       child: InkWell(

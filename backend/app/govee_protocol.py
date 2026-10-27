@@ -1725,6 +1725,146 @@ class GoveeProtocolDriver:
                 "name": "A&M",
                 "id": 33896,
                 "paramId": 46134
+        },
+        "mh_halloween_phantom_relay": {
+                "name": "Halloween",
+                "id": 10764,
+                "paramId": 17969
+        },
+        "mh_halloween_headless_gallop": {
+                "name": "Meteor",
+                "id": 14161,
+                "paramId": 22809
+        },
+        "mh_halloween_coven_shockwave": {
+                "name": "Halloween B",
+                "id": 10765,
+                "paramId": 17970
+        },
+        "mh_halloween_thunder_chain": {
+                "name": "Thunderstorm",
+                "id": 14158,
+                "paramId": 22806
+        },
+        "mh_halloween_vampire_bat_swarm": {
+                "name": "Halloween D",
+                "id": 10767,
+                "paramId": 17972
+        },
+        "mh_halloween_candy_corn_conveyor": {
+                "name": "Halloween C",
+                "id": 10766,
+                "paramId": 17971
+        },
+        "mh_halloween_zombie_breach": {
+                "name": "Halloween II",
+                "id": 14491,
+                "paramId": 23302
+        },
+        "mh_halloween_sanderson_spell": {
+                "name": "Mysterious",
+                "id": 10813,
+                "paramId": 18018
+        },
+        "mh_xmas_santa_rooftop_hop": {
+                "name": "Delivering Gifts",
+                "id": 14492,
+                "paramId": 23303
+        },
+        "mh_xmas_candy_cane_street": {
+                "name": "Candy Cane",
+                "id": 14165,
+                "paramId": 22813
+        },
+        "mh_xmas_bethlehem_beacon": {
+                "name": "Christmas Eve",
+                "id": 14166,
+                "paramId": 22814
+        },
+        "mh_xmas_grinch_chase": {
+                "name": "Christmas Tree",
+                "id": 10761,
+                "paramId": 17966
+        },
+        "mh_xmas_polar_express_train": {
+                "name": "Sled",
+                "id": 10763,
+                "paramId": 17968
+        },
+        "mh_xmas_dueling_carol_bells": {
+                "name": "Christmas Bell",
+                "id": 14164,
+                "paramId": 22812
+        },
+        "mh_xmas_jack_frost_blizzard": {
+                "name": "Winter Wonderland",
+                "id": 10787,
+                "paramId": 17992
+        },
+        "mh_xmas_three_kings_procession": {
+                "name": "Christmas Gift",
+                "id": 10762,
+                "paramId": 17967
+        },
+        "mh_diwali_diya_chain": {
+                "name": "Candlelight",
+                "id": 10782,
+                "paramId": 17987
+        },
+        "mh_diwali_rangoli_triad": {
+                "name": "Colorful",
+                "id": 10803,
+                "paramId": 18008
+        },
+        "mh_diwali_aarti_center_wave": {
+                "name": "Fire",
+                "id": 10753,
+                "paramId": 17958
+        },
+        "mh_diwali_sky_lantern_flight": {
+                "name": "Firefly",
+                "id": 10752,
+                "paramId": 17957
+        },
+        "mh_nye_times_square_ball_drop": {
+                "name": "New Years",
+                "id": 10774,
+                "paramId": 17979
+        },
+        "mh_nye_champagne_toast_ripple": {
+                "name": "Confetti",
+                "id": 14173,
+                "paramId": 22821
+        },
+        "mh_nye_grand_finale_skyrocket": {
+                "name": "Fireworks",
+                "id": 10781,
+                "paramId": 17986
+        },
+        "mh_nye_neon_2027_party_wave": {
+                "name": "Dance Party",
+                "id": 10778,
+                "paramId": 17983
+        },
+        "mh_celeb_stadium_wave": {
+                "name": "Game Day",
+                "id": 10785,
+                "paramId": 17990
+        },
+        "mh_celeb_usa_freedom_relay": {
+                "name": "Carnival",
+                "id": 10776,
+                "paramId": 17981
+        },
+        "mh_cyber_portal_wormhole": {
+                "name": "Flow",
+                "id": 10804,
+                "paramId": 18009
+        },
+        "mh_cyber_dual_serpent_clash": {
+                "name": "Universe",
+                "id": 10743,
+                "paramId": 17948
         }
 }
 

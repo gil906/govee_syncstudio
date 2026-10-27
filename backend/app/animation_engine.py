@@ -802,6 +802,706 @@ class MasterAnimationEngine:
 
     PRESETS: List[Dict[str, Any]] = [
         {
+                "id": "mh_halloween_phantom_relay",
+                "name": "Multi-House: Phantom Poltergeist Relay (1\u21922\u21923)",
+                "category": "Halloween",
+                "subcategory": "Multi-House",
+                "holiday_tag": "Halloween",
+                "scene_source": "multi_house",
+                "is_multi_house": True,
+                "badge": "Multi-House \u2022 Halloween",
+                "description": "Designed for Multi-House Sync: Ghostly ultraviolet phantom leaps from Neighbor 1 -> My House -> Neighbor 2 while trailing eerie toxic green mist.",
+                "animation": {
+                        "effect": "halloween_spooky",
+                        "speed": 0.24,
+                        "direction": "forward",
+                        "mapping_mode": "house_normalized",
+                        "primary_color": "#9333ea",
+                        "secondary_color": "#22c55e",
+                        "accent_color": "#ff6b00",
+                        "background_color": "#090314",
+                        "background_dim": 0.1,
+                        "tail_length": 0.26,
+                        "pulse_count": 1,
+                        "supersample": True
+                }
+        },
+        {
+                "id": "mh_halloween_headless_gallop",
+                "name": "Multi-House: Headless Horseman Street Gallop",
+                "category": "Halloween",
+                "subcategory": "Multi-House",
+                "holiday_tag": "Halloween",
+                "scene_source": "multi_house",
+                "is_multi_house": True,
+                "badge": "Multi-House \u2022 Halloween",
+                "description": "Designed for Multi-House Sync: Fiery pumpkin-orange steed charges down the street from House 1 through My House to House 3 leaving blood-crimson sparks.",
+                "animation": {
+                        "effect": "comet_meteor",
+                        "speed": 0.28,
+                        "direction": "forward",
+                        "mapping_mode": "house_normalized",
+                        "primary_color": "#ff5500",
+                        "secondary_color": "#dc2626",
+                        "accent_color": "#fde047",
+                        "background_color": "#120303",
+                        "background_dim": 0.08,
+                        "tail_length": 0.24,
+                        "pulse_count": 1,
+                        "supersample": True
+                }
+        },
+        {
+                "id": "mh_halloween_coven_shockwave",
+                "name": "Multi-House: Middle-House Witch Coven Blast",
+                "category": "Halloween",
+                "subcategory": "Multi-House",
+                "holiday_tag": "Halloween",
+                "scene_source": "multi_house",
+                "is_multi_house": True,
+                "badge": "Multi-House \u2022 Center-Out",
+                "description": "Designed for Multi-House Sync: Ignites at YOUR middle house with a blinding emerald-purple cauldron flash, then explodes outward to both neighbors.",
+                "animation": {
+                        "effect": "center_out_shockwave",
+                        "speed": 0.25,
+                        "direction": "forward",
+                        "mapping_mode": "house_normalized",
+                        "primary_color": "#10b981",
+                        "secondary_color": "#9333ea",
+                        "accent_color": "#ff6b00",
+                        "background_color": "#05100a",
+                        "background_dim": 0.1,
+                        "tail_length": 0.28,
+                        "pulse_count": 1,
+                        "supersample": True
+                }
+        },
+        {
+                "id": "mh_halloween_thunder_chain",
+                "name": "Multi-House: Rooftop Chain-Lightning Jump",
+                "category": "Halloween",
+                "subcategory": "Multi-House",
+                "holiday_tag": "Halloween",
+                "scene_source": "multi_house",
+                "is_multi_house": True,
+                "badge": "Multi-House \u2022 Storm",
+                "description": "Designed for Multi-House Sync: Brooding violet storm clouds across all houses as a white-hot chain lightning bolt jumps rooftop to rooftop.",
+                "animation": {
+                        "effect": "lightning_storm",
+                        "speed": 0.32,
+                        "direction": "forward",
+                        "mapping_mode": "house_normalized",
+                        "primary_color": "#38bdf8",
+                        "secondary_color": "#7e22ce",
+                        "accent_color": "#facc15",
+                        "background_color": "#070412",
+                        "background_dim": 0.1,
+                        "tail_length": 0.22,
+                        "pulse_count": 1,
+                        "supersample": True
+                }
+        },
+        {
+                "id": "mh_halloween_vampire_bat_swarm",
+                "name": "Multi-House: Dracula's Bat Swarm Bounce (\u2194)",
+                "category": "Halloween",
+                "subcategory": "Multi-House",
+                "holiday_tag": "Halloween",
+                "scene_source": "multi_house",
+                "is_multi_house": True,
+                "badge": "Multi-House \u2022 Bounce",
+                "description": "Designed for Multi-House Sync: Blood-red and midnight-purple bat colony swooping back and forth between all active houses.",
+                "animation": {
+                        "effect": "multi_house_chase",
+                        "speed": 0.26,
+                        "direction": "pingpong",
+                        "mapping_mode": "house_normalized",
+                        "primary_color": "#dc2626",
+                        "secondary_color": "#6b21a8",
+                        "accent_color": "#f43f5e",
+                        "background_color": "#110205",
+                        "background_dim": 0.08,
+                        "tail_length": 0.25,
+                        "pulse_count": 1,
+                        "supersample": True
+                }
+        },
+        {
+                "id": "mh_halloween_candy_corn_conveyor",
+                "name": "Multi-House: 3-House Candy Corn Rotation",
+                "category": "Halloween",
+                "subcategory": "Multi-House",
+                "holiday_tag": "Halloween",
+                "scene_source": "multi_house",
+                "is_multi_house": True,
+                "badge": "Multi-House \u2022 3-Color",
+                "description": "Designed for Multi-House Sync: House 1 glows Pumpkin Orange, My House glows Golden Yellow, and House 3 glows Marshmallow White\u2014rotating every beat!",
+                "animation": {
+                        "effect": "govee_rainbow2",
+                        "speed": 0.22,
+                        "direction": "forward",
+                        "mapping_mode": "house_normalized",
+                        "primary_color": "#ff7b00",
+                        "secondary_color": "#facc15",
+                        "accent_color": "#ffffff",
+                        "background_color": "#120700",
+                        "background_dim": 0.09,
+                        "tail_length": 0.3,
+                        "pulse_count": 1,
+                        "supersample": True
+                }
+        },
+        {
+                "id": "mh_halloween_zombie_breach",
+                "name": "Multi-House: Biohazard Quarantine Siren Sweep",
+                "category": "Halloween",
+                "subcategory": "Multi-House",
+                "holiday_tag": "Halloween",
+                "scene_source": "multi_house",
+                "is_multi_house": True,
+                "badge": "Multi-House \u2022 Siren",
+                "description": "Designed for Multi-House Sync: Toxic radioactive green sweeps from Neighbor 1 to Neighbor 2 while emergency crimson beacons flash.",
+                "animation": {
+                        "effect": "cyber_snake",
+                        "speed": 0.3,
+                        "direction": "pingpong",
+                        "mapping_mode": "house_normalized",
+                        "primary_color": "#84cc16",
+                        "secondary_color": "#ef4444",
+                        "accent_color": "#eab308",
+                        "background_color": "#060e02",
+                        "background_dim": 0.09,
+                        "tail_length": 0.24,
+                        "pulse_count": 1,
+                        "supersample": True
+                }
+        },
+        {
+                "id": "mh_halloween_sanderson_spell",
+                "name": "Multi-House: Three Witches Trio (1 Witch Per House)",
+                "category": "Halloween",
+                "subcategory": "Multi-House",
+                "holiday_tag": "Halloween",
+                "scene_source": "multi_house",
+                "is_multi_house": True,
+                "badge": "Multi-House \u2022 Trio",
+                "description": "Designed for Multi-House Sync: Winifred Emerald on House 1, Sarah Violet on My House, and Mary Crimson on House 3 rotating across the street.",
+                "animation": {
+                        "effect": "govee_rainbow1",
+                        "speed": 0.21,
+                        "direction": "forward",
+                        "mapping_mode": "house_normalized",
+                        "primary_color": "#10b981",
+                        "secondary_color": "#8b5cf6",
+                        "accent_color": "#ef4444",
+                        "background_color": "#080312",
+                        "background_dim": 0.1,
+                        "tail_length": 0.3,
+                        "pulse_count": 1,
+                        "supersample": True
+                }
+        },
+        {
+                "id": "mh_xmas_santa_rooftop_hop",
+                "name": "Multi-House: Santa's Sleigh Rooftop Hop (1\u21922\u21923)",
+                "category": "Christmas",
+                "subcategory": "Multi-House",
+                "holiday_tag": "Christmas",
+                "scene_source": "multi_house",
+                "is_multi_house": True,
+                "badge": "Multi-House \u2022 Christmas",
+                "description": "Designed for Multi-House Sync: Rudolph's glowing red nose and golden sleigh land on House 1, leap to My House, then fly to House 3!",
+                "animation": {
+                        "effect": "christmas_magic",
+                        "speed": 0.24,
+                        "direction": "forward",
+                        "mapping_mode": "house_normalized",
+                        "primary_color": "#ef4444",
+                        "secondary_color": "#fbbf24",
+                        "accent_color": "#10b981",
+                        "background_color": "#041008",
+                        "background_dim": 0.1,
+                        "tail_length": 0.26,
+                        "pulse_count": 1,
+                        "supersample": True
+                }
+        },
+        {
+                "id": "mh_xmas_candy_cane_street",
+                "name": "Multi-House: 3-House Peppermint Candy Cane Relay",
+                "category": "Christmas",
+                "subcategory": "Multi-House",
+                "holiday_tag": "Christmas",
+                "scene_source": "multi_house",
+                "is_multi_house": True,
+                "badge": "Multi-House \u2022 Candy Cane",
+                "description": "Designed for Multi-House Sync: Peppermint Red, Pure Snow White, and Holly Green jumping house-to-house down the block.",
+                "animation": {
+                        "effect": "multi_house_chase",
+                        "speed": 0.25,
+                        "direction": "forward",
+                        "mapping_mode": "house_normalized",
+                        "primary_color": "#ff1744",
+                        "secondary_color": "#ffffff",
+                        "accent_color": "#00e676",
+                        "background_color": "#100306",
+                        "background_dim": 0.08,
+                        "tail_length": 0.25,
+                        "pulse_count": 1,
+                        "supersample": True
+                }
+        },
+        {
+                "id": "mh_xmas_bethlehem_beacon",
+                "name": "Multi-House: Star of Bethlehem Middle-House Radiance",
+                "category": "Christmas",
+                "subcategory": "Multi-House",
+                "holiday_tag": "Christmas",
+                "scene_source": "multi_house",
+                "is_multi_house": True,
+                "badge": "Multi-House \u2022 Center-Out",
+                "description": "Designed for Multi-House Sync: Brilliant golden-white star ignites on your middle house and cascades royal blue & gold waves to both neighbors.",
+                "animation": {
+                        "effect": "center_out_shockwave",
+                        "speed": 0.2,
+                        "direction": "forward",
+                        "mapping_mode": "house_normalized",
+                        "primary_color": "#fde047",
+                        "secondary_color": "#38bdf8",
+                        "accent_color": "#ffffff",
+                        "background_color": "#040816",
+                        "background_dim": 0.1,
+                        "tail_length": 0.3,
+                        "pulse_count": 1,
+                        "supersample": True
+                }
+        },
+        {
+                "id": "mh_xmas_grinch_chase",
+                "name": "Multi-House: Grinch Stealing the Street Lights",
+                "category": "Christmas",
+                "subcategory": "Multi-House",
+                "holiday_tag": "Christmas",
+                "scene_source": "multi_house",
+                "is_multi_house": True,
+                "badge": "Multi-House \u2022 Story",
+                "description": "Designed for Multi-House Sync: Sneaky Grinch lime-green creeps from house to house, turning each roofline from Holiday Red into Grinch Green!",
+                "animation": {
+                        "effect": "color_wipe",
+                        "speed": 0.23,
+                        "direction": "forward",
+                        "mapping_mode": "house_normalized",
+                        "primary_color": "#84cc16",
+                        "secondary_color": "#ef4444",
+                        "accent_color": "#facc15",
+                        "background_color": "#051004",
+                        "background_dim": 0.09,
+                        "tail_length": 0.28,
+                        "pulse_count": 1,
+                        "supersample": True
+                }
+        },
+        {
+                "id": "mh_xmas_polar_express_train",
+                "name": "Multi-House: Polar Express Locomotive Crossing",
+                "category": "Christmas",
+                "subcategory": "Multi-House",
+                "holiday_tag": "Christmas",
+                "scene_source": "multi_house",
+                "is_multi_house": True,
+                "badge": "Multi-House \u2022 Train",
+                "description": "Designed for Multi-House Sync: Golden steam-engine headlamp followed by glowing passenger-car windows chugging across all 3 houses.",
+                "animation": {
+                        "effect": "comet_meteor",
+                        "speed": 0.24,
+                        "direction": "forward",
+                        "mapping_mode": "house_normalized",
+                        "primary_color": "#f59e0b",
+                        "secondary_color": "#fde047",
+                        "accent_color": "#38bdf8",
+                        "background_color": "#040914",
+                        "background_dim": 0.09,
+                        "tail_length": 0.3,
+                        "pulse_count": 1,
+                        "supersample": True
+                }
+        },
+        {
+                "id": "mh_xmas_dueling_carol_bells",
+                "name": "Multi-House: Carol of the Bells Rooftop Ping-Pong",
+                "category": "Christmas",
+                "subcategory": "Multi-House",
+                "holiday_tag": "Christmas",
+                "scene_source": "multi_house",
+                "is_multi_house": True,
+                "badge": "Multi-House \u2022 Bounce",
+                "description": "Designed for Multi-House Sync: High-contrast Gold, Ruby Red, and Emerald Green bell chimes bouncing back and forth across the street.",
+                "animation": {
+                        "effect": "theater_chase",
+                        "speed": 0.28,
+                        "direction": "pingpong",
+                        "mapping_mode": "house_normalized",
+                        "primary_color": "#fbbf24",
+                        "secondary_color": "#dc2626",
+                        "accent_color": "#10b981",
+                        "background_color": "#0c0602",
+                        "background_dim": 0.1,
+                        "tail_length": 0.24,
+                        "pulse_count": 2,
+                        "supersample": True
+                }
+        },
+        {
+                "id": "mh_xmas_jack_frost_blizzard",
+                "name": "Multi-House: Arctic Nor'easter Street Sweep",
+                "category": "Christmas",
+                "subcategory": "Multi-House",
+                "holiday_tag": "Christmas",
+                "scene_source": "multi_house",
+                "is_multi_house": True,
+                "badge": "Multi-House \u2022 Blizzard",
+                "description": "Designed for Multi-House Sync: Icy cyan and diamond-white blizzard gust blowing across all three rooflines in sequence.",
+                "animation": {
+                        "effect": "govee_rainbow1",
+                        "speed": 0.26,
+                        "direction": "forward",
+                        "mapping_mode": "house_normalized",
+                        "primary_color": "#38bdf8",
+                        "secondary_color": "#ffffff",
+                        "accent_color": "#2563eb",
+                        "background_color": "#030b18",
+                        "background_dim": 0.1,
+                        "tail_length": 0.28,
+                        "pulse_count": 1,
+                        "supersample": True
+                }
+        },
+        {
+                "id": "mh_xmas_three_kings_procession",
+                "name": "Multi-House: Three Kings Royal Procession",
+                "category": "Christmas",
+                "subcategory": "Multi-House",
+                "holiday_tag": "Christmas",
+                "scene_source": "multi_house",
+                "is_multi_house": True,
+                "badge": "Multi-House \u2022 Royal",
+                "description": "Designed for Multi-House Sync: Sovereign Gold on House 1, Frankincense Crimson on My House, and Royal Purple on House 3 marching in unison.",
+                "animation": {
+                        "effect": "govee_rainbow2",
+                        "speed": 0.2,
+                        "direction": "forward",
+                        "mapping_mode": "house_normalized",
+                        "primary_color": "#fbbf24",
+                        "secondary_color": "#dc2626",
+                        "accent_color": "#7e22ce",
+                        "background_color": "#0a0412",
+                        "background_dim": 0.09,
+                        "tail_length": 0.28,
+                        "pulse_count": 1,
+                        "supersample": True
+                }
+        },
+        {
+                "id": "mh_diwali_diya_chain",
+                "name": "Multi-House: Chain of 1,000 Diyas (1\u21922\u21923)",
+                "category": "Diwali",
+                "subcategory": "Multi-House",
+                "holiday_tag": "Diwali",
+                "scene_source": "multi_house",
+                "is_multi_house": True,
+                "badge": "Multi-House \u2022 Diwali",
+                "description": "Designed for Multi-House Sync: Sacred golden oil-lamp flame passed from house to house, lighting the street in saffron and gold.",
+                "animation": {
+                        "effect": "diwali_festival",
+                        "speed": 0.22,
+                        "direction": "forward",
+                        "mapping_mode": "house_normalized",
+                        "primary_color": "#f59e0b",
+                        "secondary_color": "#fde047",
+                        "accent_color": "#ef4444",
+                        "background_color": "#120802",
+                        "background_dim": 0.1,
+                        "tail_length": 0.28,
+                        "pulse_count": 1,
+                        "supersample": True
+                }
+        },
+        {
+                "id": "mh_diwali_rangoli_triad",
+                "name": "Multi-House: 3-House Royal Rangoli Triad",
+                "category": "Diwali",
+                "subcategory": "Multi-House",
+                "holiday_tag": "Diwali",
+                "scene_source": "multi_house",
+                "is_multi_house": True,
+                "badge": "Multi-House \u2022 Rangoli",
+                "description": "Designed for Multi-House Sync: Peacock Cyan, Lotus Magenta, and Marigold Gold rotating house-by-house in festive symmetry.",
+                "animation": {
+                        "effect": "govee_rainbow2",
+                        "speed": 0.24,
+                        "direction": "forward",
+                        "mapping_mode": "house_normalized",
+                        "primary_color": "#ec4899",
+                        "secondary_color": "#f97316",
+                        "accent_color": "#06b6d4",
+                        "background_color": "#10040c",
+                        "background_dim": 0.1,
+                        "tail_length": 0.26,
+                        "pulse_count": 1,
+                        "supersample": True
+                }
+        },
+        {
+                "id": "mh_diwali_aarti_center_wave",
+                "name": "Multi-House: Sacred Aarti Wave from My House",
+                "category": "Diwali",
+                "subcategory": "Multi-House",
+                "holiday_tag": "Diwali",
+                "scene_source": "multi_house",
+                "is_multi_house": True,
+                "badge": "Multi-House \u2022 Center-Out",
+                "description": "Designed for Multi-House Sync: Warm golden-crimson temple flame radiating outward from your middle house to both neighbors.",
+                "animation": {
+                        "effect": "center_out_shockwave",
+                        "speed": 0.21,
+                        "direction": "forward",
+                        "mapping_mode": "house_normalized",
+                        "primary_color": "#ea580c",
+                        "secondary_color": "#facc15",
+                        "accent_color": "#dc2626",
+                        "background_color": "#140602",
+                        "background_dim": 0.1,
+                        "tail_length": 0.28,
+                        "pulse_count": 1,
+                        "supersample": True
+                }
+        },
+        {
+                "id": "mh_diwali_sky_lantern_flight",
+                "name": "Multi-House: Floating Sky Lanterns Across Street",
+                "category": "Diwali",
+                "subcategory": "Multi-House",
+                "holiday_tag": "Diwali",
+                "scene_source": "multi_house",
+                "is_multi_house": True,
+                "badge": "Multi-House \u2022 Lanterns",
+                "description": "Designed for Multi-House Sync: Glowing amber, magenta, and rose-gold lanterns drifting smoothly from rooftop to rooftop.",
+                "animation": {
+                        "effect": "govee_rainbow1",
+                        "speed": 0.2,
+                        "direction": "forward",
+                        "mapping_mode": "house_normalized",
+                        "primary_color": "#fbbf24",
+                        "secondary_color": "#f43f5e",
+                        "accent_color": "#f97316",
+                        "background_color": "#110504",
+                        "background_dim": 0.1,
+                        "tail_length": 0.3,
+                        "pulse_count": 1,
+                        "supersample": True
+                }
+        },
+        {
+                "id": "mh_nye_times_square_ball_drop",
+                "name": "Multi-House: New Year's Eve Ball Drop Relay",
+                "category": "Celebrations",
+                "subcategory": "Multi-House",
+                "holiday_tag": "New Year's Eve",
+                "scene_source": "multi_house",
+                "is_multi_house": True,
+                "badge": "Multi-House \u2022 NYE",
+                "description": "Designed for Multi-House Sync: Electric crystal cyan, champagne gold, and confetti magenta racing between houses for New Year's Eve!",
+                "animation": {
+                        "effect": "multi_house_chase",
+                        "speed": 0.3,
+                        "direction": "forward",
+                        "mapping_mode": "house_normalized",
+                        "primary_color": "#fbbf24",
+                        "secondary_color": "#00f5d4",
+                        "accent_color": "#ec4899",
+                        "background_color": "#060814",
+                        "background_dim": 0.1,
+                        "tail_length": 0.26,
+                        "pulse_count": 1,
+                        "supersample": True
+                }
+        },
+        {
+                "id": "mh_nye_champagne_toast_ripple",
+                "name": "Multi-House: Midnight Champagne Supernova (My House)",
+                "category": "Celebrations",
+                "subcategory": "Multi-House",
+                "holiday_tag": "New Year's Eve",
+                "scene_source": "multi_house",
+                "is_multi_house": True,
+                "badge": "Multi-House \u2022 NYE",
+                "description": "Designed for Multi-House Sync: Effervescent champagne gold and silver bubbles bursting from your middle house outward to the whole street.",
+                "animation": {
+                        "effect": "center_out_shockwave",
+                        "speed": 0.26,
+                        "direction": "forward",
+                        "mapping_mode": "house_normalized",
+                        "primary_color": "#fde047",
+                        "secondary_color": "#ffffff",
+                        "accent_color": "#f59e0b",
+                        "background_color": "#0c0902",
+                        "background_dim": 0.1,
+                        "tail_length": 0.28,
+                        "pulse_count": 1,
+                        "supersample": True
+                }
+        },
+        {
+                "id": "mh_nye_grand_finale_skyrocket",
+                "name": "Multi-House: NYE 3-House Fireworks Finale Relay",
+                "category": "Celebrations",
+                "subcategory": "Multi-House",
+                "holiday_tag": "New Year's Eve",
+                "scene_source": "multi_house",
+                "is_multi_house": True,
+                "badge": "Multi-House \u2022 NYE",
+                "description": "Designed for Multi-House Sync: Sequential skyrocket launches\u2014House 1 bursts Gold, My House bursts Cyan, House 3 bursts Magenta!",
+                "animation": {
+                        "effect": "sparkle_twinkle",
+                        "speed": 0.34,
+                        "direction": "forward",
+                        "mapping_mode": "house_normalized",
+                        "primary_color": "#fbbf24",
+                        "secondary_color": "#38bdf8",
+                        "accent_color": "#f43f5e",
+                        "background_color": "#050712",
+                        "background_dim": 0.1,
+                        "tail_length": 0.24,
+                        "pulse_count": 2,
+                        "supersample": True
+                }
+        },
+        {
+                "id": "mh_nye_neon_2027_party_wave",
+                "name": "Multi-House: New Year's Midnight Club Bounce (\u2194)",
+                "category": "Celebrations",
+                "subcategory": "Multi-House",
+                "holiday_tag": "New Year's Eve",
+                "scene_source": "multi_house",
+                "is_multi_house": True,
+                "badge": "Multi-House \u2022 NYE",
+                "description": "Designed for Multi-House Sync: High-energy neon magenta, laser cyan, and electric gold bouncing between all active houses.",
+                "animation": {
+                        "effect": "cyber_snake",
+                        "speed": 0.32,
+                        "direction": "pingpong",
+                        "mapping_mode": "house_normalized",
+                        "primary_color": "#ff007f",
+                        "secondary_color": "#00f5d4",
+                        "accent_color": "#facc15",
+                        "background_color": "#060414",
+                        "background_dim": 0.09,
+                        "tail_length": 0.25,
+                        "pulse_count": 1,
+                        "supersample": True
+                }
+        },
+        {
+                "id": "mh_celeb_stadium_wave",
+                "name": "Multi-House: Seahawks Stadium Crowd Wave (1\u21922\u21923)",
+                "category": "Celebrations",
+                "subcategory": "Multi-House",
+                "holiday_tag": "Celebrations",
+                "scene_source": "multi_house",
+                "is_multi_house": True,
+                "badge": "Multi-House \u2022 Game Day",
+                "description": "Designed for Multi-House Sync: Action Green and College Navy stadium wave rolling down the street from house to house!",
+                "animation": {
+                        "effect": "multi_house_chase",
+                        "speed": 0.27,
+                        "direction": "forward",
+                        "mapping_mode": "house_normalized",
+                        "primary_color": "#69be28",
+                        "secondary_color": "#002244",
+                        "accent_color": "#ffffff",
+                        "background_color": "#020b18",
+                        "background_dim": 0.1,
+                        "tail_length": 0.26,
+                        "pulse_count": 1,
+                        "supersample": True
+                }
+        },
+        {
+                "id": "mh_celeb_usa_freedom_relay",
+                "name": "Multi-House: Red, White & Blue 3-House Relay",
+                "category": "Celebrations",
+                "subcategory": "Multi-House",
+                "holiday_tag": "Celebrations",
+                "scene_source": "multi_house",
+                "is_multi_house": True,
+                "badge": "Multi-House \u2022 Patriotic",
+                "description": "Designed for Multi-House Sync: House 1 Patriot Red, My House Pure White, and House 3 Navy Blue marching across the street!",
+                "animation": {
+                        "effect": "govee_rainbow2",
+                        "speed": 0.23,
+                        "direction": "forward",
+                        "mapping_mode": "house_normalized",
+                        "primary_color": "#ef4444",
+                        "secondary_color": "#ffffff",
+                        "accent_color": "#2563eb",
+                        "background_color": "#040816",
+                        "background_dim": 0.09,
+                        "tail_length": 0.28,
+                        "pulse_count": 1,
+                        "supersample": True
+                }
+        },
+        {
+                "id": "mh_cyber_portal_wormhole",
+                "name": "Multi-House: Inter-House Quantum Portal Jump",
+                "category": "Cyber & Party",
+                "subcategory": "Multi-House",
+                "holiday_tag": "Cyber & Party",
+                "scene_source": "multi_house",
+                "is_multi_house": True,
+                "badge": "Multi-House \u2022 Portal",
+                "description": "Designed for Multi-House Sync: Neon cyan wormhole opens on House 1, teleports through My House, and exits on House 3 in magenta!",
+                "animation": {
+                        "effect": "comet_meteor",
+                        "speed": 0.3,
+                        "direction": "forward",
+                        "mapping_mode": "house_normalized",
+                        "primary_color": "#00f5d4",
+                        "secondary_color": "#a855f7",
+                        "accent_color": "#ff007f",
+                        "background_color": "#050714",
+                        "background_dim": 0.08,
+                        "tail_length": 0.25,
+                        "pulse_count": 1,
+                        "supersample": True
+                }
+        },
+        {
+                "id": "mh_cyber_dual_serpent_clash",
+                "name": "Multi-House: Neighbor-vs-Neighbor Clash at My House",
+                "category": "Center-Out (My House)",
+                "subcategory": "Multi-House",
+                "holiday_tag": "Center-Out (My House)",
+                "scene_source": "multi_house",
+                "is_multi_house": True,
+                "badge": "Multi-House \u2022 Clash",
+                "description": "Designed for Multi-House Sync: Neighbor 1 fires Cyan and Neighbor 2 fires Magenta, colliding in a blinding Gold explosion on YOUR middle house!",
+                "animation": {
+                        "effect": "center_out_shockwave",
+                        "speed": 0.26,
+                        "direction": "pingpong",
+                        "mapping_mode": "house_normalized",
+                        "primary_color": "#00f5d4",
+                        "secondary_color": "#ff007f",
+                        "accent_color": "#fde047",
+                        "background_color": "#060514",
+                        "background_dim": 0.09,
+                        "tail_length": 0.26,
+                        "pulse_count": 1,
+                        "supersample": True
+                }
+        },
+        {
                 "id": "diy_halloween_chasing",
                 "name": "Halloween Chasing (My Govee DIY)",
                 "category": "Halloween",
@@ -4150,7 +4850,8 @@ class MasterAnimationEngine:
                         "supersample": True
                 },
                 "scene_source": "ai_custom",
-                "subcategory": "AI & Custom"
+                "subcategory": "AI & Custom",
+                "is_multi_house": True
         },
         {
                 "id": "halloween_zombie_outbreak",
@@ -4173,7 +4874,8 @@ class MasterAnimationEngine:
                         "supersample": True
                 },
                 "scene_source": "ai_custom",
-                "subcategory": "AI & Custom"
+                "subcategory": "AI & Custom",
+                "is_multi_house": True
         },
         {
                 "id": "halloween_frankenstein_lab",
@@ -4288,7 +4990,8 @@ class MasterAnimationEngine:
                         "supersample": True
                 },
                 "scene_source": "ai_custom",
-                "subcategory": "AI & Custom"
+                "subcategory": "AI & Custom",
+                "is_multi_house": True
         },
         {
                 "id": "halloween_shadow_possession",
@@ -4380,7 +5083,8 @@ class MasterAnimationEngine:
                         "supersample": True
                 },
                 "scene_source": "ai_custom",
-                "subcategory": "AI & Custom"
+                "subcategory": "AI & Custom",
+                "is_multi_house": True
         },
         {
                 "id": "halloween_pharaoh_curse",
@@ -4725,7 +5429,8 @@ class MasterAnimationEngine:
                         "supersample": True
                 },
                 "scene_source": "ai_custom",
-                "subcategory": "AI & Custom"
+                "subcategory": "AI & Custom",
+                "is_multi_house": True
         },
         {
                 "id": "xmas_frozen_aurora",
@@ -4817,7 +5522,8 @@ class MasterAnimationEngine:
                         "supersample": True
                 },
                 "scene_source": "ai_custom",
-                "subcategory": "AI & Custom"
+                "subcategory": "AI & Custom",
+                "is_multi_house": True
         },
         {
                 "id": "xmas_grinch_heist",
@@ -4840,7 +5546,8 @@ class MasterAnimationEngine:
                         "supersample": True
                 },
                 "scene_source": "ai_custom",
-                "subcategory": "AI & Custom"
+                "subcategory": "AI & Custom",
+                "is_multi_house": True
         },
         {
                 "id": "xmas_polar_express",
@@ -4863,7 +5570,8 @@ class MasterAnimationEngine:
                         "supersample": True
                 },
                 "scene_source": "ai_custom",
-                "subcategory": "AI & Custom"
+                "subcategory": "AI & Custom",
+                "is_multi_house": True
         },
         {
                 "id": "xmas_gingerbread_village",
@@ -4978,7 +5686,8 @@ class MasterAnimationEngine:
                         "supersample": True
                 },
                 "scene_source": "ai_custom",
-                "subcategory": "AI & Custom"
+                "subcategory": "AI & Custom",
+                "is_multi_house": True
         },
         {
                 "id": "xmas_sugar_plum_fairy",
@@ -5323,7 +6032,8 @@ class MasterAnimationEngine:
                         "supersample": True
                 },
                 "scene_source": "ai_custom",
-                "subcategory": "AI & Custom"
+                "subcategory": "AI & Custom",
+                "is_multi_house": True
         },
         {
                 "id": "diwali_golden_diya",
@@ -5369,7 +6079,8 @@ class MasterAnimationEngine:
                         "supersample": True
                 },
                 "scene_source": "ai_custom",
-                "subcategory": "AI & Custom"
+                "subcategory": "AI & Custom",
+                "is_multi_house": True
         },
         {
                 "id": "diwali_firecracker_sparkle",
@@ -5438,7 +6149,8 @@ class MasterAnimationEngine:
                         "supersample": True
                 },
                 "scene_source": "ai_custom",
-                "subcategory": "AI & Custom"
+                "subcategory": "AI & Custom",
+                "is_multi_house": True
         },
         {
                 "id": "center_golden_ripple",
@@ -5461,7 +6173,8 @@ class MasterAnimationEngine:
                         "supersample": True
                 },
                 "scene_source": "ai_custom",
-                "subcategory": "AI & Custom"
+                "subcategory": "AI & Custom",
+                "is_multi_house": True
         },
         {
                 "id": "center_serpent_clash",
@@ -5484,7 +6197,8 @@ class MasterAnimationEngine:
                         "supersample": True
                 },
                 "scene_source": "ai_custom",
-                "subcategory": "AI & Custom"
+                "subcategory": "AI & Custom",
+                "is_multi_house": True
         },
         {
                 "id": "cyber_chase",
@@ -5507,7 +6221,8 @@ class MasterAnimationEngine:
                         "supersample": True
                 },
                 "scene_source": "ai_custom",
-                "subcategory": "AI & Custom"
+                "subcategory": "AI & Custom",
+                "is_multi_house": True
         },
         {
                 "id": "dual_comet_pingpong",
@@ -5599,7 +6314,8 @@ class MasterAnimationEngine:
                         "supersample": True
                 },
                 "scene_source": "ai_custom",
-                "subcategory": "AI & Custom"
+                "subcategory": "AI & Custom",
+                "is_multi_house": True
         },
         {
                 "id": "july4_fireworks",
@@ -5714,7 +6430,8 @@ class MasterAnimationEngine:
                         "tail_length": 0.26,
                         "pulse_count": 2,
                         "supersample": True
-                }
+                },
+                "is_multi_house": True
         },
         {
                 "id": "ai_halloween_salem_blood_moon",
@@ -5737,7 +6454,8 @@ class MasterAnimationEngine:
                         "tail_length": 0.3,
                         "pulse_count": 2,
                         "supersample": True
-                }
+                },
+                "is_multi_house": True
         },
         {
                 "id": "ai_halloween_cyber_jack",
@@ -5829,7 +6547,8 @@ class MasterAnimationEngine:
                         "tail_length": 0.26,
                         "pulse_count": 2,
                         "supersample": True
-                }
+                },
+                "is_multi_house": True
         },
         {
                 "id": "ai_xmas_elsa_ice_palace",
@@ -5852,7 +6571,8 @@ class MasterAnimationEngine:
                         "tail_length": 0.28,
                         "pulse_count": 2,
                         "supersample": True
-                }
+                },
+                "is_multi_house": True
         },
         {
                 "id": "ai_xmas_hot_cocoa_hearth",

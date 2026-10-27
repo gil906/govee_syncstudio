@@ -252,6 +252,7 @@ const EFFECTS = [
 
 const SCENE_CATEGORIES = [
   { id: 'all', label: '✨ All Scenes' },
+  { id: 'Multi-House', label: '🏘️ Multi-House' },
   { id: 'Halloween', label: '🎃 Halloween' },
   { id: 'Christmas', label: '🎄 Christmas' },
   { id: 'Diwali', label: '🪔 Diwali' },
@@ -1186,13 +1187,27 @@ export default function App() {
   const playlist = config?.playlist || { enabled: false, interval_sec: 60, preset_ids: [] };
   const liveSched = liveState?.schedule_status || scheduleStatus || {};
   const isRunning = anim.running ?? true;
+  const isMultiHousePreset = (p) =>
+    Boolean(p.is_multi_house || p.scene_source === 'multi_house' || (p.id || '').startsWith('mh_'));
+
   const categoryPresets =
     sceneCategory === 'all'
       ? presets
+      : sceneCategory === 'Multi-House'
+      ? presets.filter(isMultiHousePreset)
       : presets.filter((p) => p.category === sceneCategory);
+
   const filteredPresets =
     sceneSubcategory === 'all'
       ? categoryPresets
+      : sceneCategory === 'Multi-House'
+      ? categoryPresets.filter(
+          (p) =>
+            (p.holiday_tag || p.category || '').toLowerCase() ===
+            sceneSubcategory.toLowerCase()
+        )
+      : sceneSubcategory === 'multi_house'
+      ? categoryPresets.filter(isMultiHousePreset)
       : categoryPresets.filter(
           (p) => (p.scene_source || 'ai_custom') === sceneSubcategory
         );
@@ -1793,12 +1808,17 @@ export default function App() {
                     const count =
                       cat.id === 'all'
                         ? presets.length
+                        : cat.id === 'Multi-House'
+                        ? presets.filter(isMultiHousePreset).length
                         : presets.filter((p) => p.category === cat.id).length;
                     return (
                       <button
                         key={cat.id}
                         type="button"
-                        onClick={() => setSceneCategory(cat.id)}
+                        onClick={() => {
+                          setSceneCategory(cat.id);
+                          setSceneSubcategory('all');
+                        }}
                         className={`px-3 py-1.5 rounded-xl text-xs font-extrabold whitespace-nowrap border transition flex items-center gap-1.5 shrink-0 ${
                           active
                             ? 'bg-[#00f5d4]/20 text-[#00f5d4] border-[#00f5d4]'
@@ -1812,28 +1832,81 @@ export default function App() {
                   })}
                 </div>
 
-                {/* Subcategory Filter Bar (All Types | Official Govee | AI & Custom | My Govee DIY) */}
+                {/* Subcategory Filter Bar */}
                 <div className="flex items-center gap-2 overflow-x-auto pb-1 no-scrollbar">
-                  {[
-                    { id: 'all', label: 'All Types', count: categoryPresets.length },
-                    {
-                      id: 'official',
-                      label: '🏷️ Official Govee',
-                      count: categoryPresets.filter((p) => p.scene_source === 'official').length,
-                    },
-                    {
-                      id: 'ai_custom',
-                      label: '🤖 AI & Custom Designs',
-                      count: categoryPresets.filter(
-                        (p) => (p.scene_source || 'ai_custom') === 'ai_custom'
-                      ).length,
-                    },
-                    {
-                      id: 'diy',
-                      label: '🛠️ My Govee DIY',
-                      count: categoryPresets.filter((p) => p.scene_source === 'diy').length,
-                    },
-                  ].map((sub) => {
+                  {(sceneCategory === 'Multi-House'
+                    ? [
+                        { id: 'all', label: 'All Multi-House', count: categoryPresets.length },
+                        {
+                          id: 'Halloween',
+                          label: '🎃 Halloween',
+                          count: categoryPresets.filter(
+                            (p) => (p.holiday_tag || p.category) === 'Halloween'
+                          ).length,
+                        },
+                        {
+                          id: 'Christmas',
+                          label: '🎄 Christmas',
+                          count: categoryPresets.filter(
+                            (p) => (p.holiday_tag || p.category) === 'Christmas'
+                          ).length,
+                        },
+                        {
+                          id: 'Diwali',
+                          label: '🪔 Diwali',
+                          count: categoryPresets.filter(
+                            (p) => (p.holiday_tag || p.category) === 'Diwali'
+                          ).length,
+                        },
+                        {
+                          id: "New Year's Eve",
+                          label: "🎆 New Year's Eve",
+                          count: categoryPresets.filter(
+                            (p) => p.holiday_tag === "New Year's Eve"
+                          ).length,
+                        },
+                        {
+                          id: 'Center-Out (My House)',
+                          label: '💥 Center-Out',
+                          count: categoryPresets.filter(
+                            (p) => p.category === 'Center-Out (My House)'
+                          ).length,
+                        },
+                        {
+                          id: 'Celebrations',
+                          label: '🏈 Celebrations',
+                          count: categoryPresets.filter(
+                            (p) =>
+                              (p.holiday_tag || p.category) === 'Celebrations'
+                          ).length,
+                        },
+                      ]
+                    : [
+                        { id: 'all', label: 'All Types', count: categoryPresets.length },
+                        {
+                          id: 'multi_house',
+                          label: '🏘️ Multi-House',
+                          count: categoryPresets.filter(isMultiHousePreset).length,
+                        },
+                        {
+                          id: 'official',
+                          label: '🏷️ Official Govee',
+                          count: categoryPresets.filter((p) => p.scene_source === 'official').length,
+                        },
+                        {
+                          id: 'ai_custom',
+                          label: '🤖 AI & Custom Designs',
+                          count: categoryPresets.filter(
+                            (p) => (p.scene_source || 'ai_custom') === 'ai_custom'
+                          ).length,
+                        },
+                        {
+                          id: 'diy',
+                          label: '🛠️ My Govee DIY',
+                          count: categoryPresets.filter((p) => p.scene_source === 'diy').length,
+                        },
+                      ]
+                  ).map((sub) => {
                     const active = sceneSubcategory === sub.id;
                     return (
                       <button

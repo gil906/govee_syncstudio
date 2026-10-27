@@ -2,7 +2,7 @@ name: govee_lights_sync
 description: "Govee Multi-House Light Sync — Native Android & Galaxy Z Fold 7 Studio App"
 publish_to: 'none'
 
-version: 3.4.0+7
+version: 3.5.0+8
 environment:
   sdk: ^3.11.5
 
