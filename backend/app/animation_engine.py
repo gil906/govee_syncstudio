@@ -172,6 +172,7 @@ class VirtualSegmentSlot:
         "controller",
         "controller_index",
         "segment_index",
+        "wall",
         "normalized_pos",
         "normalized_width",
         "house_local_pos",
@@ -188,6 +189,7 @@ class VirtualSegmentSlot:
         normalized_pos: float,
         normalized_width: float,
         house_local_pos: float,
+        wall: str = "front",
     ) -> None:
         self.global_index = global_index
         self.house = house
@@ -195,6 +197,7 @@ class VirtualSegmentSlot:
         self.controller = controller
         self.controller_index = controller_index
         self.segment_index = segment_index
+        self.wall = wall
         self.normalized_pos = normalized_pos
         self.normalized_width = normalized_width
         self.house_local_pos = house_local_pos
@@ -203,12 +206,8 @@ class VirtualSegmentSlot:
 def build_virtual_strip_map(config: SystemConfig) -> List[VirtualSegmentSlot]:
     """
     Construct the continuous coordinate mapping across all enabled houses and controllers.
-    Compensates in real time for houses having different numbers of controllers and segments:
-    - `house_normalized`: Each house h gets a normalized span proportional to `house.time_weight`
-      (equal 1/H share by default), so a chase pulse takes the exact same transit time across
-      House 1 (1 controller, 9 segments) as House 2 (2 controllers, 24 segments) and House 3 (30 segments).
-    - `virtual_strip`: Uniform segment spacing across all N_total segments.
-    - `parallel_zones`: Each house spans [0, 1) simultaneously in synchronized lockstep.
+    Compensates in real time for houses having different numbers of controllers, segments,
+    and 3D house wall zones (`front`, `left`, `right`, `back`).
     """
     active_houses: List[Tuple[HouseConfig, List[ControllerConfig]]] = []
     sorted_houses = sorted(config.houses, key=lambda h: (h.order, h.id))
@@ -224,6 +223,7 @@ def build_virtual_strip_map(config: SystemConfig) -> List[VirtualSegmentSlot]:
         return []
 
     mode = config.animation.mapping_mode
+    zone_mode = getattr(config.animation, "zone_mode", "all_segments") or "all_segments"
     total_segments_all = sum(sum(c.segment_count for c in ctrls) for _, ctrls in active_houses)
     total_house_weight = sum(max(0.1, h.time_weight) for h, _ in active_houses)
 
@@ -238,42 +238,101 @@ def build_virtual_strip_map(config: SystemConfig) -> List[VirtualSegmentSlot]:
         house_span_norm = h_weight / total_house_weight
         cumulative_house_weight += h_weight
 
-        house_seg_cursor = 0
+        # Collect all segments for this house along with their 3D wall zone ('front', 'left', 'right', 'back')
+        house_seg_items: List[Tuple[int, ControllerConfig, int, str]] = []
         for c_idx, ctrl in enumerate(ctrls):
+            seg_walls = ctrl.get_segment_walls()
             seg_indices = list(range(ctrl.segment_count))
             if ctrl.reversed:
                 seg_indices.reverse()
-
             for phys_seg_idx in seg_indices:
+                w_label = seg_walls[phys_seg_idx] if phys_seg_idx < len(seg_walls) else "front"
+                house_seg_items.append((c_idx, ctrl, phys_seg_idx, w_label))
+
+        front_total = sum(1 for _, _, _, w in house_seg_items if w == "front")
+        front_seen = 0
+        side_seen = 0
+        side_total = sum(1 for _, _, _, w in house_seg_items if w in ("left", "right"))
+        back_seen = 0
+        back_total = sum(1 for _, _, _, w in house_seg_items if w == "back")
+
+        for house_seg_cursor, (c_idx, ctrl, phys_seg_idx, w_label) in enumerate(house_seg_items):
+            if zone_mode in ("front_street_sync", "front_only_quiet_sides") and front_total > 0:
+                if w_label == "front":
+                    house_local_pos = (front_seen + 0.5) / max(1, front_total)
+                    house_local_width = 1.0 / max(1, front_total)
+                    front_seen += 1
+                elif w_label == "left":
+                    # Echo outward from left-front corner (0.0 -> 0.35 of house span)
+                    side_u = (side_seen + 0.5) / max(1, side_total)
+                    house_local_pos = max(0.0, min(1.0, 0.35 * side_u))
+                    house_local_width = 1.0 / max(1, house_seg_total)
+                    side_seen += 1
+                elif w_label == "right":
+                    # Echo outward from right-front corner (1.0 -> 0.65 of house span)
+                    side_u = (side_seen + 0.5) / max(1, side_total)
+                    house_local_pos = max(0.0, min(1.0, 1.0 - 0.35 * side_u))
+                    house_local_width = 1.0 / max(1, house_seg_total)
+                    side_seen += 1
+                else:
+                    # Back wall echoes center of house
+                    back_u = (back_seen + 0.5) / max(1, back_total)
+                    house_local_pos = 0.25 + 0.50 * back_u
+                    house_local_width = 1.0 / max(1, house_seg_total)
+                    back_seen += 1
+            elif zone_mode == "depth_front_to_back":
+                # 3D Street-to-Backyard Depth Wave: Front (0.0..0.33) -> Left/Right Sides (0.33..0.67) -> Back (0.67..1.0)
+                if w_label == "front":
+                    u = (front_seen + 0.5) / max(1, front_total)
+                    front_seen += 1
+                    house_local_pos = 0.33 * u
+                elif w_label in ("left", "right"):
+                    u = (side_seen + 0.5) / max(1, side_total)
+                    side_seen += 1
+                    house_local_pos = 0.33 + 0.34 * u
+                else:
+                    u = (back_seen + 0.5) / max(1, back_total)
+                    back_seen += 1
+                    house_local_pos = 0.67 + 0.33 * u
+                house_local_width = 1.0 / max(1, house_seg_total)
+            elif zone_mode == "perimeter_360":
+                # 360° Clockwise Rooftop Orbit: Front (0..0.25) -> Right (0.25..0.50) -> Back (0.50..0.75) -> Left (0.75..1.0)
+                wall_base = {"front": 0.0, "right": 0.25, "back": 0.50, "left": 0.75}.get(w_label, 0.0)
+                u = (house_seg_cursor + 0.5) / max(1, house_seg_total)
+                house_local_pos = (wall_base + 0.25 * u) % 1.0
+                house_local_width = 1.0 / max(1, house_seg_total)
+            else:
                 house_local_pos = (house_seg_cursor + 0.5) / max(1, house_seg_total)
                 house_local_width = 1.0 / max(1, house_seg_total)
 
-                if mode == SpatialMappingMode.HOUSE_NORMALIZED:
-                    norm_pos = house_start_norm + house_local_pos * house_span_norm
-                    norm_width = house_span_norm * house_local_width
-                elif mode == SpatialMappingMode.PARALLEL_ZONES:
-                    norm_pos = house_local_pos
-                    norm_width = house_local_width
-                else:
-                    # VIRTUAL_STRIP: constant speed per physical segment
-                    norm_pos = (global_idx + 0.5) / max(1, total_segments_all)
-                    norm_width = 1.0 / max(1, total_segments_all)
+            if zone_mode == "depth_front_to_back":
+                norm_pos = house_local_pos
+                norm_width = house_local_width
+            elif mode == SpatialMappingMode.HOUSE_NORMALIZED:
+                norm_pos = house_start_norm + house_local_pos * house_span_norm
+                norm_width = house_span_norm * house_local_width
+            elif mode == SpatialMappingMode.PARALLEL_ZONES:
+                norm_pos = house_local_pos
+                norm_width = house_local_width
+            else:
+                norm_pos = (global_idx + 0.5) / max(1, total_segments_all)
+                norm_width = 1.0 / max(1, total_segments_all)
 
-                slots.append(
-                    VirtualSegmentSlot(
-                        global_index=global_idx,
-                        house=house,
-                        house_index=h_idx,
-                        controller=ctrl,
-                        controller_index=c_idx,
-                        segment_index=phys_seg_idx,
-                        normalized_pos=norm_pos,
-                        normalized_width=norm_width,
-                        house_local_pos=house_local_pos,
-                    )
+            slots.append(
+                VirtualSegmentSlot(
+                    global_index=global_idx,
+                    house=house,
+                    house_index=h_idx,
+                    controller=ctrl,
+                    controller_index=c_idx,
+                    segment_index=phys_seg_idx,
+                    normalized_pos=norm_pos,
+                    normalized_width=norm_width,
+                    house_local_pos=house_local_pos,
+                    wall=w_label,
                 )
-                global_idx += 1
-                house_seg_cursor += 1
+            )
+            global_idx += 1
 
     return slots
 
@@ -2488,6 +2547,7 @@ class MasterAnimationEngine:
                         controller_name=slot.controller.name,
                         controller_index=slot.controller_index,
                         segment_index=slot.segment_index,
+                        wall=slot.wall,
                         normalized_pos=round(slot.normalized_pos, 5),
                         normalized_width=round(slot.normalized_width, 5),
                         r=0,
@@ -2556,6 +2616,8 @@ class MasterAnimationEngine:
                 if slot.controller.brightness_override is not None
                 else intensity_scale
             )
+            if getattr(anim, "zone_mode", "all_segments") == "front_only_quiet_sides" and slot.wall != "front":
+                ctrl_bri *= 0.14
             final_r = max(0, min(255, round((acc_r / n_samples) * ctrl_bri)))
             final_g = max(0, min(255, round((acc_g / n_samples) * ctrl_bri)))
             final_b = max(0, min(255, round((acc_b / n_samples) * ctrl_bri)))
@@ -2571,6 +2633,7 @@ class MasterAnimationEngine:
                     controller_name=slot.controller.name,
                     controller_index=slot.controller_index,
                     segment_index=slot.segment_index,
+                    wall=slot.wall,
                     normalized_pos=round(slot.normalized_pos, 5),
                     normalized_width=round(slot.normalized_width, 5),
                     r=final_r,

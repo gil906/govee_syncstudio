@@ -1611,6 +1611,39 @@ export default function App() {
                       />
                     </div>
 
+                    {/* 3D House Wall Zone Mode (Front vs Sides vs Back) */}
+                    <div className="flex items-center justify-between gap-2 text-xs">
+                      <span className="text-slate-300 font-semibold shrink-0">
+                        3D Wall Sync:
+                      </span>
+                      <select
+                        value={anim.zone_mode || 'all_segments'}
+                        onChange={(e) =>
+                          updateAnimation(
+                            { zone_mode: e.target.value },
+                            selectedPreset?.id
+                          )
+                        }
+                        className="flex-1 bg-[#060b18] border border-[#1e293b] rounded-lg px-2 py-1 text-[11px] font-bold text-[#00f5d4]"
+                      >
+                        <option value="all_segments">
+                          Linear Strip (All Segments)
+                        </option>
+                        <option value="front_street_sync">
+                          Street-Front Sync + Side/Back Echo
+                        </option>
+                        <option value="depth_front_to_back">
+                          3D Depth Wave (Front → Sides → Back)
+                        </option>
+                        <option value="perimeter_360">
+                          360° House Perimeter Orbit
+                        </option>
+                        <option value="front_only_quiet_sides">
+                          Front Show Only (Dim Sides &amp; Back)
+                        </option>
+                      </select>
+                    </div>
+
                     {/* Color Channel Chips + Swatches matching APK */}
                     <div className="space-y-2 pt-1 border-t border-[#1e293b]">
                       <div className="flex flex-wrap items-center gap-1.5">
@@ -2116,35 +2149,153 @@ export default function App() {
                         )}
                       </div>
 
-                      {/* Controllers & 1-Click Test Physical Light Button */}
-                      <div className="pt-2.5 border-t border-slate-800/80 space-y-1.5">
-                        <div className="text-[10px] uppercase tracking-wider text-slate-400 font-semibold">
-                          Controllers &amp; 1-Click Hardware Test
+                      {/* Controllers & 1-Click Test Physical Light Button + 3D Wall Zone Split */}
+                      <div className="pt-2.5 border-t border-slate-800/80 space-y-2.5">
+                        <div className="flex items-center justify-between">
+                          <span className="text-[10px] uppercase tracking-wider text-slate-400 font-semibold">
+                            Controllers &amp; 3D Wall Zone Mapping (Front / Sides / Back)
+                          </span>
                         </div>
-                        {(house.controllers || []).map((ctrl) => (
-                          <div
-                            key={ctrl.id}
-                            className="flex items-center justify-between gap-2 bg-slate-900/90 border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs"
-                          >
-                            <div className="truncate">
-                              <div className="font-semibold text-slate-200 truncate">
-                                {ctrl.name}
+                        {(house.controllers || []).map((ctrl) => {
+                          const zones = Array.isArray(ctrl.wall_zones) && ctrl.wall_zones.length > 0
+                            ? ctrl.wall_zones
+                            : [{ wall: 'front', segments: ctrl.segment_count }];
+                          const frontSegs = zones
+                            .filter((z) => z.wall === 'front')
+                            .reduce((s, z) => s + (Number(z.segments) || 0), 0);
+                          const sideWall =
+                            zones.find((z) => z.wall !== 'front')?.wall || 'right';
+                          const sideSegs = Math.max(0, ctrl.segment_count - frontSegs);
+
+                          return (
+                            <div
+                              key={ctrl.id}
+                              className="bg-slate-900/90 border border-slate-800 rounded-xl p-2.5 space-y-2 text-xs"
+                            >
+                              <div className="flex items-center justify-between gap-2">
+                                <div className="truncate">
+                                  <div className="font-semibold text-slate-200 truncate">
+                                    {ctrl.name}
+                                  </div>
+                                  <div className="text-[10px] font-mono text-slate-400">
+                                    {ctrl.ip ? `LAN ${ctrl.ip}` : 'Cloud/Internet'} · {ctrl.sku} ·{' '}
+                                    {ctrl.segment_count} segs
+                                  </div>
+                                </div>
+                                <button
+                                  onClick={() => handleTestController(ctrl.id)}
+                                  className="px-2.5 py-1 rounded-lg bg-cyan-500/20 hover:bg-cyan-500/35 text-cyan-200 border border-cyan-500/40 text-[11px] font-bold flex items-center gap-1 shrink-0 transition"
+                                  title={`Send test color pulse to ${ctrl.name}`}
+                                >
+                                  <Zap className="w-3 h-3 text-cyan-300" />
+                                  Test Light
+                                </button>
                               </div>
-                              <div className="text-[10px] font-mono text-slate-400">
-                                {ctrl.ip ? `LAN ${ctrl.ip}` : 'Cloud/Internet'} · {ctrl.sku} ·{' '}
-                                {ctrl.segment_count} segs
+
+                              {/* Interactive Front vs Side/Back Corner Split Slider */}
+                              <div className="bg-slate-950/90 border border-slate-800/80 rounded-lg p-2 space-y-1.5">
+                                <div className="flex items-center justify-between text-[11px]">
+                                  <span className="font-bold text-cyan-300">
+                                    Front: {frontSegs} segs
+                                  </span>
+                                  <span className="text-slate-400 font-mono text-[10px]">
+                                    Corner Split
+                                  </span>
+                                  <span className="font-bold text-purple-300">
+                                    {sideWall.toUpperCase()}: {sideSegs} segs
+                                  </span>
+                                </div>
+                                <input
+                                  type="range"
+                                  min="0"
+                                  max={ctrl.segment_count}
+                                  value={frontSegs}
+                                  onChange={async (e) => {
+                                    const newFront = Number(e.target.value);
+                                    const rem = Math.max(0, ctrl.segment_count - newFront);
+                                    const newZones = [];
+                                    if (newFront > 0)
+                                      newZones.push({ wall: 'front', segments: newFront });
+                                    if (rem > 0)
+                                      newZones.push({ wall: sideWall, segments: rem });
+                                    const r = await apiFetch(`/api/controllers/${ctrl.id}/zones`, {
+                                      method: 'PATCH',
+                                      headers: { 'Content-Type': 'application/json' },
+                                      body: JSON.stringify({ wall_zones: newZones }),
+                                    });
+                                    if (r.ok) {
+                                      const d = await r.json();
+                                      if (d.config) setConfig(d.config);
+                                    }
+                                  }}
+                                  className="w-full accent-[#00f5d4] h-1.5 bg-slate-800 rounded-lg cursor-pointer"
+                                />
+                                <div className="flex items-center justify-between gap-1.5 pt-0.5">
+                                  <div className="flex items-center gap-1 text-[10px] text-slate-400">
+                                    <span>2nd Wall:</span>
+                                    {['left', 'right', 'back'].map((wName) => (
+                                      <button
+                                        key={wName}
+                                        type="button"
+                                        onClick={async () => {
+                                          const rem = Math.max(1, ctrl.segment_count - frontSegs);
+                                          const fCnt = Math.max(0, ctrl.segment_count - rem);
+                                          const newZones = [];
+                                          if (fCnt > 0)
+                                            newZones.push({ wall: 'front', segments: fCnt });
+                                          newZones.push({ wall: wName, segments: rem });
+                                          const r = await apiFetch(
+                                            `/api/controllers/${ctrl.id}/zones`,
+                                            {
+                                              method: 'PATCH',
+                                              headers: { 'Content-Type': 'application/json' },
+                                              body: JSON.stringify({ wall_zones: newZones }),
+                                            }
+                                          );
+                                          if (r.ok) {
+                                            const d = await r.json();
+                                            if (d.config) setConfig(d.config);
+                                          }
+                                        }}
+                                        className={`px-1.5 py-0.5 rounded font-bold uppercase ${
+                                          sideWall === wName && sideSegs > 0
+                                            ? 'bg-purple-500/30 text-purple-200 border border-purple-400/50'
+                                            : 'bg-slate-900 text-slate-400 border border-slate-800'
+                                        }`}
+                                      >
+                                        {wName}
+                                      </button>
+                                    ))}
+                                  </div>
+                                  <button
+                                    type="button"
+                                    onClick={async () => {
+                                      const cornerIdx = Math.max(
+                                        0,
+                                        Math.min(ctrl.segment_count - 1, frontSegs - 1)
+                                      );
+                                      await apiFetch(
+                                        `/api/controllers/${ctrl.id}/locate-segment`,
+                                        {
+                                          method: 'POST',
+                                          headers: { 'Content-Type': 'application/json' },
+                                          body: JSON.stringify({ segment_index: cornerIdx }),
+                                        }
+                                      );
+                                      showBanner(
+                                        `Spotlighted Corner Segment #${cornerIdx + 1} on ${ctrl.name} in White!`
+                                      );
+                                    }}
+                                    className="px-2 py-0.5 rounded bg-amber-500/20 hover:bg-amber-500/30 text-amber-200 border border-amber-500/40 text-[10px] font-bold"
+                                    title="Light up the corner split segment in bright white on the physical house"
+                                  >
+                                    Spotlight Corner #{Math.max(1, frontSegs)}
+                                  </button>
+                                </div>
                               </div>
                             </div>
-                            <button
-                              onClick={() => handleTestController(ctrl.id)}
-                              className="px-2.5 py-1 rounded-lg bg-cyan-500/20 hover:bg-cyan-500/35 text-cyan-200 border border-cyan-500/40 text-[11px] font-bold flex items-center gap-1 shrink-0 transition"
-                              title={`Send test color pulse to ${ctrl.name}`}
-                            >
-                              <Zap className="w-3 h-3 text-cyan-300" />
-                              Test Physical Light
-                            </button>
-                          </div>
-                        ))}
+                          );
+                        })}
                       </div>
                     </div>
                   );

@@ -1028,6 +1028,136 @@ async def test_controller(
     return result
 
 
+@app.patch("/api/controllers/{controller_id}/zones")
+async def update_controller_wall_zones(
+    controller_id: str,
+    patch: Dict[str, Any] = Body(...),
+) -> Dict[str, Any]:
+    """
+    Update a controller's 3D house wall segment distribution (`wall_zones`, e.g.
+    `[{"wall": "front", "segments": 8}, {"wall": "right", "segments": 7}]`).
+    """
+    cfg = store.get()
+    target_ctrl: Optional[ControllerConfig] = None
+    for h in cfg.houses:
+        for c in h.controllers:
+            if c.id == controller_id:
+                target_ctrl = c
+                break
+        if target_ctrl is not None:
+            break
+
+    if target_ctrl is None:
+        raise HTTPException(status_code=404, detail=f"Controller '{controller_id}' not found")
+
+    raw_zones = patch.get("wall_zones", [])
+    cleaned_zones: List[Dict[str, Any]] = []
+    valid_walls = {"front", "left", "right", "back"}
+    for item in raw_zones if isinstance(raw_zones, list) else []:
+        if not isinstance(item, dict):
+            continue
+        w = str(item.get("wall", "front")).strip().lower()
+        if w not in valid_walls:
+            w = "front"
+        cnt = max(0, int(item.get("segments", 0) or 0))
+        if cnt > 0:
+            cleaned_zones.append({"wall": w, "segments": cnt})
+
+    target_ctrl.wall_zones = cleaned_zones
+    if "reversed" in patch and isinstance(patch["reversed"], bool):
+        target_ctrl.reversed = patch["reversed"]
+
+    saved = store.save(cfg)
+    await engine.broadcast_snapshot(saved)
+    return {
+        "controller_id": controller_id,
+        "wall_zones": target_ctrl.wall_zones,
+        "segment_walls": target_ctrl.get_segment_walls(),
+        "config": saved.model_dump(mode="json"),
+    }
+
+
+@app.post("/api/controllers/{controller_id}/locate-segment")
+async def locate_controller_segment(
+    controller_id: str,
+    body: Dict[str, Any] = Body(...),
+) -> Dict[str, Any]:
+    """
+    Corner Calibration Finder: Lights up a single `segment_index` (`0..N-1`) in bright
+    spotlight White/Red (`#ffffff`) and all other segments in dim Blue (`#001b44`) via
+    Govee Cloud `segmentedColorRgb` so the user can visually identify where the physical
+    light strip turns the corner from Front -> Left/Right Side -> Back.
+    """
+    cfg = store.get()
+    target_house: Optional[HouseConfig] = None
+    target_ctrl: Optional[ControllerConfig] = None
+    for h in cfg.houses:
+        for c in h.controllers:
+            if c.id == controller_id:
+                target_house = h
+                target_ctrl = c
+                break
+        if target_ctrl is not None:
+            break
+
+    if target_house is None or target_ctrl is None:
+        raise HTTPException(status_code=404, detail=f"Controller '{controller_id}' not found")
+
+    n_segs = max(1, int(target_ctrl.segment_count or 12))
+    seg_idx = max(0, min(n_segs - 1, int(body.get("segment_index", 0) or 0)))
+    effective_key = (target_house.govee_api_key or cfg.govee_api_key or "").strip()
+
+    driver.clear_active_cloud_scenes()
+    sent_cloud = False
+    if effective_key and target_ctrl.mac and driver._http_client:
+        headers = {"Govee-API-Key": effective_key, "Content-Type": "application/json"}
+        other_segs = [i for i in range(n_segs) if i != seg_idx]
+        try:
+            if other_segs:
+                await driver._http_client.post(
+                    f"{driver.CLOUD_BASE_URL}/device/control",
+                    headers=headers,
+                    json={
+                        "requestId": str(uuid.uuid4()),
+                        "payload": {
+                            "sku": target_ctrl.sku or "H705E",
+                            "device": target_ctrl.mac,
+                            "capability": {
+                                "type": "devices.capabilities.segment_color_setting",
+                                "instance": "segmentedColorRgb",
+                                "value": {"segment": other_segs, "rgb": 0x001845},
+                            },
+                        },
+                    },
+                )
+            resp = await driver._http_client.post(
+                f"{driver.CLOUD_BASE_URL}/device/control",
+                headers=headers,
+                json={
+                    "requestId": str(uuid.uuid4()),
+                    "payload": {
+                        "sku": target_ctrl.sku or "H705E",
+                        "device": target_ctrl.mac,
+                        "capability": {
+                            "type": "devices.capabilities.segment_color_setting",
+                            "instance": "segmentedColorRgb",
+                            "value": {"segment": [seg_idx], "rgb": 0xFFFFFF},
+                        },
+                    },
+                },
+            )
+            sent_cloud = resp.status_code == 200
+        except Exception:
+            pass
+
+    return {
+        "controller_id": controller_id,
+        "segment_index": seg_idx,
+        "total_segments": n_segs,
+        "sent_cloud": sent_cloud,
+    }
+
+
 
 @app.get("/api/bridges")
 async def list_neighbor_bridges() -> Dict[str, Any]:

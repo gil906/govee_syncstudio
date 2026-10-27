@@ -84,6 +84,27 @@ class ControllerConfig(BaseModel):
     reversed: bool = Field(default=False, description="Reverse physical segment order on this controller")
     protocol_mode: ProtocolMode = Field(default=ProtocolMode.AUTO, description="Control transport mode")
     brightness_override: Optional[int] = Field(default=None, ge=1, le=100, description="Optional per-controller brightness cap")
+    wall_zones: List[Dict[str, Any]] = Field(
+        default_factory=list,
+        description="Ordered 3D house wall spans on this controller, e.g. [{'wall': 'front', 'segments': 8}, {'wall': 'right', 'segments': 7}]",
+    )
+
+    def get_segment_walls(self) -> List[str]:
+        """Return the wall label ('front', 'left', 'right', 'back') for each segment 0..segment_count-1."""
+        walls: List[str] = []
+        valid_walls = {"front", "left", "right", "back"}
+        for item in self.wall_zones or []:
+            if not isinstance(item, dict):
+                continue
+            w = str(item.get("wall", "front")).strip().lower()
+            if w not in valid_walls:
+                w = "front"
+            cnt = max(0, int(item.get("segments", 0) or 0))
+            walls.extend([w] * cnt)
+        if len(walls) < self.segment_count:
+            pad_wall = walls[-1] if walls else "front"
+            walls.extend([pad_wall] * (self.segment_count - len(walls)))
+        return walls[: self.segment_count]
 
     @field_validator("ip")
     @classmethod
@@ -144,6 +165,16 @@ class AnimationConfig(BaseModel):
     mapping_mode: SpatialMappingMode = Field(
         default=SpatialMappingMode.HOUSE_NORMALIZED,
         description="How uneven segment counts are compensated across houses",
+    )
+    zone_mode: Literal[
+        "all_segments",
+        "front_street_sync",
+        "depth_front_to_back",
+        "perimeter_360",
+        "front_only_quiet_sides",
+    ] = Field(
+        default="all_segments",
+        description="How Front vs Left/Right/Back house walls are mapped in 3D space",
     )
     fps: int = Field(default=25, ge=5, le=60, description="Master loop update rate (frames per second)")
     intensity: int = Field(default=100, ge=1, le=100, description="Master brightness / intensity percentage")
@@ -278,6 +309,7 @@ class SegmentRenderPoint(BaseModel):
     controller_name: str
     controller_index: int
     segment_index: int
+    wall: str = "front"
     normalized_pos: float
     normalized_width: float
     r: int
